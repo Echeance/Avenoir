@@ -49,13 +49,15 @@ L'ordre suit un principe : **chaque jalon produit un assistant utilisable**, plu
 
 **Fini quand :** `cmake --preset debug && cmake --build --preset debug && ctest --preset debug` fonctionne sur Linux et Windows.
 
-### 1.2 Intégration continue — P1
-- ⬜ GitHub Actions : matrice **Linux (GCC + Clang) + Windows (MSVC)**
-- ⬜ Build sans avertissement, `ctest`, vérification `clang-format`
-- ⬜ Passe ASan + UBSan sous Linux
-- ⬜ Cache vcpkg (binary caching) pour des CI rapides
+### 1.2 Intégration continue et releases — P1 🔄
+- ✅ Workflow `ci` à chaque push / PR : Linux GCC 14, Linux Clang 18, Linux ASan + UBSan, Windows MSVC ; build sans avertissement + `ctest`
+- ✅ Vérification `clang-format` (même version majeure qu'en local)
+- ✅ Cache binaire vcpkg (action commune `.github/actions/setup-vcpkg`)
+- ✅ Workflow `release` sur tag `vX.Y.Z` : contrôle tag = version, build + tests Linux / Windows, publication de la release avec les binaires
+- ⬜ Premier passage au vert sur GitHub (dépôt public)
+- ⬜ Première release `v0.1.0`
 
-**Fini quand :** chaque push sur `main` est vérifié sur les deux OS, badge vert dans le README.
+**Fini quand :** chaque push sur `main` est vérifié sur les deux OS, badge vert dans le README, et une release publie des binaires téléchargeables.
 
 ### 1.3 Cœur (`avenoir::core`) — P1
 - ⬜ Messages (`User`, `Assistant`, `ToolResult`) et `ToolCall`
@@ -206,8 +208,8 @@ L'ordre suit un principe : **chaque jalon produit un assistant utilisable**, plu
 
 Par ordre conseillé :
 
-1. Projet CMake + vcpkg + préréglages + un test qui passe (1.1)
-2. CI GitHub Actions Linux + Windows (1.2)
+1. ~~Projet CMake + vcpkg + préréglages + un test qui passe (1.1)~~ ✅
+2. CI au vert sur GitHub + release `v0.1.0` (1.2)
 3. Cœur : messages, outils, permissions, agent avec LLM scripté (1.3)
 4. Fournisseur `openai_compatible` + outil `current_time` + CLI minimale : premier dialogue de bout en bout (1.4, 1.5, 1.7)
 5. Les autres fournisseurs, outils et le client MCP

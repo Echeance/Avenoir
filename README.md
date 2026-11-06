@@ -1,5 +1,7 @@
 # Avenoir
 
+[![CI](https://github.com/ympax14/Avenoir/actions/workflows/ci.yml/badge.svg)](https://github.com/ympax14/Avenoir/actions/workflows/ci.yml)
+
 Assistant de système d'exploitation pour Windows et Linux, écrit en C++23, piloté par un LLM configurable et extensible par des plugins MCP.
 
 Vision, architecture et directives : voir **[PROJECT.md](PROJECT.md)**.
@@ -46,3 +48,14 @@ clang-tidy -p build/debug <fichiers .cpp modifiés>
 - **Local** avec Ollama : `ollama pull qwen3:8b` (ou tout modèle gérant le *tool calling*).
 - **API distante** : exporter la variable indiquée par `api_key_env`.
 - **Abonnement Claude** (Pro / Max), sans clé d'API : installer Claude Code, s'y connecter (`claude` puis `/login`), et choisir `provider = "claude_code"` (option D de `config.example.toml`).
+
+## Publier une version
+
+1. Mettre à jour la version dans `CMakeLists.txt` (`project(... VERSION x.y.z)`) et `vcpkg.json`.
+2. Committer, puis pousser un tag du même numéro :
+
+```sh
+git tag v0.2.0 && git push origin v0.2.0
+```
+
+Le workflow `release` vérifie que le tag correspond à la version, compile et teste sous Linux et Windows, puis publie la release GitHub avec `avenoir-linux-x64.tar.gz` et `avenoir-windows-x64.zip`.

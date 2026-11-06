@@ -249,7 +249,8 @@ Emplacement cible (phase 3) : `%APPDATA%\avenoir\config.toml` sous Windows, `$XD
 > Plan détaillé, priorités et critères de fin : [`docs/ROADMAP.md`](docs/ROADMAP.md).
 
 ### Phase 1 : socle en mode texte
-- [ ] Projet CMake + vcpkg + préréglages, CI Windows + Linux
+- [x] Projet CMake + vcpkg + préréglages
+- [ ] CI Windows + Linux au vert, releases automatiques
 - [ ] Boucle agent, permissions, voie rapide
 - [ ] Fournisseurs LLM configurables (OpenAI-compatible, Anthropic, Claude Code)
 - [ ] Outils : `current_time`, `system_info`, `launch_app`, `open_url`
@@ -307,6 +308,7 @@ Emplacement cible (phase 3) : `%APPDATA%\avenoir\config.toml` sous Windows, `$XD
 | 11 | `std::expected` plutôt qu'exceptions dans les bibliothèques | Erreurs explicites dans les signatures, coût prévisible, pas d'exception qui s'échappe d'un thread ou d'un plugin |
 | 12 | Modèle synchrone + threads plutôt que coroutines / Asio | La boucle agent est séquentielle par nature ; plus simple à lire et à déboguer. À réévaluer pour le démon (phase 3) |
 | 13 | Voie rapide sans LLM, réponses en phrases françaises | Latence quasi nulle et fonctionnement hors ligne ; le texte de l'outil est affiché (et lu) tel quel |
+| 14 | Dépôt public, CI GitHub Actions (Linux + Windows) à chaque push, releases publiées automatiquement sur tag `vX.Y.Z` | Actions gratuit et illimité pour un dépôt public ; le code Windows est compilé et testé en continu sans machine Windows ; binaires téléchargeables à chaque version |
 
 ---
 

@@ -1,0 +1,44 @@
+name: Préparer vcpkg
+description: >
+  Installe vcpkg au commit `builtin-baseline` de vcpkg.json et active un cache
+  binaire des dépendances compilées (évite de recompiler curl, OpenSSL… à
+  chaque exécution).
+
+inputs:
+  cache-key:
+    description: Identifiant de la configuration (compilateur, triplet…) pour séparer les caches
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Variables vcpkg
+      shell: bash
+      run: |
+        baseline=$(python3 -c "import json; print(json.load(open('vcpkg.json'))['builtin-baseline'])" 2>/dev/null \
+                   || python -c "import json; print(json.load(open('vcpkg.json'))['builtin-baseline'])")
+        echo "VCPKG_BASELINE=$baseline" >> "$GITHUB_ENV"
+        echo "VCPKG_ROOT=${{ runner.temp }}/vcpkg" >> "$GITHUB_ENV"
+        echo "VCPKG_BINARY_SOURCES=clear;files,${{ runner.temp }}/vcpkg-cache,readwrite" >> "$GITHUB_ENV"
+        mkdir -p "${{ runner.temp }}/vcpkg-cache"
+
+    - name: Cache des paquets vcpkg
+      uses: actions/cache@v4
+      with:
+        path: ${{ runner.temp }}/vcpkg-cache
+        key: vcpkg-${{ runner.os }}-${{ inputs.cache-key }}-${{ hashFiles('vcpkg.json') }}
+        restore-keys: vcpkg-${{ runner.os }}-${{ inputs.cache-key }}-
+
+    - name: Installer vcpkg
+      shell: bash
+      run: |
+        git init -q "$VCPKG_ROOT"
+        cd "$VCPKG_ROOT"
+        git remote add origin https://github.com/microsoft/vcpkg.git
+        git fetch -q --depth 1 origin "$VCPKG_BASELINE"
+        git checkout -q FETCH_HEAD
+        if [ "$RUNNER_OS" = "Windows" ]; then
+          ./bootstrap-vcpkg.bat -disableMetrics
+        else
+          ./bootstrap-vcpkg.sh -disableMetrics
+        fi

@@ -14,10 +14,13 @@ Avenoir est un assistant de système d'exploitation (Windows + Linux) écrit en 
 - Avant chaque commit : build sans avertissement, `clang-format`, `clang-tidy`, `ctest`.
 - Toute décision d'architecture notable → nouvelle entrée dans la section 7 de `PROJECT.md` (« Journal des décisions »).
 - Une tâche de la roadmap terminée → la cocher dans `docs/ROADMAP.md`.
+- Publier une version : même numéro dans `CMakeLists.txt` et `vcpkg.json`, commit, puis tag `vX.Y.Z` poussé (le workflow `release` publie les binaires). Ne jamais créer de tag sans demande de l'utilisateur.
+- CI (`.github/workflows/ci.yml`) : Linux GCC / Clang / ASan + Windows MSVC + clang-format. Une CI rouge se corrige avant de continuer.
 
-## Commandes (cible, une fois le projet CMake en place)
+## Commandes
 
 ```sh
+export VCPKG_ROOT=~/vcpkg          # requis par les préréglages
 cmake --preset debug               # configuration (vcpkg en mode manifeste)
 cmake --build --preset debug       # build
 ctest --preset debug               # tests

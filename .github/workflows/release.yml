@@ -1,0 +1,100 @@
+name: Release
+
+# Publier une version : mettre à jour la version dans CMakeLists.txt et
+# vcpkg.json, committer, puis pousser un tag du même numéro :
+#   git tag v0.2.0 && git push origin v0.2.0
+on:
+  push:
+    tags: ['v*.*.*']
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Binaire ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - { name: Linux x64,   os: ubuntu-24.04, archive: avenoir-linux-x64.tar.gz }
+          - { name: Windows x64, os: windows-2025, archive: avenoir-windows-x64.zip }
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Vérifier que le tag correspond à la version du projet
+        shell: bash
+        run: |
+          project=$(sed -nE 's/^ +VERSION ([0-9]+\.[0-9]+\.[0-9]+)$/\1/p' CMakeLists.txt)
+          manifest=$(python3 -c "import json; print(json.load(open('vcpkg.json'))['version'])" 2>/dev/null \
+                     || python -c "import json; print(json.load(open('vcpkg.json'))['version'])")
+          tag="${GITHUB_REF_NAME#v}"
+          echo "tag=$tag CMakeLists.txt=$project vcpkg.json=$manifest"
+          [ "$tag" = "$project" ] && [ "$tag" = "$manifest" ] || {
+            echo "::error::Le tag v$tag ne correspond pas à la version du projet ($project / $manifest)"; exit 1; }
+
+      - name: Outils Linux (GCC 14, Ninja)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update -q && sudo apt-get install -y -q ninja-build
+          echo "CC=gcc-14" >> "$GITHUB_ENV"
+          echo "CXX=g++-14" >> "$GITHUB_ENV"
+      - name: Environnement MSVC (cl, Ninja)
+        if: runner.os == 'Windows'
+        uses: ilammy/msvc-dev-cmd@v1
+
+      - uses: ./.github/actions/setup-vcpkg
+        with:
+          cache-key: release
+
+      - name: Configurer (Linux)
+        if: runner.os == 'Linux'
+        # libstdc++ liée statiquement : le binaire tourne sur d'autres distributions.
+        run: >
+          cmake --preset release -DAVENOIR_BUILD_TESTS=ON
+          "-DCMAKE_EXE_LINKER_FLAGS=-static-libstdc++ -static-libgcc"
+      - name: Configurer (Windows)
+        if: runner.os == 'Windows'
+        run: cmake --preset release -DAVENOIR_BUILD_TESTS=ON -DVCPKG_TARGET_TRIPLET=x64-windows-static-md
+
+      - name: Compiler
+        run: cmake --build --preset release
+      - name: Tester
+        run: ctest --test-dir build/release --output-on-failure --no-tests=error
+
+      - name: Empaqueter
+        shell: bash
+        run: |
+          mkdir -p dist/avenoir
+          cp README.md config.example.toml dist/avenoir/
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            cp build/release/apps/cli/avenoir.exe dist/avenoir/
+            (cd dist && 7z a -bso0 "${{ matrix.archive }}" avenoir)
+          else
+            cp build/release/apps/cli/avenoir dist/avenoir/
+            tar -C dist -czf "dist/${{ matrix.archive }}" avenoir
+          fi
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.archive }}
+          path: dist/${{ matrix.archive }}
+
+  publish:
+    name: Publier la release
+    needs: build
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Créer la release GitHub
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*
+          generate_release_notes: true
+          # 0.x.y : versions de développement.
+          prerelease: ${{ startsWith(github.ref_name, 'v0.') }}
