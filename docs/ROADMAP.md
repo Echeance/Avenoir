@@ -88,6 +88,7 @@ L'ordre suit un principe : **chaque jalon produit un assistant utilisable**, plu
 - ⬜ `launch_app` : nom validé strictement ; Linux `gtk-launch` puis PATH ; Windows **`ShellExecuteW`** (jamais `cmd.exe`)
 - ⬜ `open_url` : `http(s)` uniquement ; Linux `xdg-open` ; Windows `ShellExecuteW`
 - ⬜ Tests de validation, y compris tentatives d'injection
+- ⬜ Actions d'annulation pour les outils qui le permettent (aucun des quatre outils de base n'est annulable de façon sûre : `launch_app` et `open_url` sont listés comme non annulables) ; les outils du jalon 2 (volume, luminosité, mode sombre) le seront
 
 ### 1.6 Hôte de modules v1 (`avenoir::modules`) — P1
 - ⬜ Découverte des modules : `<installation>/modules/` et dossier utilisateur ; lecture et validation de `module.toml` (PROJECT.md § 2.6)
@@ -98,6 +99,7 @@ L'ordre suit un principe : **chaque jalon produit un assistant utilisable**, plu
 - ⬜ stderr de chaque module redirigé vers un log dédié ; un module défaillant n'empêche pas le démarrage
 - ⬜ Configuration `[modules.<id>]` (activation, risque relevé) ; remplace `[[mcp_servers]]` et `McpServerConfig` dans `config.hpp`
 - ⬜ Baisse de risque : prise en compte seulement avec un accord enregistré (sinon ignorée + avertissement) ; commande CLI qui affiche avertissement et disclaimer et exige « Je sais ce que je fais »
+- ⬜ Annulation pour les outils de modules : action d'annulation renvoyée par l'outil, exécutée par `avenoir/undo`
 - ⬜ Un module d'exemple (ex. météo factice) qui sert de test d'intégration
 
 ### 1.7 CLI (`apps/cli`) — P1 🔄
@@ -105,6 +107,10 @@ L'ordre suit un principe : **chaque jalon produit un assistant utilisable**, plu
 - ⬜ Commande `/outils`
 - ⬜ Confirmations au terminal (« Autoriser ? [o/N] »)
 - ⬜ Ctrl+C **ne ferme pas** la CLI : il arrête l'action en cours (appel au LLM ou outil, via `std::stop_token`) ; sans action en cours, il efface la saisie et rappelle `/quitter` (PROJECT.md § 2.4)
+- ⬜ Cœur : `ToolOutput` peut contenir une action d'annulation ; journal d'annulation par requête dans l'agent ; annulation en ordre inverse, avec vérification d'état, échecs signalés sans bloquer, audit (PROJECT.md § 2.4, décision 23)
+- ⬜ À l'interruption : liste des actions effectuées (✓ annulables, ✗ non annulables) et question « Annuler les N actions annulables ? [o/N] »
+- ⬜ Commande `/annuler` : même proposition pour la dernière requête terminée ; répétée, remonte aux précédentes
+- ⬜ Tests : annulation en ordre inverse, refus si l'état a changé, Ctrl+C pendant la question = pas d'annulation
 - ⬜ P3 : historique et édition de ligne (`replxx` ou `linenoise-ng`), indicateur « réflexion en cours… », `/config`
 
 ### 1.8 Essais avec de vrais modèles — P1
@@ -222,6 +228,7 @@ L'ordre suit un principe : **chaque jalon produit un assistant utilisable**, plu
 - ⬜ Pingouin animé (Rive ou Lottie) qui reflète l'état de l'assistant (repos, écoute, réflexion, action)
 - ⬜ Onglets : activités en cours, historique défilable, informations système, version et mises à jour, chatbox, consommation et limites Claude Code
 - ⬜ Confirmations dessinées par Avenoir (`ConfirmationHandler` graphique), hors de tout contenu de module
+- ⬜ Bouton « Arrêter » (équivalent de Ctrl+C) et proposition d'annulation ; bouton « Annuler » sur la dernière requête (équivalent de `/annuler`)
 
 ### 6.3 Onglets des modules — P1
 - ⬜ Onglets déclaratifs : format des composants (textes, listes, images, graphiques, boutons, formulaires) et rendu
@@ -230,7 +237,7 @@ L'ordre suit un principe : **chaque jalon produit un assistant utilisable**, plu
 
 ### 6.4 Application principale — P1
 - ⬜ Réglages (fournisseur LLM, permissions par défaut, démarrage automatique…)
-- ⬜ Conversations ; historique des actions et logs, par conversation et global
+- ⬜ Conversations ; historique des actions et logs, par conversation et global ; annulation possible depuis l'historique pour les actions encore annulables
 - ⬜ Permissions : liste des accords durables et des permissions de modules, révocation
 - ⬜ Modules installés : activation, risque, mise à jour, désinstallation
 - ⬜ Baisse du risque d'un outil : avertissement, disclaimer de responsabilité, saisie de « Je sais ce que je fais » ; baisses listées et annulables dans l'écran Permissions

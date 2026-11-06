@@ -149,7 +149,14 @@ Chaque dossier de `libs/` est une bibliothèque CMake (`avenoir::core`, `avenoir
 3. pour chaque appel d'outil : contrôle des permissions → exécution → résultat renvoyé au LLM (les erreurs aussi, en texte, pour que le modèle s'adapte) ;
 4. répéter jusqu'à une réponse sans appel d'outil, ou `max_steps`.
 
-**Interruption (Ctrl+C)** : **Ctrl+C ne ferme jamais Avenoir, il arrête l'action en cours** (appel au LLM ou exécution d'outil, via `std::stop_token`). L'interruption prend effet au prochain point sûr ; une action déjà effectuée (application lancée, fichier déplacé) n'est pas annulée. Sans action en cours, Ctrl+C efface la saisie et rappelle comment quitter (`/quitter`, ou Ctrl+D dans la CLI).
+**Interruption (Ctrl+C)** : **Ctrl+C ne ferme jamais Avenoir, il arrête l'action en cours** (appel au LLM ou exécution d'outil, via `std::stop_token`). L'interruption prend effet au prochain point sûr. Sans action en cours, Ctrl+C efface la saisie et rappelle comment quitter (`/quitter`, ou Ctrl+D dans la CLI).
+
+**Annulation des actions** : « réversible » (niveau de risque) ne signifie pas « annulable automatiquement » ; **chaque outil déclare lui-même** s'il sait défaire son action. Quand c'est le cas, son résultat contient une **action d'annulation** (description lisible, ex. « remettre le volume à 45 % », et moyen de l'exécuter), que l'agent empile dans le **journal d'annulation** de la requête.
+- **À l'interruption** (Ctrl+C), si la requête a déjà effectué des actions annulables, Avenoir liste les actions effectuées (annulables ✓ et non annulables ✗) et demande s'il faut annuler les annulables `[o/N]`.
+- **Commande `/annuler`** : propose de la même façon d'annuler les actions de la **dernière requête terminée** ; répétée, elle remonte aux requêtes précédentes (dans la limite de l'historique conservé).
+- Les annulations s'exécutent **dans l'ordre inverse** des actions ; un échec est signalé sans bloquer les suivantes ; chacune est journalisée. Le « oui » de l'utilisateur vaut confirmation pour la liste affichée.
+- Une annulation **vérifie que l'état n'a pas changé** depuis l'action (ex. fichier modifié entre-temps) ; sinon elle est refusée et signalée plutôt que d'écraser quelque chose.
+- Les actions non annulables (application lancée, URL ouverte, mail envoyé…) sont listées comme telles : rien n'est promis qui ne puisse être tenu.
 
 **Voie rapide** (`FastRouter`) : règles regex strictes pour les commandes fréquentes. Elle passe **par le même contrôle de permissions** que le LLM. En cas de doute, la requête part au LLM. Sa réponse est le texte de l'outil, affiché tel quel (sans LLM) : les outils concernés renvoient donc des phrases françaises lisibles, y compris à voix haute.
 
@@ -201,6 +208,7 @@ kind = "declarative"                 # ou "web" (exige la permission ui.web)
 - **appels entre modules** : toujours **via l'hôte** (`avenoir/call_tool`), jamais en direct ; seuls les outils `public` sont accessibles ; l'appel subit le même contrôle des permissions et le même audit que le LLM, avec l'identité du module appelant ;
 - **fonctions de fond** : un module peut travailler en continu (ex. récupérer la météo toutes les 30 min) et pousser des mises à jour de son onglet à l'hôte (notifications JSON-RPC) ;
 - **découverte par le LLM** : les outils des modules apparaissent dans la liste des outils de l'agent (ex. `calendrier__update_event`). Quand les modules seront nombreux, un outil de recherche de capacités évitera d'envoyer toute la liste au LLM ;
+- **annulation** : un outil de module peut renvoyer une action d'annulation ; Avenoir l'exécute par la méthode `avenoir/undo` du module (voir « Annulation des actions », § 2.4). Les outils de serveurs MCP ne sont pas annulables ;
 - **compatibilité MCP** : `protocol = "mcp"` permet d'utiliser un serveur MCP existant comme module (outils seulement : `initialize`, `tools/list`, `tools/call`) ;
 - **risque** : celui du manifeste est un minimum proposé par l'auteur ; défaut `sensitive` si absent (on ne fait pas confiance à l'auto-déclaration d'un module). L'utilisateur peut le **relever** librement. Il peut aussi l'**abaisser**, mais uniquement depuis l'application (ou une commande de la CLI), après :
   - un **avertissement** : « Cet outil sera exécuté avec moins de contrôles que ne le prévoit son auteur. » ;
@@ -288,8 +296,9 @@ Ces règles priment sur toute considération de confort ou de rapidité.
 4. Choisir le `RiskLevel` le plus élevé applicable en cas de doute.
 5. Lire les arguments depuis le `nlohmann::json` reçu dans une structure typée, puis **valider**.
 6. Renvoyer un résultat court et factuel, en phrase française lisible (il est relu par le LLM, affiché tel quel par la voie rapide, et parfois dit à voix haute).
-7. Ajouter des tests unitaires sur la validation.
-8. L'enregistrer dans `register_native_tools`.
+7. Si l'action peut être défaite de façon sûre, renvoyer une **action d'annulation** (qui vérifie que l'état n'a pas changé avant de restaurer) ; sinon, ne rien promettre.
+8. Ajouter des tests unitaires sur la validation (et sur l'annulation, le cas échéant).
+9. L'enregistrer dans `register_native_tools`.
 
 ### 4.5 Écrire un module
 
@@ -426,6 +435,7 @@ Emplacement cible (phase 3) : `%APPDATA%\avenoir\config.toml` sous Windows, `$XD
 | 20 | **Onglets de modules déclaratifs par défaut**, web isolés sur permission `ui.web` (directive de sécurité n° 12) | Liberté pour les modules qui en ont besoin, sans exécuter de code de module dans l'interface par défaut ni lui donner accès au réseau ou aux autres modules |
 | 21 | **Baisse du risque d'un outil de module** possible, uniquement depuis l'application ou la CLI, après avertissement, disclaimer de responsabilité et saisie de « Je sais ce que je fais » ; accord enregistré, journalisé, révocable ; baisse sans accord ignorée | Laisser l'utilisateur maître de sa machine tout en rendant le choix explicite et traçable. Abaisser un outil `sensitive` lui retire la confirmation obligatoire : la décision 6 reste vraie pour la politique par niveau, mais pour cet outil c'est l'utilisateur qui lève la protection, à ses risques |
 | 22 | **Réglages modifiables uniquement par Avenoir** : démon seul rédacteur, fichier scellé par HMAC (clé dans le trousseau du système), modification extérieure refusée et restaurée, alerte et journal ; `config.toml` éditable à la main seulement en développement, jusqu'au jalon 3 | Garantir que les protections (permissions, risques, baisses avec accord) ne se contournent pas en éditant un fichier, et que chaque changement est traçable. Limite assumée : preuve de falsification, pas protection contre un logiciel malveillant avec les droits de l'utilisateur |
+| 23 | **Annulation des actions** : chaque outil déclare s'il sait défaire son action ; journal d'annulation par requête ; proposé à l'interruption (Ctrl+C) et par la commande `/annuler` ; annulations en ordre inverse, avec vérification de l'état et confirmation de l'utilisateur | Pouvoir revenir en arrière sans rien promettre d'impossible : « réversible » ne veut pas dire « annulable automatiquement » (une URL ouverte ou une application lancée ne se défont pas proprement) ; la vérification d'état évite qu'une annulation écrase un changement fait entre-temps |
 
 ---
 

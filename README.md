@@ -73,7 +73,10 @@ scripts/build.sh -r -- config.toml
 ```
 
 - `/reset` : oublie la conversation en cours ; `/quitter` (ou Ctrl+D) : quitte.
-- **Ctrl+C ne ferme pas Avenoir** : il arrête l'action en cours (réponse du LLM, outil). *Prévu à l'étape 1.7 : pour l'instant, Ctrl+C quitte encore la CLI.*
+- **Ctrl+C ne ferme pas Avenoir** : il arrête l'action en cours (réponse du LLM, outil), puis propose d'annuler les actions déjà effectuées qui peuvent l'être.
+- `/annuler` : propose d'annuler les actions de la dernière requête (répétable pour remonter plus loin).
+
+*Ctrl+C et `/annuler` arrivent à l'étape 1.7 : pour l'instant, Ctrl+C quitte encore la CLI.*
 
 ## Configuration
 

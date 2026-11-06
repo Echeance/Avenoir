@@ -100,7 +100,7 @@ En-têtes publics dans `libs/<nom>/include/avenoir/<nom>/`, tests Catch2 dans `l
 
 ## Écrire un outil natif
 
-Nom `snake_case` anglais ; description soignée pour le LLM ; JSON Schema minimal avec `required` ; lecture des arguments dans une structure typée puis validation ; résultat court, en phrase française lisible (la voie rapide l'affiche sans LLM) ; tests de validation (cas valides **et** tentatives d'injection) ; enregistrement dans `register_native_tools`.
+Nom `snake_case` anglais ; description soignée pour le LLM ; JSON Schema minimal avec `required` ; lecture des arguments dans une structure typée puis validation ; résultat court, en phrase française lisible (la voie rapide l'affiche sans LLM) ; tests de validation (cas valides **et** tentatives d'injection) ; action d'annulation si l'action peut être défaite de façon sûre (avec vérification que l'état n'a pas changé), sinon ne rien promettre ; enregistrement dans `register_native_tools`.
 
 ## Tests
 
