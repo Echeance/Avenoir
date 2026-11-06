@@ -11,12 +11,12 @@
 | Jalon | Objectif | État |
 |---|---|---|
 | **0. Conception** | Vision, architecture, directives, choix de la stack | ✅ |
-| **1. Socle** | Projet CMake, CI, cœur (agent, permissions, voie rapide), LLM, premiers outils, MCP, CLI | 🔄 prochain |
+| **1. Socle** | Projet CMake, CI, cœur (agent, permissions, voie rapide), LLM, premiers outils, hôte de modules v1, CLI | 🔄 en cours |
 | **2. Assistant du quotidien** | Contrôle système (volume, écran, multimédia), recherche web, applications installées | ⬜ |
-| **3. Résident** | Démon en arrière-plan, config et logs aux emplacements standards, raccourci global | ⬜ |
-| **4. Tâches et plugins** | Fichiers, mémoire, contexte long, client MCP complet, permissions par plugin | ⬜ |
+| **3. Résident** | Démon en arrière-plan, IPC, journal structuré, permissions durables et révocables | ⬜ |
+| **4. Tâches et modules** | Fichiers, mémoire, contexte long, appels entre modules, fonctions de fond | ⬜ |
 | **5. Voix** | Mot de réveil, STT, TTS, confirmations vocales | ⬜ |
-| **6. Interface graphique** | Icône de notification, fenêtre de conversation, écran de configuration | ⬜ |
+| **6. Interface graphique** | Widget en haut de l'écran (pingouin animé), application principale, onglets de modules | ⬜ |
 
 L'ordre suit un principe : **chaque jalon produit un assistant utilisable**, plus capable que le précédent. La voix et l'UI viennent tard parce qu'elles reposent sur un cœur stable (PROJECT.md, décision 7).
 
@@ -25,7 +25,8 @@ L'ordre suit un principe : **chaque jalon produit un assistant utilisable**, plu
 ## Jalon 0 — Conception ✅
 
 - ✅ Vision, principes directeurs, directives de sécurité (`PROJECT.md`)
-- ✅ Architecture : agent + voie rapide + permissions + outils / plugins MCP
+- ✅ Architecture : agent + voie rapide + permissions + outils ; démon / interface / modules
+- ✅ Modules en processus JSON-RPC, compatibles MCP ; interface web dans la vue web système ; onglets de modules déclaratifs ou web isolés
 - ✅ Stack : C++23, CMake, vcpkg, `std::expected`, modèle synchrone + threads
 - ✅ Fournisseurs LLM prévus : OpenAI-compatible, Anthropic, Claude Code (abonnement)
 - ✅ Format de configuration (`config.example.toml`)
@@ -37,7 +38,7 @@ L'ordre suit un principe : **chaque jalon produit un assistant utilisable**, plu
 
 *But : un assistant texte complet, sûr et testé, sur Windows comme sur Linux.*
 
-### 1.1 Projet et outillage — P1 🔄
+### 1.1 Projet et outillage — P1 ✅
 - ✅ `CMakeLists.txt` racine : C++23, avertissements stricts en erreurs, options `AVENOIR_BUILD_TESTS`, `AVENOIR_SANITIZE`
 - ✅ `cmake/AvenoirOptions.cmake` : cible `avenoir::options` (avertissements, sanitizers) et fonctions `avenoir_add_library` / `avenoir_add_tests`
 - ✅ `CMakePresets.json` : `debug`, `release`, `asan` ; générateur Ninja ; toolchain vcpkg
@@ -49,13 +50,13 @@ L'ordre suit un principe : **chaque jalon produit un assistant utilisable**, plu
 
 **Fini quand :** `cmake --preset debug && cmake --build --preset debug && ctest --preset debug` fonctionne sur Linux et Windows.
 
-### 1.2 Intégration continue et releases — P1 🔄
+### 1.2 Intégration continue et releases — P1 ✅
 - ✅ Workflow `ci` à chaque push / PR : Linux GCC 14, Linux Clang 18, Linux ASan + UBSan, Windows MSVC ; build sans avertissement + `ctest`
 - ✅ Vérification `clang-format` (même version majeure qu'en local)
 - ✅ Cache binaire vcpkg (action commune `.github/actions/setup-vcpkg`)
 - ✅ Workflow `release` sur tag `vX.Y.Z` : contrôle tag = version, build + tests Linux / Windows, publication de la release avec les binaires
 - ✅ Premier passage au vert sur GitHub (dépôt public), y compris Windows MSVC
-- ⬜ Première release `v0.1.0`
+- ✅ Première release `v0.1.0` (pré-version, binaires Linux et Windows)
 
 **Fini quand :** chaque push sur `main` est vérifié sur les deux OS, badge vert dans le README, et une release publie des binaires téléchargeables.
 
@@ -82,11 +83,15 @@ L'ordre suit un principe : **chaque jalon produit un assistant utilisable**, plu
 - ⬜ `open_url` : `http(s)` uniquement ; Linux `xdg-open` ; Windows `ShellExecuteW`
 - ⬜ Tests de validation, y compris tentatives d'injection
 
-### 1.6 Client MCP (`avenoir::mcp`) — P1
-- ⬜ Lancement du serveur (`reproc`), JSON-RPC sur stdio, thread de lecture, délai max par requête
-- ⬜ `initialize`, `tools/list`, `tools/call` ; outils exposés en `plugin__outil` (nom assaini)
-- ⬜ stderr de chaque plugin redirigé vers un log dédié
-- ⬜ Un plugin défaillant n'empêche pas le démarrage
+### 1.6 Hôte de modules v1 (`avenoir::modules`) — P1
+- ⬜ Découverte des modules : `<installation>/modules/` et dossier utilisateur ; lecture et validation de `module.toml` (PROJECT.md § 2.6)
+- ⬜ Lancement du module (`reproc`), JSON-RPC 2.0 sur stdio, thread de lecture, délai max par requête
+- ⬜ Protocole `avenoir` v1 : poignée de main, appel d'outil ; outils exposés en `module__outil` ; risque du manifeste relevable par l'utilisateur, `sensitive` si absent
+- ⬜ Commandes (`/meteo`) et règles de voie rapide déclarées par les modules (limitées à leurs propres outils)
+- ⬜ Compatibilité MCP (`protocol = "mcp"`) : `initialize`, `tools/list`, `tools/call`
+- ⬜ stderr de chaque module redirigé vers un log dédié ; un module défaillant n'empêche pas le démarrage
+- ⬜ Configuration `[modules.<id>]` (activation, risque relevé) ; remplace `[[mcp_servers]]` et `McpServerConfig` dans `config.hpp`
+- ⬜ Un module d'exemple (ex. météo factice) qui sert de test d'intégration
 
 ### 1.7 CLI (`apps/cli`) — P1
 - ⬜ Boucle de saisie, commandes `/outils`, `/reset`, `/quitter`
@@ -153,7 +158,9 @@ L'ordre suit un principe : **chaque jalon produit un assistant utilisable**, plu
 - ⬜ **P1** Config à l'emplacement standard : `$XDG_CONFIG_HOME/avenoir/`, `%APPDATA%\avenoir\` ; création guidée au premier lancement
 - ⬜ **P1** Journal d'audit dans un fichier dédié, avec rotation (`spdlog` rotating sink)
 - ⬜ **P1** Mode démon : unité systemd utilisateur / service Windows (ou démarrage à l'ouverture de session)
-- ⬜ **P1** IPC locale (socket Unix / named pipe) entre le démon et les interfaces ; la CLI devient un client
+- ⬜ **P1** IPC locale (socket Unix / named pipe) entre le démon et les interfaces (`avenoir::ipc`) ; la CLI devient un client
+- ⬜ **P1** Journal structuré : conversations, actions, décisions de permission, module concerné ; historique par conversation et global
+- ⬜ **P1** Permissions durables (« toujours autoriser cet outil de ce module ») et révocables ; permissions de module accordées à l'installation, révocables
 - ⬜ **P2** Réévaluer le modèle de concurrence (décision 12) pour le démon
 - ⬜ **P2** Raccourci clavier global qui ouvre une saisie rapide
 - ⬜ **P2** Mode « local uniquement » : refuse tout fournisseur distant (directive de sécurité n° 10)
@@ -161,13 +168,16 @@ L'ordre suit un principe : **chaque jalon produit un assistant utilisable**, plu
 
 ---
 
-## Jalon 4 — Tâches et plugins avancés ⬜
+## Jalon 4 — Tâches et modules avancés ⬜
 
 - ⬜ **P1** Outils fichiers (lister, lire, déplacer, renommer, ranger) **restreints à des dossiers autorisés** dans la config, chemins canonicalisés (`std::filesystem::weakly_canonical`)
 - ⬜ **P1** Suppression = `sensitive`, avec un résumé avant confirmation (« 12 fichiers dans Téléchargements »)
 - ⬜ **P2** Gestion du contexte long : résumé automatique de l'historique au-delà d'un seuil
-- ⬜ **P2** Client MCP complet (ressources, prompts, HTTP, `list_changed`) ou bibliothèque C++ existante
-- ⬜ **P2** Permissions déclarées par plugin (réseau, fichiers)
+- ⬜ **P1** Appels entre modules via l'hôte (`avenoir/call_tool`) : outils `public` seulement, permissions et audit avec l'identité du module appelant
+- ⬜ **P1** Fonctions de fond des modules : notifications vers l'hôte, mises à jour d'onglets
+- ⬜ **P2** Outil de recherche de capacités (quand les modules sont nombreux, ne pas envoyer tous les outils au LLM)
+- ⬜ **P2** Compatibilité MCP étendue (ressources, prompts, HTTP, `list_changed`) si besoin
+- ⬜ **P2** Bac à sable des processus de modules (réseau, fichiers) selon leurs permissions
 - ⬜ **P3** Mémoire persistante optionnelle (préférences de l'utilisateur), consultable et effaçable
 - ⬜ **P3** Tâches planifiées (« rappelle-moi à 18 h ») avec `AutoReject` pour les actions sensibles hors présence
 
@@ -186,10 +196,32 @@ L'ordre suit un principe : **chaque jalon produit un assistant utilisable**, plu
 
 ## Jalon 6 — Interface graphique ⬜
 
-- ⬜ Choisir la technologie (Qt 6 / QML, Dear ImGui ou WebView) — question ouverte
-- ⬜ Icône dans la zone de notification, fenêtre de conversation
-- ⬜ Confirmations en popup (`ConfirmationHandler` graphique)
-- ⬜ Écran de configuration et gestion des plugins
+*Interface web (HTML / CSS / TypeScript) dans la vue web du système, hébergée par un petit hôte C++ (PROJECT.md § 2.7, décisions 18 à 20).*
+
+### 6.1 Fondations — P1
+- ⬜ Choisir le framework web (Svelte, Solid, React…) et la bibliothèque C++ de vue web (`saucer`, `webview`…)
+- ⬜ Hôte C++ des fenêtres (`apps/ui`) : WebView2 sous Windows, WebKitGTK sous Linux ; un processus, deux fenêtres
+- ⬜ Pont typé interface ↔ hôte C++ ↔ démon (IPC du jalon 3)
+- ⬜ Build de `ui/` intégré à CMake et à la CI ; contrôle de types TypeScript strict
+
+### 6.2 Widget principal — P1
+- ⬜ Fenêtre sans bordure, transparente, au premier plan, en haut au centre ; layer-shell sous Wayland (niri, KDE, Hyprland, Sway)
+- ⬜ Barre pliée ; widget déplié au survol, avec animations
+- ⬜ Pingouin animé (Rive ou Lottie) qui reflète l'état de l'assistant (repos, écoute, réflexion, action)
+- ⬜ Onglets : activités en cours, historique défilable, informations système, version et mises à jour, chatbox, consommation et limites Claude Code
+- ⬜ Confirmations dessinées par Avenoir (`ConfirmationHandler` graphique), hors de tout contenu de module
+
+### 6.3 Onglets des modules — P1
+- ⬜ Onglets déclaratifs : format des composants (textes, listes, images, graphiques, boutons, formulaires) et rendu
+- ⬜ Onglets web (permission `ui.web`) : iframe `sandbox="allow-scripts"`, origine `avenoir-module://<id>/`, CSP sans réseau, `postMessage` validé (directive de sécurité n° 12)
+- ⬜ Tests de sécurité : un onglet web ne peut ni accéder au réseau, ni à l'interface, ni aux autres modules
+
+### 6.4 Application principale — P1
+- ⬜ Réglages (fournisseur LLM, permissions par défaut, démarrage automatique…)
+- ⬜ Conversations ; historique des actions et logs, par conversation et global
+- ⬜ Permissions : liste des accords durables et des permissions de modules, révocation
+- ⬜ Modules installés : activation, risque, mise à jour, désinstallation
+- ⬜ Magasin de modules (P2 : dépend de l'hébergement et de la signature)
 
 ---
 
@@ -197,10 +229,11 @@ L'ordre suit un principe : **chaque jalon produit un assistant utilisable**, plu
 
 | Question | Bloque | Quand trancher |
 |---|---|---|
-| Client MCP : bibliothèque existante ou maison ? | 1.6 / 4 | début du jalon 1.6 |
+| Protocole `avenoir` v1 : messages exacts (poignée de main, appels, notifications) | 1.6 | début du jalon 1.6 |
 | Moteur de recherche web par défaut | 2.3 | début du jalon 2 |
-| Technologie d'UI | jalon 6 | fin du jalon 3 |
-| Catalogue / registre de plugins ? | diffusion des plugins | jalon 4 |
+| Framework web et bibliothèque C++ de vue web | jalon 6 | fin du jalon 3 |
+| Format des composants déclaratifs des onglets | 6.3 | début du jalon 6 |
+| Magasin de modules : hébergement, signature, vérification | 6.4 | jalon 4 |
 
 ---
 
@@ -209,7 +242,7 @@ L'ordre suit un principe : **chaque jalon produit un assistant utilisable**, plu
 Par ordre conseillé :
 
 1. ~~Projet CMake + vcpkg + préréglages + un test qui passe (1.1)~~ ✅
-2. CI au vert sur GitHub + release `v0.1.0` (1.2)
+2. ~~CI au vert sur GitHub + release `v0.1.0` (1.2)~~ ✅
 3. ~~Cœur : messages, outils, permissions, agent avec LLM scripté (1.3)~~ ✅
 4. Fournisseur `openai_compatible` + outil `current_time` + CLI minimale : premier dialogue de bout en bout (1.4, 1.5, 1.7)
-5. Les autres fournisseurs, outils et le client MCP
+5. Les autres fournisseurs et outils, puis l'hôte de modules v1 (1.6)

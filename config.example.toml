@@ -48,19 +48,15 @@ read_only = "allow"
 reversible = "allow"
 sensitive = "confirm"
 
-# ─── Plugins (serveurs MCP en stdio) ───────────────────────────────────────
-# Les outils apparaissent sous le nom `<name>__<outil>`.
-# `risk` s'applique à tous les outils du serveur (défaut : "sensitive").
-
-# [[mcp_servers]]
-# name = "fichiers"
-# command = "npx"
-# args = ["-y", "@modelcontextprotocol/server-filesystem", "/home/moi/Documents"]
-# risk = "reversible"
-
-# [[mcp_servers]]
-# name = "recherche"
-# command = "/chemin/vers/mon-serveur-recherche"
-# env = { SEARXNG_URL = "http://localhost:8080" }
-# risk = "read_only"
-# enabled = false
+# ─── Modules ───────────────────────────────────────────────────────────────
+# Les modules s'installent dans `<installation>/modules/<id>/` ou dans le
+# dossier utilisateur ; chacun se décrit dans son `module.toml`. Ici, seuls
+# VOS réglages par module (prise en charge à l'étape 1.6 de la roadmap).
+#
+# [modules.meteo]
+# enabled = true
+#
+# [modules.calendrier]
+# enabled = true
+# # Relever le risque d'un outil (jamais l'abaisser sous celui du manifeste) :
+# risk = { update_event = "sensitive" }
