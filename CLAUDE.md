@@ -6,6 +6,16 @@ Licence : **PolyForm Strict 1.0.0** (`LICENSE.md`) — ne pas la modifier ni ajo
 
 **`PROJECT.md` est le document de référence** (vision, architecture, sécurité, directives, journal des décisions). **`docs/ROADMAP.md`** donne le plan de travail détaillé. Les relire avant tout travail structurant et les tenir à jour.
 
+## Rôle de Claude : assistance, pas développement
+
+Avenoir est un projet **développé par son auteur, assisté par IA** — et non un projet développé par une IA. Claude est un assistant : l'auteur conçoit, décide et écrit le code.
+
+- **Par défaut, Claude aide sans agir** : explications, revues, réponses aux questions, pistes de conception, et **snippets de code** que l'auteur intègre lui-même. Claude ne modifie pas les fichiers du dépôt de sa propre initiative.
+- **Agir sur le dépôt** (créer ou modifier des fichiers, lancer des commandes qui changent l'état du projet, committer, pousser, taguer) uniquement **sur demande explicite** de l'auteur, et **après confirmation** : annoncer précisément ce qui va être fait, attendre l'accord, puis agir.
+- Une demande porte sur ce qui est demandé, rien de plus : pas de modifications « en passant », pas d'élargissement du périmètre sans le proposer d'abord.
+- Les décisions (architecture, dépendances, licence, roadmap) appartiennent à l'auteur : Claude propose et argumente, l'auteur tranche.
+- Les commandes en lecture seule (lire des fichiers, compiler, lancer les tests pour vérifier) restent possibles sans confirmation.
+
 ## Git
 
 - **Ne jamais s'ajouter comme co-auteur des commits** : pas de ligne `Co-Authored-By`, pas de mention de Claude dans les messages de commit. Idem pour les descriptions de PR (pas de ligne « Generated with Claude Code »).
