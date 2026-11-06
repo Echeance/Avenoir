@@ -112,6 +112,7 @@ avenoir/
 │   ├── llm/                Fournisseurs : API compatible OpenAI, Anthropic, Claude Code
 │   ├── tools/              Outils natifs ; code par OS dans src/platform/{linux,windows}.cpp
 │   ├── modules/            Hôte de modules : manifestes, processus JSON-RPC, compatibilité MCP
+│   ├── storage/            Conversations et journal (SQLite)
 │   ├── ipc/                Protocole et transport démon ↔ interfaces
 │   └── voice/              Interfaces voix (déclarations uniquement au départ)
 ├── apps/
@@ -232,6 +233,28 @@ Sous Wayland, le placement en haut de l'écran passe par le protocole **layer-sh
 **Onglets des modules** — deux types, la sécurité d'abord :
 - **déclaratif** (par défaut) : le module décrit son contenu (textes, listes, images, graphiques, boutons, formulaires) et l'interface le dessine dans le style d'Avenoir ; **aucun code du module ne s'exécute dans l'interface** ;
 - **web** (permission `ui.web`) : HTML / CSS / JS du module, affiché dans une **iframe isolée** (voir directive de sécurité n° 12).
+
+### 2.8 Conversations et historique
+
+Les conversations sont **persistantes** : à la réouverture de l'application ou de la CLI, tout est rétabli.
+
+- **Stockage** : base **SQLite** locale (`~/.local/share/avenoir/avenoir.db` sous Linux, `%LOCALAPPDATA%\avenoir\avenoir.db` sous Windows), dans la bibliothèque `avenoir::storage`. Elle contient les conversations (identifiant, titre, dates) et **tous leurs messages** : questions, réponses, appels d'outils et résultats, horodatage, consommation. Elle servira aussi au journal global (jalon 3).
+- **Écriture immédiate** : chaque message est enregistré dès qu'il existe ; un plantage ou un Ctrl+C ne perd rien.
+- **Reprise** : au lancement, la dernière conversation utilisée est rouverte ; ses messages sont réaffichés et l'agent recharge l'historique (le LLM retrouve tout le contexte).
+- **Titre** : par défaut, les premiers mots de la première question ; renommable.
+- **Commandes de la CLI** :
+
+| Commande | Effet |
+|---|---|
+| `/nouvelle [titre]` | crée une conversation et bascule dessus |
+| `/conversations` | liste les conversations (n°, titre, date, nombre de messages) |
+| `/ouvrir <n° ou titre>` | bascule sur une conversation et réaffiche ses messages |
+| `/renommer <titre>` | renomme la conversation en cours |
+| `/supprimer [n° ou titre]` | supprime une conversation (la conversation en cours par défaut), après confirmation |
+| `/historique` | réaffiche toute la conversation en cours |
+
+- **Défilement** : la conversation se remonte avec le défilement du terminal. Au démarrage et avec `/ouvrir`, les **50 derniers messages** sont réaffichés (pour ne pas inonder le terminal) ; `/historique` affiche tout. Les appels d'outils sont affichés de façon compacte (`⚙ launch_app « firefox »`).
+- **Limites** : les conversations sont stockées **en clair** sur la machine (chiffrement optionnel envisagé plus tard) ; les actions d'annulation (`/annuler`) ne survivent pas à un redémarrage (les actions passées restent visibles dans l'historique, mais ne sont plus annulables) ; une très longue conversation reprise est renvoyée en entier au LLM (résumé automatique prévu au jalon 4).
 
 ---
 
@@ -436,6 +459,7 @@ Emplacement cible (phase 3) : `%APPDATA%\avenoir\config.toml` sous Windows, `$XD
 | 21 | **Baisse du risque d'un outil de module** possible, uniquement depuis l'application ou la CLI, après avertissement, disclaimer de responsabilité et saisie de « Je sais ce que je fais » ; accord enregistré, journalisé, révocable ; baisse sans accord ignorée | Laisser l'utilisateur maître de sa machine tout en rendant le choix explicite et traçable. Abaisser un outil `sensitive` lui retire la confirmation obligatoire : la décision 6 reste vraie pour la politique par niveau, mais pour cet outil c'est l'utilisateur qui lève la protection, à ses risques |
 | 22 | **Réglages modifiables uniquement par Avenoir** : démon seul rédacteur, fichier scellé par HMAC (clé dans le trousseau du système), modification extérieure refusée et restaurée, alerte et journal ; `config.toml` éditable à la main seulement en développement, jusqu'au jalon 3 | Garantir que les protections (permissions, risques, baisses avec accord) ne se contournent pas en éditant un fichier, et que chaque changement est traçable. Limite assumée : preuve de falsification, pas protection contre un logiciel malveillant avec les droits de l'utilisateur |
 | 23 | **Annulation des actions** : chaque outil déclare s'il sait défaire son action ; journal d'annulation par requête ; proposé à l'interruption (Ctrl+C) et par la commande `/annuler` ; annulations en ordre inverse, avec vérification de l'état et confirmation de l'utilisateur | Pouvoir revenir en arrière sans rien promettre d'impossible : « réversible » ne veut pas dire « annulable automatiquement » (une URL ouverte ou une application lancée ne se défont pas proprement) ; la vérification d'état évite qu'une annulation écrase un changement fait entre-temps |
+| 24 | **Conversations persistantes** dans une base SQLite locale (`avenoir::storage`) : écriture immédiate de chaque message, reprise de la dernière conversation, commandes `/nouvelle`, `/conversations`, `/ouvrir`, `/renommer`, `/supprimer`, `/historique` | Ne rien perdre entre deux sessions et pouvoir tout rétablir ; SQLite est fiable, transactionnel, multiplateforme, dans le domaine public (compatible avec la licence) et servira aussi au journal global du jalon 3 |
 
 ---
 

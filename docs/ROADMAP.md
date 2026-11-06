@@ -11,7 +11,7 @@
 | Jalon | Objectif | État |
 |---|---|---|
 | **0. Conception** | Vision, architecture, directives, choix de la stack | ✅ |
-| **1. Socle** | Projet CMake, CI, cœur (agent, permissions, voie rapide), LLM, premiers outils, hôte de modules v1, CLI | 🔄 en cours |
+| **1. Socle** | Projet CMake, CI, cœur (agent, permissions, voie rapide), LLM, premiers outils, hôte de modules v1, CLI, conversations persistantes | 🔄 en cours |
 | **2. Assistant du quotidien** | Contrôle système (volume, écran, multimédia), recherche web, applications installées | ⬜ |
 | **3. Résident** | Démon en arrière-plan, IPC, journal structuré, permissions durables et révocables | ⬜ |
 | **4. Tâches et modules** | Fichiers, mémoire, contexte long, appels entre modules, fonctions de fond | ⬜ |
@@ -126,6 +126,18 @@ L'ordre suit un principe : **chaque jalon produit un assistant utilisable**, plu
 
 **Fini quand :** les requêtes de référence passent avec au moins un modèle local et un modèle distant, sur Linux et Windows.
 
+### 1.9 Conversations persistantes (`avenoir::storage`) — P1
+- ⬜ Dépendance `sqlite3` (vcpkg) ; base `avenoir.db` dans le dossier de données de l'utilisateur
+- ⬜ Schéma : conversations (identifiant, titre, dates), messages (rôle, contenu, appels et résultats d'outils, horodatage, consommation) ; migrations versionnées
+- ⬜ Écriture immédiate de chaque message (transactions) ; aucune perte sur plantage ou Ctrl+C
+- ⬜ Agent : chargement d'un historique existant ; rattachement à une conversation
+- ⬜ CLI : reprise de la dernière conversation au lancement, réaffichage des 50 derniers messages
+- ⬜ CLI : `/nouvelle [titre]`, `/conversations`, `/ouvrir <n° ou titre>`, `/renommer <titre>`, `/supprimer [n° ou titre]` (avec confirmation), `/historique`
+- ⬜ Titre automatique (premiers mots de la première question)
+- ⬜ Tests : écriture puis relecture, reprise après « plantage » simulé, renommage, suppression, base créée si absente
+
+**Fini quand :** on ferme la CLI au milieu d'une conversation, on la rouvre, et tout est là ; on peut créer, lister, ouvrir, renommer et supprimer des conversations.
+
 ---
 
 ## Jalon 2 — Assistant du quotidien ⬜
@@ -181,7 +193,7 @@ L'ordre suit un principe : **chaque jalon produit un assistant utilisable**, plu
 - ⬜ **P1** Journal d'audit dans un fichier dédié, avec rotation (`spdlog` rotating sink)
 - ⬜ **P1** Mode démon : unité systemd utilisateur / service Windows (ou démarrage à l'ouverture de session)
 - ⬜ **P1** IPC locale (socket Unix / named pipe) entre le démon et les interfaces (`avenoir::ipc`) ; la CLI devient un client
-- ⬜ **P1** Journal structuré : conversations, actions, décisions de permission, module concerné ; historique par conversation et global
+- ⬜ **P1** Journal structuré (dans la base de l'étape 1.9) : actions, décisions de permission, module concerné ; historique par conversation et global ; le démon devient le seul à écrire dans la base
 - ⬜ **P1** Permissions durables (« toujours autoriser cet outil de ce module ») et révocables ; permissions de module accordées à l'installation, révocables
 - ⬜ **P2** Réévaluer le modèle de concurrence (décision 12) pour le démon
 - ⬜ **P2** Raccourci clavier global qui ouvre une saisie rapide
@@ -270,4 +282,5 @@ Par ordre conseillé :
 3. ~~Cœur : messages, outils, permissions, agent avec LLM scripté (1.3)~~ ✅
 4. ~~Fournisseurs LLM + CLI minimale : premier dialogue de bout en bout (1.4)~~ ✅
 5. ~~Outils natifs (1.5)~~ ✅ ; confirmations, Ctrl+C, annulation et `/annuler` dans la CLI (1.7)
-6. Hôte de modules v1 (1.6)
+6. Conversations persistantes (1.9)
+7. Hôte de modules v1 (1.6)

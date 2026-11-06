@@ -52,6 +52,7 @@ AVENOIR_LOG=debug ./build/debug/apps/cli/avenoir
 - `libs/llm` : fournisseurs LLM (OpenAI-compatible, Anthropic, Claude Code).
 - `libs/tools` : outils natifs ; code spécifique à l'OS dans `src/platform/`.
 - `libs/modules` : hôte de modules (manifestes `module.toml`, processus JSON-RPC, compatibilité MCP).
+- `libs/storage` : conversations et journal (SQLite) ; chaque message est écrit immédiatement.
 - `libs/ipc` : protocole et transport démon ↔ interfaces.
 - `libs/voice` : interfaces voix.
 - `apps/cli` : interface texte (exécutable `avenoir`) ; `apps/daemon` : démon résident ; `apps/ui` : hôte C++ des fenêtres (widget + application principale). Les applications de `apps/` assemblent le tout.
