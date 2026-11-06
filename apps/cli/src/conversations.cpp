@@ -4,7 +4,6 @@
 #include <cstdint>
 #include <format>
 #include <optional>
-#include <print>
 #include <span>
 #include <string>
 #include <string_view>
@@ -13,19 +12,13 @@
 
 #include <spdlog/spdlog.h>
 
+#include "avenoir/terminal/style.hpp"
+
 namespace avenoir::cli {
 
 namespace {
 
 constexpr std::string_view kDefaultTitle = "Nouvelle conversation";
-
-/// « « firefox » » pour un seul argument texte, le JSON compact sinon.
-std::string summarize_arguments(const nlohmann::json& arguments) {
-    if (arguments.is_object() && arguments.size() == 1 && arguments.begin()->is_string()) {
-        return "« " + arguments.begin()->get<std::string>() + " »";
-    }
-    return arguments.dump();
-}
 
 /// Numéro de conversation (18 chiffres au plus : pas de débordement possible).
 std::optional<std::int64_t> parse_id(std::string_view text) {
@@ -56,52 +49,26 @@ flatten(core::Result<std::optional<storage::ConversationInfo>> result) {
 
 } // namespace
 
-void print_messages(std::span<const core::Message> messages, std::optional<std::size_t> limit) {
-    if (limit && messages.size() > *limit) {
-        std::println("… {} message(s) plus ancien(s) — /historique pour tout afficher",
-                     messages.size() - *limit);
-        messages = messages.last(*limit);
-    }
-    for (const auto& message : messages) {
-        std::visit(
-            [](const auto& m) {
-                using T = std::decay_t<decltype(m)>;
-                if constexpr (std::is_same_v<T, core::UserMessage>) {
-                    std::println("\n> {}", m.content);
-                } else if constexpr (std::is_same_v<T, core::AssistantMessage>) {
-                    for (const auto& call : m.tool_calls) {
-                        std::println("⚙ {} {}", call.name, summarize_arguments(call.arguments));
-                    }
-                    if (!m.text.empty()) {
-                        std::println("{}", m.text);
-                    }
-                }
-                // Les résultats bruts des outils ne sont pas réaffichés.
-            },
-            message);
-    }
-}
-
 Conversations::Conversations(std::optional<storage::Store> store, core::Agent& agent,
                              Prompt& prompt)
     : store_(std::move(store)), agent_(&agent), prompt_(&prompt) {}
 
 void Conversations::resume() {
-    agent_->set_history_observer(core::HistoryObserver{
-        .appended = [this](const core::Message& message) { record(message); },
-        .removed_last = [this] { record_removal(); },
-    });
     if (!store_) {
         return;
     }
     if (auto recent = flatten(store_->most_recent())) {
-        switch_to(*recent);
+        switch_to(*recent, /*show=*/false);
     } else {
         start({}, /*announce=*/false);
     }
 }
 
-void Conversations::switch_to(const storage::ConversationInfo& conversation) {
+void Conversations::show_recent() {
+    print_messages(agent_->history(), kResumeMessages);
+}
+
+void Conversations::switch_to(const storage::ConversationInfo& conversation, bool show) {
     if (!store_) {
         return;
     }
@@ -113,7 +80,9 @@ void Conversations::switch_to(const storage::ConversationInfo& conversation) {
     current_ = conversation.id;
     title_ = conversation.title;
     auto_title_ = conversation.message_count == 0 && conversation.title == kDefaultTitle;
-    print_messages(*messages, kResumeMessages);
+    if (show) {
+        print_messages(*messages, kResumeMessages);
+    }
     agent_->load_history(std::move(*messages));
 }
 
@@ -124,7 +93,7 @@ void Conversations::create(std::string_view title) {
 void Conversations::start(std::string_view title, bool announce) {
     agent_->reset();
     if (!store_) {
-        std::println("Nouvelle conversation (non conservée : base indisponible).");
+        display().info("Nouvelle conversation (non conservée : base indisponible).");
         return;
     }
     const std::string name = title.empty() ? std::string(kDefaultTitle) : std::string(title);
@@ -137,13 +106,13 @@ void Conversations::start(std::string_view title, bool announce) {
     title_ = created->title;
     auto_title_ = title.empty();
     if (announce) {
-        std::println("Nouvelle conversation : {}", describe_current());
+        display().success(std::format("Nouvelle conversation : {}", describe_current()));
     }
 }
 
 void Conversations::list() {
     if (!store_) {
-        std::println("Conversations non conservées : base indisponible.");
+        display().info("Conversations non conservées : base indisponible.");
         return;
     }
     auto conversations = store_->list_conversations();
@@ -151,9 +120,17 @@ void Conversations::list() {
         warn_storage(conversations.error());
         return;
     }
+    using terminal::Color;
     for (const auto& c : *conversations) {
-        std::println("{} {:>4}  {}  ({}, {} message(s))", c.id == current_ ? "▶" : " ", c.id,
-                     c.title, c.updated_at.substr(0, 16), c.message_count);
+        const bool current = c.id == current_;
+        display().plain(
+            std::format("{} {}  {}  {}",
+                        current ? terminal::paint("▶", {.color = Color::Green, .bold = true}) : " ",
+                        terminal::paint(std::format("{:>4}", c.id), {.color = Color::Gray}),
+                        terminal::paint(terminal::truncate(c.title, 50), {.bold = current}),
+                        terminal::paint(std::format("{} · {} message(s)",
+                                                    c.updated_at.substr(0, 16), c.message_count),
+                                        {.color = Color::Gray})));
     }
 }
 
@@ -175,32 +152,33 @@ std::optional<storage::ConversationInfo> Conversations::resolve(std::string_view
             }
         }
     }
-    std::println("Conversation introuvable : {} (voir /conversations)", target);
+    display().warning(std::format("Conversation introuvable : {} (voir /conversations)", target));
     return std::nullopt;
 }
 
 void Conversations::open(std::string_view target) {
     if (!store_) {
-        std::println("Conversations non conservées : base indisponible.");
+        display().info("Conversations non conservées : base indisponible.");
         return;
     }
     if (target.empty()) {
-        std::println("Usage : /ouvrir <n° ou titre>");
+        display().info("Usage : /ouvrir <n° ou titre>");
         return;
     }
     if (const auto conversation = resolve(target)) {
-        std::println("Conversation : {} — {}", conversation->id, conversation->title);
-        switch_to(*conversation);
+        display().success(
+            std::format("Conversation : « {} » (n° {})", conversation->title, conversation->id));
+        switch_to(*conversation, /*show=*/true);
     }
 }
 
 void Conversations::rename(std::string_view title) {
     if (!store_) {
-        std::println("Conversations non conservées : base indisponible.");
+        display().info("Conversations non conservées : base indisponible.");
         return;
     }
     if (title.empty()) {
-        std::println("Usage : /renommer <titre>");
+        display().info("Usage : /renommer <titre>");
         return;
     }
     if (auto renamed = store_->rename(current_, title); !renamed) {
@@ -209,12 +187,12 @@ void Conversations::rename(std::string_view title) {
     }
     title_ = std::string(title);
     auto_title_ = false;
-    std::println("Conversation renommée : {}", describe_current());
+    display().success(std::format("Conversation renommée : {}", describe_current()));
 }
 
 void Conversations::remove(std::string_view target) {
     if (!store_) {
-        std::println("Conversations non conservées : base indisponible.");
+        display().info("Conversations non conservées : base indisponible.");
         return;
     }
     storage::Store& store = *store_;
@@ -226,22 +204,22 @@ void Conversations::remove(std::string_view target) {
     const std::string question = std::format("Supprimer « {} » et ses {} message(s) ? [o/N] ",
                                              conversation->title, conversation->message_count);
     if (!prompt_->ask_yes_no(question)) {
-        std::println("Rien n'a été supprimé.");
+        display().info("Rien n'a été supprimé.");
         return;
     }
     if (auto removed = store.remove(conversation->id); !removed) {
         warn_storage(removed.error());
         return;
     }
-    std::println("Conversation supprimée.");
+    display().success("Conversation supprimée.");
     if (conversation->id != current_) {
         return;
     }
     // La conversation en cours a disparu : reprise de la plus récente.
     agent_->reset();
     if (auto recent = flatten(store.most_recent())) {
-        std::println("Conversation : {}", recent->title);
-        switch_to(*recent);
+        display().info(std::format("Conversation : « {} » (n° {})", recent->title, recent->id));
+        switch_to(*recent, /*show=*/true);
     } else {
         create({});
     }

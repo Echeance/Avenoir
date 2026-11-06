@@ -72,6 +72,8 @@ Avant de committer : `scripts/build.sh -k` (vérifie le formatage, lance clang-t
 scripts/build.sh -r -- config.toml
 ```
 
+L'accueil présente le pingouin d'Avenoir en pixel art. La barre de saisie est fixe en bas du terminal ; la conversation défile au-dessus. La barre grandit pour les saisies longues et suit les changements de taille de la fenêtre ; les confirmations s'y répondent. Une toupie indique, avec les réponses, que le LLM réfléchit. Chaque élément a son style : vos requêtes (`❯`), les réponses d'Avenoir (`◆ Avenoir`, Markdown rendu), les actions en direct (`⚙ … ✓/✗`), les confirmations (cadre jaune, badge de risque), les erreurs (en rouge). Les couleurs sont désactivées hors d'un terminal ou si la variable `NO_COLOR` est définie ; le journal d'audit s'affiche avec `AVENOIR_LOG=info`.
+
 - `/aide` : liste des commandes ; `/outils` : outils disponibles et leur niveau de risque.
 - `/reset` : oublie la conversation en cours ; `/quitter` (ou Ctrl+D) : quitte.
 - **Ctrl+C ne ferme pas Avenoir** : il arrête l'action en cours (réponse du LLM, outil), puis propose d'annuler les actions déjà effectuées qui peuvent l'être. Sur une ligne vide, il efface la saisie.

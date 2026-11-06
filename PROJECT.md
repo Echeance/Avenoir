@@ -113,6 +113,7 @@ avenoir/
 │   ├── tools/              Outils natifs ; code par OS dans src/platform/{linux,windows}.cpp
 │   ├── modules/            Hôte de modules : manifestes, processus JSON-RPC, compatibilité MCP
 │   ├── storage/            Conversations et journal (SQLite)
+│   ├── terminal/           Rendu dans le terminal : couleurs, cadres, Markdown
 │   ├── ipc/                Protocole et transport démon ↔ interfaces
 │   └── voice/              Interfaces voix (déclarations uniquement au départ)
 ├── apps/
@@ -257,6 +258,32 @@ Les conversations sont **persistantes** : à la réouverture de l'application ou
 - **Historique des saisies de la CLI** : les lignes tapées sont aussi conservées (flèches haut/bas), dans `cli_history.txt`, en clair, dans le même dossier de données.
 - **Droits** : le dossier de données est réservé à l'utilisateur (`700`), la base et l'historique des saisies aussi (`600`) ; sous Windows, `%LOCALAPPDATA%` est déjà propre à l'utilisateur.
 - **Limites** : les conversations sont stockées **en clair** sur la machine (chiffrement optionnel envisagé plus tard) ; les actions d'annulation (`/annuler`) ne survivent pas à un redémarrage (les actions passées restent visibles dans l'historique, mais ne sont plus annulables) ; une très longue conversation reprise est renvoyée en entier au LLM (résumé automatique prévu au jalon 4).
+
+### 2.9 Apparence de la CLI
+
+La CLI doit être agréable à lire : chaque type d'élément a son style, reconnaissable d'un coup d'œil.
+
+| Élément | Rendu |
+|---|---|
+| Accueil | cadre avec le **pingouin en pixel art** (demi-blocs ▀ ▄ colorés, couleurs 24 bits ou 256 selon le terminal ; en ASCII sans couleurs), version, LLM, conversation en cours |
+| Barre de saisie | **fixe en bas du terminal** : une ligne grise, l'invite `❯` cyan, une ligne grise ; tout le reste défile au-dessus. Elle **grandit** quand la saisie dépasse une ligne et reprend sa taille après validation ; les confirmations s'y répondent (« Autoriser ? [o/N] ») |
+| Requête de l'utilisateur | `❯` cyan, texte en gras, **sans cadre** dans l'historique |
+| Réponse d'Avenoir | `◆ Avenoir` blanc, puis le texte précédé d'une barre `│` ; **Markdown rendu** (gras, italique, `code`, titres, puces `•`, citations, blocs de code) |
+| Action en cours | `⚙ outil « argument »` jaune, suivi de `✓` vert ou `✗` rouge et de l'erreur, affichés **en direct** |
+| Réflexion du LLM | toupie animée, temps écoulé et rappel « Ctrl+C pour arrêter », **avec les réponses** (au-dessus de la barre) |
+| Confirmation | cadre jaune « ⚠ Action à confirmer », badge de risque, arguments |
+| Risques | `lecture seule` vert, `réversible` jaune, `SENSIBLE` rouge (confirmations, `/outils`) |
+| Erreur | `✗ Erreur :` rouge, sur la sortie d'erreur |
+| Messages système | gris discret |
+
+- **Bibliothèque `avenoir::terminal`** : couleurs, cadres, badges, largeur d'affichage UTF-8, retour à la ligne, rendu Markdown léger. Testée sans terminal.
+- **Barre fixe** : les dernières lignes du terminal sont réservées (zone de défilement DECSTBM au-dessus) ; à la sortie (y compris sur erreur), le terminal retrouve son état normal. Active dès que la sortie est un terminal qui interprète les séquences de contrôle (Linux et Windows, avec ou sans couleurs) et fait au moins 5 lignes ; hors d'un terminal (tube, script), texte simple sans barre.
+- **Saisie longue** : la barre grandit vers le haut, ligne par ligne : l'historique défile d'autant (CSI S, sans déplacer le curseur), la bordure du haut et l'invite sont redessinées plus haut, puis le curseur remonte d'autant (replxx se déplace en relatif : ses calculs restent justes). Le curseur n'est jamais mémorisé pendant un défilement : certains terminaux (Alacritty) le déplacent alors avec le contenu. La barre reprend une ligne après validation et l'historique redescend.
+- **Redimensionnement** : selon le terminal, les lignes déjà affichées sont recoupées ou déplacées (Alacritty réorganise le texte à la nouvelle largeur). L'affichage retient donc la fin de l'historique : au redimensionnement, l'écran est vidé, cette fin réaffichée à la nouvelle largeur et la barre redessinée. Pendant une réflexion, c'est la boucle de la toupie qui le fait ; pendant une saisie, un thread de surveillance simule une touche que replxx traite dans sa boucle (invite réécrite, bordure du bas — mise en cache par replxx à l'ancienne largeur — recalculée). Les éléments déjà affichés gardent leur mise en forme d'origine (un cadre dessiné plus large peut être coupé).
+- **Réponses découpées aux mots** : chaque ligne garde la barre `│`.
+- **Toutes les sorties de la CLI passent par un seul module d'affichage**, sous un verrou : la toupie (thread principal) et les actions (thread de la requête) ne s'écrivent jamais en même temps ; la toupie est suspendue pendant une confirmation.
+- **Sans terminal ou avec `NO_COLOR`** (https://no-color.org) : ni couleur ni animation, texte simple (les marqueurs Markdown sont tout de même retirés). Sous Windows, les séquences de couleur de la console sont activées.
+- **Journal d'audit** : masqué à l'écran par défaut (les lignes `⚙` montrent déjà les actions) ; visible avec `AVENOIR_LOG=info`. Il sera écrit dans un fichier au jalon 3.
 
 ---
 
@@ -462,6 +489,7 @@ Emplacement cible (phase 3) : `%APPDATA%\avenoir\config.toml` sous Windows, `$XD
 | 22 | **Réglages modifiables uniquement par Avenoir** : démon seul rédacteur, fichier scellé par HMAC (clé dans le trousseau du système), modification extérieure refusée et restaurée, alerte et journal ; `config.toml` éditable à la main seulement en développement, jusqu'au jalon 3 | Garantir que les protections (permissions, risques, baisses avec accord) ne se contournent pas en éditant un fichier, et que chaque changement est traçable. Limite assumée : preuve de falsification, pas protection contre un logiciel malveillant avec les droits de l'utilisateur |
 | 23 | **Annulation des actions** : chaque outil déclare s'il sait défaire son action ; journal d'annulation par requête ; proposé à l'interruption (Ctrl+C) et par la commande `/annuler` ; annulations en ordre inverse, avec vérification de l'état et confirmation de l'utilisateur | Pouvoir revenir en arrière sans rien promettre d'impossible : « réversible » ne veut pas dire « annulable automatiquement » (une URL ouverte ou une application lancée ne se défont pas proprement) ; la vérification d'état évite qu'une annulation écrase un changement fait entre-temps |
 | 24 | **Conversations persistantes** dans une base SQLite locale (`avenoir::storage`) : écriture immédiate de chaque message, reprise de la dernière conversation, commandes `/nouvelle`, `/conversations`, `/ouvrir`, `/renommer`, `/supprimer`, `/historique` | Ne rien perdre entre deux sessions et pouvoir tout rétablir ; SQLite est fiable, transactionnel, multiplateforme, dans le domaine public (compatible avec la licence) et servira aussi au journal global du jalon 3 |
+| 25 | **CLI soignée** : un style par type d'élément (requête, réponse, action, confirmation, erreur), Markdown rendu, toupie, actions affichées en direct ; bibliothèque `avenoir::terminal` ; couleurs désactivées hors terminal et avec `NO_COLOR` | Distinguer d'un coup d'œil ce qui vient de l'utilisateur, de l'assistant ou d'une action ; rester propre dans un tube ou un script, et respecter la convention `NO_COLOR` |
 
 ---
 

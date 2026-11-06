@@ -27,6 +27,7 @@ Avenoir est un projet **développé par son auteur, assisté par IA** — et non
 - Avant chaque commit : `scripts/build.sh -k` (build sans avertissement, `clang-format`, `clang-tidy`, `ctest`).
 - Toute décision d'architecture notable → nouvelle entrée dans la section 7 de `PROJECT.md` (« Journal des décisions »).
 - Une tâche de la roadmap terminée → la cocher dans `docs/ROADMAP.md`.
+- **Documentation toujours à jour ensemble** : chaque évolution met à jour, dans le même temps, `README.md` (usage), `PROJECT.md` (architecture, décisions) et `docs/ROADMAP.md` (avancement) — pas seulement l'un d'eux.
 - Publier une version : même numéro dans `CMakeLists.txt` et `vcpkg.json`, commit, puis tag poussé : `vX.Y.Z` (stable, « Latest » si ≥ 1.0.0) ou `vX.Y.Z-alpha|beta|rc.N` (pré-version). Le workflow `release` publie les binaires. Ne jamais créer de tag sans demande de l'utilisateur.
 - CI (`.github/workflows/ci.yml`) : Linux GCC / Clang / ASan + Windows MSVC + clang-format. Une CI rouge se corrige avant de continuer.
 
@@ -53,6 +54,7 @@ AVENOIR_LOG=debug ./build/debug/apps/cli/avenoir
 - `libs/tools` : outils natifs ; code spécifique à l'OS dans `src/platform/`.
 - `libs/modules` : hôte de modules (manifestes `module.toml`, processus JSON-RPC, compatibilité MCP).
 - `libs/storage` : conversations et journal (SQLite) ; chaque message est écrit immédiatement.
+- `libs/terminal` : rendu dans le terminal (couleurs, cadres, Markdown) ; dans la CLI, **toute sortie passe par le module d'affichage** (`apps/cli/src/display.*`), jamais par `std::print` direct, pour respecter le verrou de la toupie et `NO_COLOR`.
 - `libs/ipc` : protocole et transport démon ↔ interfaces.
 - `libs/voice` : interfaces voix.
 - `apps/cli` : interface texte (exécutable `avenoir`) ; `apps/daemon` : démon résident ; `apps/ui` : hôte C++ des fenêtres (widget + application principale). Les applications de `apps/` assemblent le tout.

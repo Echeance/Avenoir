@@ -10,6 +10,7 @@
 #include "avenoir/core/agent.hpp"
 #include "avenoir/storage/store.hpp"
 
+#include "display.hpp"
 #include "prompt.hpp"
 
 namespace avenoir::cli {
@@ -23,9 +24,17 @@ class Conversations {
   public:
     Conversations(std::optional<storage::Store> store, core::Agent& agent, Prompt& prompt);
 
-    /// Reprend la conversation la plus récente (ou en crée une) et branche
-    /// l'enregistrement des messages sur l'agent.
+    /// Reprend la conversation la plus récente (ou en crée une) et la charge
+    /// dans l'agent, sans l'afficher (voir `show_recent`).
     void resume();
+    /// Réaffiche les derniers messages de la conversation en cours.
+    void show_recent();
+
+    /// Enregistre un message ajouté à l'historique (appelé par l'observateur
+    /// de l'agent, depuis le thread de la requête).
+    void record(const core::Message& message);
+    /// Enregistre le retrait du dernier message.
+    void record_removal();
 
     void create(std::string_view title);  ///< /nouvelle [titre] (et /reset)
     void list();                          ///< /conversations
@@ -38,11 +47,9 @@ class Conversations {
     [[nodiscard]] std::string describe_current() const;
 
   private:
-    void switch_to(const storage::ConversationInfo& conversation);
+    void switch_to(const storage::ConversationInfo& conversation, bool show);
     void start(std::string_view title, bool announce);
     [[nodiscard]] std::optional<storage::ConversationInfo> resolve(std::string_view target);
-    void record(const core::Message& message);
-    void record_removal();
 
     std::optional<storage::Store> store_;
     core::Agent* agent_;
@@ -51,10 +58,5 @@ class Conversations {
     std::string title_;
     bool auto_title_ = false; ///< Titre à déduire de la première question.
 };
-
-/// Affiche des messages comme dans la conversation : « > question »,
-/// réponses, appels d'outils compacts (⚙). Les `limit` derniers seulement si
-/// demandé, avec une ligne qui signale les messages masqués.
-void print_messages(std::span<const core::Message> messages, std::optional<std::size_t> limit);
 
 } // namespace avenoir::cli
