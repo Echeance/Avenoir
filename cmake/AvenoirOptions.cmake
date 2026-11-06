@@ -33,6 +33,16 @@ if(AVENOIR_SANITIZE)
     endif()
 endif()
 
+# Windows : intègre le manifeste qui fait d'UTF-8 la page de codes active
+# (arguments, chemins, environnement). Sans effet ailleurs.
+#
+#   avenoir_utf8_manifest(<cible exécutable>)
+function(avenoir_utf8_manifest target)
+    if(WIN32)
+        target_sources(${target} PRIVATE "${PROJECT_SOURCE_DIR}/cmake/utf8.manifest")
+    endif()
+endfunction()
+
 # Déclare une bibliothèque interne `avenoir::<nom>` selon la structure
 # libs/<nom>/{include,src,tests}.
 #
@@ -59,5 +69,7 @@ function(avenoir_add_tests name)
     add_executable(${target} ${ARG_SOURCES})
     target_link_libraries(${target} PRIVATE avenoir::${name} avenoir::options
                                             Catch2::Catch2WithMain)
+    # Sans lui, les noms de tests accentués passés par ctest arrivent abîmés.
+    avenoir_utf8_manifest(${target})
     catch_discover_tests(${target} TEST_PREFIX "${name}: ")
 endfunction()
