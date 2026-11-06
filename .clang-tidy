@@ -20,7 +20,18 @@ Checks: >
   -modernize-use-trailing-return-type,
   -readability-identifier-length,
   -readability-function-cognitive-complexity,
-  -portability-avoid-pragma-once
+  -portability-avoid-pragma-once,
+  -readability-trailing-comma,
+  -cppcoreguidelines-pro-bounds-avoid-unchecked-container-access,
+  -clang-analyzer-optin.core.EnumCastOutOfRange
+# Désactivées volontairement :
+# - portability-avoid-pragma-once : #pragma once est la convention du projet.
+# - readability-trailing-comma : la mise en page relève de clang-format.
+# - pro-bounds-avoid-unchecked-container-access : signale tout operator[]
+#   (dont json["clé"]) ; l'alternative .at() lève des exceptions, interdites
+#   dans les bibliothèques (PROJECT.md § 4.2).
+# - clang-analyzer-optin.core.EnumCastOutOfRange : faux positifs sur les
+#   enums de drapeaux (Catch2).
 WarningsAsErrors: '*'
 HeaderFilterRegex: '(libs|apps)/.*'
 FormatStyle: file

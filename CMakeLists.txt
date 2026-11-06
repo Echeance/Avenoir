@@ -26,6 +26,11 @@ set(CMAKE_CXX_SCAN_FOR_MODULES OFF)
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 include(AvenoirOptions)
 
+# ─── Dépendances (vcpkg.json) ───────────────────────────────────────────────
+find_package(nlohmann_json CONFIG REQUIRED)
+find_package(tomlplusplus CONFIG REQUIRED)
+find_package(spdlog CONFIG REQUIRED)
+
 # ─── Tests ──────────────────────────────────────────────────────────────────
 if(AVENOIR_BUILD_TESTS)
     enable_testing()

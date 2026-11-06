@@ -59,14 +59,15 @@ L'ordre suit un principe : **chaque jalon produit un assistant utilisable**, plu
 
 **Fini quand :** chaque push sur `main` est vérifié sur les deux OS, badge vert dans le README, et une release publie des binaires téléchargeables.
 
-### 1.3 Cœur (`avenoir::core`) — P1
-- ⬜ Messages (`User`, `Assistant`, `ToolResult`) et `ToolCall`
-- ⬜ `Tool`, `ToolSpec`, `RiskLevel`, `ToolRegistry` (refus des doublons)
-- ⬜ `PermissionPolicy` (`sensitive` jamais `allow`), `ConfirmationHandler`, `AutoReject`
-- ⬜ `FastRouter` : règles « ouvre <url> », « lance <app> », « quelle heure est-il »
-- ⬜ `Agent::handle` : voie rapide, boucle LLM ↔ outils, `max_steps`, résultats tronqués, erreurs renvoyées au LLM en texte, audit
-- ⬜ `AppConfig` lu depuis TOML ; test qui charge `config.example.toml`
-- ⬜ Tests : LLM scripté, action sensible refusée non exécutée, troncature, règles de la voie rapide
+### 1.3 Cœur (`avenoir::core`) — P1 ✅
+- ✅ Messages (`User`, `Assistant`, `ToolResult`) et `ToolCall`
+- ✅ `Tool`, `ToolSpec`, `RiskLevel`, `ToolRegistry` (refus des doublons)
+- ✅ `PermissionPolicy` (`sensitive` jamais `allow`), `ConfirmationHandler`, `AutoReject`
+- ✅ `FastRouter` : règles « ouvre <url> », « lance <app> », « quelle heure est-il »
+- ✅ `Agent::handle` : voie rapide, boucle LLM ↔ outils, `max_steps`, résultats tronqués, erreurs renvoyées au LLM en texte, audit
+- ✅ `AppConfig` lu depuis TOML ; test qui charge `config.example.toml`
+- ✅ Tests : LLM scripté, action sensible refusée non exécutée, troncature, règles de la voie rapide
+- ✅ 32 tests (agent avec LLM scripté, permissions, voie rapide, registre, configuration) ; annulation par `std::stop_token`
 
 ### 1.4 Fournisseurs LLM (`avenoir::llm`) — P1
 - ⬜ `openai_compatible` (cpr + JSON) — testé avec Ollama
@@ -209,6 +210,6 @@ Par ordre conseillé :
 
 1. ~~Projet CMake + vcpkg + préréglages + un test qui passe (1.1)~~ ✅
 2. CI au vert sur GitHub + release `v0.1.0` (1.2)
-3. Cœur : messages, outils, permissions, agent avec LLM scripté (1.3)
+3. ~~Cœur : messages, outils, permissions, agent avec LLM scripté (1.3)~~ ✅
 4. Fournisseur `openai_compatible` + outil `current_time` + CLI minimale : premier dialogue de bout en bout (1.4, 1.5, 1.7)
 5. Les autres fournisseurs, outils et le client MCP
