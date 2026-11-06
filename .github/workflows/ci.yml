@@ -16,7 +16,7 @@ permissions:
 
 jobs:
   format:
-    name: Formatage (clang-format)
+    name: Formatage et scripts
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
@@ -24,6 +24,16 @@ jobs:
         run: pipx install "clang-format==23.1.*"
       - name: Vérifier le formatage
         run: git ls-files '*.cpp' '*.hpp' | xargs clang-format --dry-run --Werror
+      - name: Analyser les scripts shell (shellcheck)
+        run: git ls-files '*.sh' | xargs shellcheck
+      - name: Analyser les scripts PowerShell (PSScriptAnalyzer)
+        shell: pwsh
+        run: |
+          Install-Module PSScriptAnalyzer -Force -Scope CurrentUser
+          $issues = Invoke-ScriptAnalyzer -Path scripts -Recurse -Severity Warning, Error `
+              -ExcludeRule PSAvoidUsingWriteHost
+          $issues | Format-Table -AutoSize
+          if ($issues) { exit 1 }
 
   linux:
     name: Linux ${{ matrix.name }}
@@ -45,26 +55,19 @@ jobs:
       - uses: ./.github/actions/setup-vcpkg
         with:
           cache-key: ${{ matrix.cxx }}
-      - name: Configurer
-        run: cmake --preset ${{ matrix.preset }}
-      - name: Compiler
-        run: cmake --build --preset ${{ matrix.preset }}
-      - name: Tester
-        run: ctest --preset ${{ matrix.preset }}
+      - name: Configurer, compiler et tester (scripts/build.sh)
+        run: scripts/build.sh ${{ matrix.preset }}
 
   windows:
     name: Windows MSVC
     runs-on: windows-2025
     steps:
       - uses: actions/checkout@v4
-      - name: Environnement MSVC (cl, Ninja)
-        uses: ilammy/msvc-dev-cmd@v1
       - uses: ./.github/actions/setup-vcpkg
         with:
           cache-key: msvc-static-md
-      - name: Configurer
-        run: cmake --preset debug -DVCPKG_TARGET_TRIPLET=x64-windows-static-md
-      - name: Compiler
-        run: cmake --build --preset debug
-      - name: Tester
-        run: ctest --preset debug
+      # Windows PowerShell 5.1, sans environnement MSVC préchargé : vérifie
+      # aussi que le script trouve Visual Studio tout seul.
+      - name: Configurer, compiler et tester (scripts/build.ps1)
+        shell: powershell
+        run: scripts\build.ps1 debug

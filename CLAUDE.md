@@ -13,7 +13,8 @@ Licence : **PolyForm Strict 1.0.0** (`LICENSE.md`) — ne pas la modifier ni ajo
 - Branche principale : `main`.
 - Messages au format *Conventional Commits* (`feat:`, `fix:`, `refactor:`, `docs:`, `chore:`…), en français.
 - Branches courtes.
-- Avant chaque commit : build sans avertissement, `clang-format`, `clang-tidy`, `ctest`.
+- Les deux scripts de build (`build.sh`, `build.ps1`) évoluent ensemble ; shellcheck et PSScriptAnalyzer doivent passer (vérifiés en CI).
+- Avant chaque commit : `scripts/build.sh -k` (build sans avertissement, `clang-format`, `clang-tidy`, `ctest`).
 - Toute décision d'architecture notable → nouvelle entrée dans la section 7 de `PROJECT.md` (« Journal des décisions »).
 - Une tâche de la roadmap terminée → la cocher dans `docs/ROADMAP.md`.
 - Publier une version : même numéro dans `CMakeLists.txt` et `vcpkg.json`, commit, puis tag poussé : `vX.Y.Z` (stable, « Latest » si ≥ 1.0.0) ou `vX.Y.Z-alpha|beta|rc.N` (pré-version). Le workflow `release` publie les binaires. Ne jamais créer de tag sans demande de l'utilisateur.
@@ -22,6 +23,8 @@ Licence : **PolyForm Strict 1.0.0** (`LICENSE.md`) — ne pas la modifier ni ajo
 ## Commandes
 
 ```sh
+scripts/build.sh [debug|release|asan] [-c] [-r] [-n] [-f] [-k]   # raccourci Linux (voir -h)
+scripts\build.ps1 [debug|release] [-c] [-r] [-n] [-f] [-k]       # raccourci Windows (même logique)
 export VCPKG_ROOT=~/vcpkg          # requis par les préréglages
 cmake --preset debug               # configuration (vcpkg en mode manifeste)
 cmake --build --preset debug       # build

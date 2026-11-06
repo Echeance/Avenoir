@@ -25,6 +25,34 @@ Les dépendances (`vcpkg.json`) sont téléchargées et compilées automatiqueme
 
 ## Compiler et tester
 
+Le plus rapide : le script `scripts/build.sh` (Linux) enchaîne configuration, compilation et tests.
+
+```sh
+scripts/build.sh                  # debug + tests
+scripts/build.sh release -r       # release, puis lance avenoir
+scripts/build.sh -r -- cc.toml    # debug + tests, puis `avenoir cc.toml`
+scripts/build.sh asan -c          # build propre avec ASan + UBSan
+scripts/build.sh -f               # reformate le code avant de compiler
+scripts/build.sh -k               # avant de committer : formatage, clang-tidy, tests
+scripts/build.sh -h               # toutes les options
+```
+
+`VCPKG_ROOT` vaut `~/vcpkg` par défaut si la variable n'est pas définie.
+
+Sous Windows, `scripts\build.ps1` fait la même chose (PowerShell 5.1 ou 7) et charge tout seul l'environnement Visual Studio (MSVC, Ninja) :
+
+```powershell
+scripts\build.ps1                       # debug + tests
+scripts\build.ps1 release -r            # release, puis lance avenoir
+scripts\build.ps1 -r -RunArgs cc.toml   # debug + tests, puis `avenoir cc.toml`
+scripts\build.ps1 -k                    # avant de committer
+Get-Help scripts\build.ps1 -Detailed    # toutes les options
+```
+
+Si PowerShell refuse d'exécuter le script : `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned`.
+
+Avec CMake directement :
+
 ```sh
 cmake --preset debug             # configuration (+ dépendances vcpkg)
 cmake --build --preset debug     # compilation
@@ -36,12 +64,7 @@ cmake --preset release && cmake --build --preset release
 
 Préréglage `asan` (Linux) : compilation avec AddressSanitizer + UndefinedBehaviorSanitizer.
 
-Avant de committer :
-
-```sh
-git ls-files '*.cpp' '*.hpp' | xargs clang-format --dry-run --Werror
-clang-tidy -p build/debug <fichiers .cpp modifiés>
-```
+Avant de committer : `scripts/build.sh -k` (vérifie le formatage, lance clang-tidy sur tous les `.cpp` et les tests).
 
 ## Fournisseurs LLM (à venir)
 
