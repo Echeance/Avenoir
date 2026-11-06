@@ -1,0 +1,4 @@
+# Configuration de clangd (éditeurs) : utilise la base de compilation du
+# préréglage debug. Lancer `scripts/build.sh` une fois pour la générer.
+CompileFlags:
+  CompilationDatabase: build/debug
