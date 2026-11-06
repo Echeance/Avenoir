@@ -1,0 +1,29 @@
+# Style du dépôt. Appliquer avec : clang-format -i <fichiers>
+BasedOnStyle: LLVM
+Language: Cpp
+Standard: c++20
+IndentWidth: 4
+ColumnLimit: 100
+PointerAlignment: Left
+ReferenceAlignment: Left
+AllowShortFunctionsOnASingleLine: Inline
+AllowShortLambdasOnASingleLine: All
+AllowShortIfStatementsOnASingleLine: Never
+AlwaysBreakTemplateDeclarations: Yes
+BreakBeforeBraces: Attach
+NamespaceIndentation: None
+FixNamespaceComments: true
+SpacesBeforeTrailingComments: 1
+IncludeBlocks: Regroup
+IncludeCategories:
+  # 1. Bibliothèque standard
+  - Regex: '^<[a-z_]+>$'
+    Priority: 1
+  # 2. Dépendances externes
+  - Regex: '^<.*>$'
+    Priority: 2
+  # 3. En-têtes du projet
+  - Regex: '^"avenoir/'
+    Priority: 3
+  - Regex: '.*'
+    Priority: 4

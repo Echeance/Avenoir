@@ -37,12 +37,15 @@ L'ordre suit un principe : **chaque jalon produit un assistant utilisable**, plu
 
 *But : un assistant texte complet, sûr et testé, sur Windows comme sur Linux.*
 
-### 1.1 Projet et outillage — P1
-- ⬜ `CMakeLists.txt` racine : C++23, avertissements stricts en erreurs, option `AVENOIR_SANITIZE`
-- ⬜ `CMakePresets.json` : `debug`, `release`, `asan` ; générateur Ninja ; toolchain vcpkg
-- ⬜ `vcpkg.json` : nlohmann-json, tomlplusplus, cpr, reproc, spdlog, catch2
-- ⬜ `.clang-format`, `.clang-tidy`, `.gitignore` (dossier `build/`)
-- ⬜ Squelette des bibliothèques `libs/{core,llm,tools,mcp,voice}` et de `apps/cli`, avec un test Catch2 qui passe
+### 1.1 Projet et outillage — P1 🔄
+- ✅ `CMakeLists.txt` racine : C++23, avertissements stricts en erreurs, options `AVENOIR_BUILD_TESTS`, `AVENOIR_SANITIZE`
+- ✅ `cmake/AvenoirOptions.cmake` : cible `avenoir::options` (avertissements, sanitizers) et fonctions `avenoir_add_library` / `avenoir_add_tests`
+- ✅ `CMakePresets.json` : `debug`, `release`, `asan` ; générateur Ninja ; toolchain vcpkg
+- ✅ `vcpkg.json` : nlohmann-json, tomlplusplus, cpr, reproc, spdlog, catch2 (baseline figée)
+- ✅ `.clang-format`, `.clang-tidy` (conventions de nommage vérifiées), `.gitignore`
+- ✅ `avenoir::core` (version) + `apps/cli` (affiche la version) + premier test Catch2. Les autres bibliothèques sont créées à leur étape (1.4 à 1.6)
+- ✅ Chaîne complète vérifiée sous Linux avec vcpkg (`debug` et `asan` : build sans avertissement, tests, clang-tidy)
+- ⬜ Même vérification sous Windows (MSVC) — sera couverte par la CI (1.2)
 
 **Fini quand :** `cmake --preset debug && cmake --build --preset debug && ctest --preset debug` fonctionne sur Linux et Windows.
 

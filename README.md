@@ -5,24 +5,44 @@ Assistant de système d'exploitation pour Windows et Linux, écrit en C++23, pil
 Vision, architecture et directives : voir **[PROJECT.md](PROJECT.md)**.
 Feuille de route : **[docs/ROADMAP.md](docs/ROADMAP.md)**.
 
-> 🚧 Le projet en est à sa phase de conception : le code arrive avec le jalon 1 de la feuille de route.
+> 🚧 Jalon 1 en cours : le projet compile (exécutable `avenoir` qui affiche sa version) ; la boucle de conversation arrive ensuite.
 
-## Prérequis (prévus)
+## Prérequis
 
 - Compilateur C++23 : GCC ≥ 14, Clang ≥ 18 ou MSVC (Visual Studio 2022 17.10+)
 - CMake ≥ 3.28 et Ninja
-- [vcpkg](https://github.com/microsoft/vcpkg) (variable `VCPKG_ROOT` définie)
-
-## Démarrage rapide (prévu)
+- [vcpkg](https://github.com/microsoft/vcpkg), avec la variable `VCPKG_ROOT` qui pointe dessus :
 
 ```sh
-cp config.example.toml config.toml   # puis choisir le fournisseur LLM
-cmake --preset release
-cmake --build --preset release
-./build/release/apps/cli/avenoir     # ou : avenoir chemin/config.toml
+git clone https://github.com/microsoft/vcpkg ~/vcpkg
+~/vcpkg/bootstrap-vcpkg.sh -disableMetrics      # Windows : bootstrap-vcpkg.bat
+export VCPKG_ROOT=~/vcpkg                        # fish : set -Ux VCPKG_ROOT ~/vcpkg
 ```
 
-Fournisseurs LLM :
+Les dépendances (`vcpkg.json`) sont téléchargées et compilées automatiquement à la première configuration.
+
+## Compiler et tester
+
+```sh
+cmake --preset debug             # configuration (+ dépendances vcpkg)
+cmake --build --preset debug     # compilation
+ctest --preset debug             # tests
+
+cmake --preset release && cmake --build --preset release
+./build/release/apps/cli/avenoir
+```
+
+Préréglage `asan` (Linux) : compilation avec AddressSanitizer + UndefinedBehaviorSanitizer.
+
+Avant de committer :
+
+```sh
+git ls-files '*.cpp' '*.hpp' | xargs clang-format --dry-run --Werror
+clang-tidy -p build/debug <fichiers .cpp modifiés>
+```
+
+## Fournisseurs LLM (à venir)
+
 - **Local** avec Ollama : `ollama pull qwen3:8b` (ou tout modèle gérant le *tool calling*).
 - **API distante** : exporter la variable indiquée par `api_key_env`.
 - **Abonnement Claude** (Pro / Max), sans clé d'API : installer Claude Code, s'y connecter (`claude` puis `/login`), et choisir `provider = "claude_code"` (option D de `config.example.toml`).
