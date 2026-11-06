@@ -1,0 +1,8 @@
+/build/
+/out/
+/vcpkg_installed/
+CMakeUserPresets.json
+compile_commands.json
+.cache/
+config.toml
+*.log

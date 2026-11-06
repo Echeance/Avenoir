@@ -1,0 +1,66 @@
+# Configuration d'Avenoir — copiez ce fichier en `config.toml`.
+# Les clés d'API ne sont JAMAIS écrites ici : indiquez le nom de la variable
+# d'environnement qui les contient.
+
+# ─── Fournisseur LLM (un seul bloc [llm] actif) ────────────────────────────
+
+# Option A — LLM local via Ollama (ou llama.cpp server, LM Studio, vLLM…)
+[llm]
+provider = "openai_compatible"
+base_url = "http://localhost:11434/v1"
+model = "qwen3:8b"            # exemple : tout modèle supportant le tool calling
+temperature = 0.2
+
+# Option B — API compatible OpenAI distante (OpenAI, Mistral, OpenRouter…)
+# [llm]
+# provider = "openai_compatible"
+# base_url = "https://api.mistral.ai/v1"
+# model = "mistral-large-latest"
+# api_key_env = "MISTRAL_API_KEY"
+
+# Option C — Anthropic
+# [llm]
+# provider = "anthropic"
+# model = "claude-sonnet-5-5"
+# api_key_env = "ANTHROPIC_API_KEY"
+# max_tokens = 4096
+
+# Option D — Abonnement Claude (Pro / Max) via la CLI Claude Code, sans clé
+# d'API ni facturation au token : la CLI doit être installée et connectée
+# (`claude` puis `/login`). Les outils propres à Claude Code sont désactivés ;
+# il sert uniquement de moteur de langage. Usage personnel uniquement.
+# [llm]
+# provider = "claude_code"
+# model = "sonnet"            # optionnel : sonnet, opus, haiku…
+# command = "claude"          # chemin complet si besoin (Windows : claude.exe)
+# timeout_secs = 180
+
+# ─── Agent ─────────────────────────────────────────────────────────────────
+[agent]
+max_steps = 10        # allers-retours LLM ↔ outils maximum par requête
+fast_path = true      # commandes simples traitées sans LLM
+# system_prompt = "…" # remplace le prompt par défaut
+
+# ─── Permissions par niveau de risque : "allow" | "confirm" | "deny" ───────
+# `sensitive` ne peut jamais être "allow" (forcé à "confirm").
+[permissions]
+read_only = "allow"
+reversible = "allow"
+sensitive = "confirm"
+
+# ─── Plugins (serveurs MCP en stdio) ───────────────────────────────────────
+# Les outils apparaissent sous le nom `<name>__<outil>`.
+# `risk` s'applique à tous les outils du serveur (défaut : "sensitive").
+
+# [[mcp_servers]]
+# name = "fichiers"
+# command = "npx"
+# args = ["-y", "@modelcontextprotocol/server-filesystem", "/home/moi/Documents"]
+# risk = "reversible"
+
+# [[mcp_servers]]
+# name = "recherche"
+# command = "/chemin/vers/mon-serveur-recherche"
+# env = { SEARXNG_URL = "http://localhost:8080" }
+# risk = "read_only"
+# enabled = false
