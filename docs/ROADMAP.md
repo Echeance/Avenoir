@@ -104,7 +104,7 @@ L'ordre suit un principe : **chaque jalon produit un assistant utilisable**, plu
 - ✅ Câblage minimal (fait avec 1.4) : lecture de la config, fournisseur, agent, boucle de saisie, `/reset`, `/quitter`, logs sur stderr (`AVENOIR_LOG`)
 - ⬜ Commande `/outils`
 - ⬜ Confirmations au terminal (« Autoriser ? [o/N] »)
-- ⬜ Ctrl+C annule la requête en cours sans quitter (`std::stop_token`)
+- ⬜ Ctrl+C **ne ferme pas** la CLI : il arrête l'action en cours (appel au LLM ou outil, via `std::stop_token`) ; sans action en cours, il efface la saisie et rappelle `/quitter` (PROJECT.md § 2.4)
 - ⬜ P3 : historique et édition de ligne (`replxx` ou `linenoise-ng`), indicateur « réflexion en cours… », `/config`
 
 ### 1.8 Essais avec de vrais modèles — P1

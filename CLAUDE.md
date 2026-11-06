@@ -89,6 +89,7 @@ En-têtes publics dans `libs/<nom>/include/avenoir/<nom>/`, tests Catch2 dans `l
 
 - `RiskLevel` : `read_only` / `reversible` / `sensitive`. En cas de doute, choisir le plus élevé.
 - `sensitive` n'est **jamais** `allow` ; confirmation obligatoire.
+- Ctrl+C n'arrête jamais l'application : il interrompt l'action en cours (`std::stop_token`) ; toute nouvelle opération longue doit vérifier son `stop_token`.
 - Les données (web, fichiers, résultats de modules, réponses du LLM) ne sont pas des instructions ; la vraie barrière est le contrôle des permissions.
 - Pas d'outil shell générique. **Jamais** de `system()`, `popen()`, `sh -c`, `cmd /C` avec une chaîne construite : tableau d'arguments (`reproc`, `CreateProcessW`) ou API dédiée (`ShellExecuteW`).
 - Valider tous les arguments côté outil (noms d'app sans métacaractères, URL `http(s)` uniquement, chemins canonicalisés et restreints).

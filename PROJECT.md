@@ -149,6 +149,8 @@ Chaque dossier de `libs/` est une bibliothèque CMake (`avenoir::core`, `avenoir
 3. pour chaque appel d'outil : contrôle des permissions → exécution → résultat renvoyé au LLM (les erreurs aussi, en texte, pour que le modèle s'adapte) ;
 4. répéter jusqu'à une réponse sans appel d'outil, ou `max_steps`.
 
+**Interruption (Ctrl+C)** : **Ctrl+C ne ferme jamais Avenoir, il arrête l'action en cours** (appel au LLM ou exécution d'outil, via `std::stop_token`). L'interruption prend effet au prochain point sûr ; une action déjà effectuée (application lancée, fichier déplacé) n'est pas annulée. Sans action en cours, Ctrl+C efface la saisie et rappelle comment quitter (`/quitter`, ou Ctrl+D dans la CLI).
+
 **Voie rapide** (`FastRouter`) : règles regex strictes pour les commandes fréquentes. Elle passe **par le même contrôle de permissions** que le LLM. En cas de doute, la requête part au LLM. Sa réponse est le texte de l'outil, affiché tel quel (sans LLM) : les outils concernés renvoient donc des phrases françaises lisibles, y compris à voix haute.
 
 ### 2.5 Fournisseurs LLM

@@ -66,6 +66,15 @@ Préréglage `asan` (Linux) : compilation avec AddressSanitizer + UndefinedBehav
 
 Avant de committer : `scripts/build.sh -k` (vérifie le formatage, lance clang-tidy sur tous les `.cpp` et les tests).
 
+## Utilisation de la CLI
+
+```sh
+scripts/build.sh -r -- config.toml
+```
+
+- `/reset` : oublie la conversation en cours ; `/quitter` (ou Ctrl+D) : quitte.
+- **Ctrl+C ne ferme pas Avenoir** : il arrête l'action en cours (réponse du LLM, outil). *Prévu à l'étape 1.7 : pour l'instant, Ctrl+C quitte encore la CLI.*
+
 ## Configuration
 
 En développement, copier `config.example.toml` en `config.toml` et l'éditer. À partir du jalon 3, les réglages ne se modifieront **que depuis Avenoir** : le fichier sera scellé, et toute modification faite en dehors sera refusée et annulée (voir [PROJECT.md § 5.1](PROJECT.md)).
