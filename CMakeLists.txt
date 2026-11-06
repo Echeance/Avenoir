@@ -33,6 +33,7 @@ find_package(spdlog CONFIG REQUIRED)
 find_package(cpr CONFIG REQUIRED)
 find_package(reproc++ CONFIG REQUIRED)
 find_package(replxx CONFIG REQUIRED)
+find_package(unofficial-sqlite3 CONFIG REQUIRED)
 
 # ─── Tests ──────────────────────────────────────────────────────────────────
 if(AVENOIR_BUILD_TESTS)
@@ -45,4 +46,5 @@ endif()
 add_subdirectory(libs/core)
 add_subdirectory(libs/llm)
 add_subdirectory(libs/tools)
+add_subdirectory(libs/storage)
 add_subdirectory(apps/cli)

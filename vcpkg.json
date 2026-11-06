@@ -11,6 +11,7 @@
     "replxx",
     "reproc",
     "spdlog",
+    "sqlite3",
     "tomlplusplus"
   ]
 }

@@ -32,9 +32,11 @@
 #include "avenoir/core/router.hpp"
 #include "avenoir/core/version.hpp"
 #include "avenoir/llm/factory.hpp"
+#include "avenoir/storage/store.hpp"
 #include "avenoir/tools/tools.hpp"
 
 #include "console.hpp"
+#include "conversations.hpp"
 #include "prompt.hpp"
 
 namespace {
@@ -64,7 +66,8 @@ void setup_logging() {
 
 /// Commandes proposées à la complétion (Tab).
 std::vector<std::string> command_names() {
-    return {"/aide", "/annuler", "/outils", "/reset", "/quitter"};
+    return {"/aide",   "/annuler", "/conversations", "/historique", "/nouvelle", "/ouvrir",
+            "/outils", "/quitter", "/renommer",      "/reset",      "/supprimer"};
 }
 
 void print_help() {
@@ -72,8 +75,14 @@ void print_help() {
     std::println("  /aide       cette aide");
     std::println("  /outils     outils disponibles et leur niveau de risque");
     std::println("  /annuler    annuler les actions de la dernière requête (répétable)");
-    std::println("  /reset      oublier la conversation en cours");
     std::println("  /quitter    quitter (ou Ctrl+D)");
+    std::println("Conversations (conservées entre deux lancements) :");
+    std::println("  /nouvelle [titre]        nouvelle conversation (/reset : idem)");
+    std::println("  /conversations           liste des conversations");
+    std::println("  /ouvrir <n° ou titre>    reprendre une conversation");
+    std::println("  /renommer <titre>        renommer la conversation en cours");
+    std::println("  /supprimer [n° ou titre] supprimer une conversation (en cours par défaut)");
+    std::println("  /historique              réafficher toute la conversation");
     std::println("Ctrl+C arrête l'action en cours sans quitter, puis propose d'annuler ce qui peut "
                  "l'être.");
 }
@@ -166,16 +175,34 @@ void run_request(core::Agent& agent, cli::Prompt& prompt, const std::string& lin
     }
 }
 
+std::string_view trim(std::string_view text);
+
 /// Traite une commande (ligne commençant par « / »). Renvoie faux pour quitter.
-bool run_command(core::Agent& agent, cli::Prompt& prompt, std::string_view command) {
+bool run_command(core::Agent& agent, cli::Prompt& prompt, cli::Conversations& conversations,
+                 std::string_view line) {
+    // « /commande argument libre »
+    const auto space = line.find(' ');
+    const std::string_view command = line.substr(0, space);
+    const std::string_view argument =
+        space == std::string_view::npos ? std::string_view{} : trim(line.substr(space + 1));
+
     if (command == "/quitter" || command == "/quit" || command == "/q") {
         return false;
     }
     if (command == "/aide" || command == "/help") {
         print_help();
-    } else if (command == "/reset") {
-        agent.reset();
-        std::println("Conversation réinitialisée.");
+    } else if (command == "/nouvelle" || command == "/reset") {
+        conversations.create(argument);
+    } else if (command == "/conversations") {
+        conversations.list();
+    } else if (command == "/ouvrir") {
+        conversations.open(argument);
+    } else if (command == "/renommer") {
+        conversations.rename(argument);
+    } else if (command == "/supprimer") {
+        conversations.remove(argument);
+    } else if (command == "/historique") {
+        conversations.show_history();
     } else if (command == "/outils" || command == "/tools") {
         for (const auto& spec : agent.tools().specs()) {
             std::println("- {} [{}] : {}", spec.name, core::to_string(spec.risk), spec.description);
@@ -243,9 +270,21 @@ int run(int argc, char** argv) {
         return EXIT_FAILURE;
     }
 
+    // Dossier de données : historique des saisies et base des conversations.
+    const auto directory = storage::data_directory();
     std::optional<std::filesystem::path> history_file;
-    if (const auto directory = cli::data_directory()) {
+    std::optional<storage::Store> store;
+    if (directory) {
         history_file = *directory / "cli_history.txt";
+        auto opened = storage::Store::open(*directory / "avenoir.db");
+        if (opened) {
+            store = std::move(*opened);
+        } else {
+            report_error(
+                (core::describe(opened.error()) + " — conversations non conservées").c_str());
+        }
+    } else {
+        report_error("dossier de données introuvable — conversations non conservées");
     }
     cli::Prompt prompt(command_names(), history_file);
 
@@ -254,6 +293,10 @@ int run(int argc, char** argv) {
 
     std::println("avenoir {} — LLM : {} — {} outil(s). /aide pour les commandes.", core::version(),
                  agent.llm_name(), agent.tools().size());
+
+    cli::Conversations conversations(std::move(store), agent, prompt);
+    conversations.resume();
+    std::println("\nConversation : {}", conversations.describe_current());
 
     while (true) {
         std::println("");
@@ -270,7 +313,7 @@ int run(int argc, char** argv) {
             continue;
         }
         if (line.starts_with('/')) {
-            if (!run_command(agent, prompt, line)) {
+            if (!run_command(agent, prompt, conversations, line)) {
                 break;
             }
             continue;

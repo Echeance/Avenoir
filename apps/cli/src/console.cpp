@@ -6,15 +6,10 @@
 #include "console.hpp"
 
 #include <csignal>
-#include <filesystem>
-#include <optional>
-#include <system_error>
 
 #ifdef _WIN32
 #include <windows.h>
 #endif
-
-#include "avenoir/core/env.hpp"
 
 namespace {
 
@@ -74,32 +69,6 @@ bool take_interrupt() noexcept {
 
 void raise_interrupt() noexcept {
     g_interrupt = 1;
-}
-
-std::optional<std::filesystem::path> data_directory() {
-    std::filesystem::path base;
-#ifdef _WIN32
-    const auto local = core::read_env("LOCALAPPDATA");
-    if (!local) {
-        return std::nullopt;
-    }
-    base = *local;
-#else
-    if (const auto xdg = core::read_env("XDG_DATA_HOME")) {
-        base = *xdg;
-    } else if (const auto home = core::read_env("HOME")) {
-        base = std::filesystem::path(*home) / ".local" / "share";
-    } else {
-        return std::nullopt;
-    }
-#endif
-    std::filesystem::path directory = base / "avenoir";
-    std::error_code error;
-    std::filesystem::create_directories(directory, error);
-    if (error) {
-        return std::nullopt;
-    }
-    return directory;
 }
 
 } // namespace avenoir::cli

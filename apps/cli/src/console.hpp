@@ -1,8 +1,5 @@
 #pragma once
 
-#include <filesystem>
-#include <optional>
-
 namespace avenoir::cli {
 
 /// Prépare la console : Ctrl+C n'arrête plus le programme mais lève une
@@ -16,9 +13,5 @@ void install_console();
 /// Lève une demande d'interruption depuis le code (ex. Ctrl+C capté par la
 /// saisie pendant une confirmation).
 void raise_interrupt() noexcept;
-
-/// Dossier de données de l'utilisateur pour Avenoir
-/// (`~/.local/share/avenoir`, `%LOCALAPPDATA%\avenoir`), créé si besoin.
-[[nodiscard]] std::optional<std::filesystem::path> data_directory();
 
 } // namespace avenoir::cli

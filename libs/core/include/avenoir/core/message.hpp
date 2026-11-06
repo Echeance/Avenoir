@@ -1,5 +1,7 @@
 #pragma once
 
+#include <cstdint>
+#include <optional>
 #include <string>
 #include <variant>
 #include <vector>
@@ -17,6 +19,15 @@ struct ToolCall {
     bool operator==(const ToolCall&) const = default;
 };
 
+/// Consommation d'un appel au LLM, quand le fournisseur la communique.
+struct Usage {
+    std::uint64_t input_tokens = 0;
+    std::uint64_t output_tokens = 0;
+    std::optional<double> cost_usd = std::nullopt; ///< Coût indicatif (prix publics).
+
+    bool operator==(const Usage&) const = default;
+};
+
 struct UserMessage {
     std::string content;
 
@@ -26,6 +37,7 @@ struct UserMessage {
 struct AssistantMessage {
     std::string text;                 ///< Vide si le modèle n'a fait qu'appeler des outils.
     std::vector<ToolCall> tool_calls; ///< Vide si c'est la réponse finale.
+    std::optional<Usage> usage = std::nullopt; ///< Consommation de cette réponse, si connue.
 
     bool operator==(const AssistantMessage&) const = default;
 };

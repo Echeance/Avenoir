@@ -22,15 +22,6 @@ struct LlmRequest {
     std::stop_token stop; ///< Annulation demandée par l'utilisateur.
 };
 
-/// Consommation d'un appel au LLM, quand le fournisseur la communique.
-struct Usage {
-    std::uint64_t input_tokens = 0;
-    std::uint64_t output_tokens = 0;
-    std::optional<double> cost_usd = std::nullopt; ///< Coût indicatif (prix publics).
-
-    bool operator==(const Usage&) const = default;
-};
-
 struct LlmResponse {
     std::string text;                 ///< Peut être vide si le modèle appelle des outils.
     std::vector<ToolCall> tool_calls; ///< Vide si c'est la réponse finale.

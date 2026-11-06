@@ -79,8 +79,8 @@ Result<std::string> Agent::handle(std::string_view input, const std::stop_token&
                 .id = "fast-path", .name = route->tool, .arguments = std::move(route->arguments)};
             Execution result = execute(call);
             // Trace dans l'historique pour que le LLM ait le contexte ensuite.
-            history_.emplace_back(UserMessage{.content = std::string(input)});
-            history_.emplace_back(AssistantMessage{.text = result.content, .tool_calls = {}});
+            append(UserMessage{.content = std::string(input)});
+            append(AssistantMessage{.text = result.content, .tool_calls = {}});
             return std::move(result.content);
         }
     }
@@ -90,7 +90,7 @@ Result<std::string> Agent::handle(std::string_view input, const std::stop_token&
     }
 
     // 2. Boucle agent.
-    history_.emplace_back(UserMessage{.content = std::string(input)});
+    append(UserMessage{.content = std::string(input)});
     const std::vector<ToolSpec> specs = tools_.specs();
 
     for (std::size_t step = 0; step < options_.max_steps; ++step) {
@@ -116,23 +116,25 @@ Result<std::string> Agent::handle(std::string_view input, const std::stop_token&
             // agi), l'historique est conservé.
             if (response->text.empty()) {
                 if (step == 0) {
-                    history_.pop_back();
+                    remove_last();
                 }
                 return make_error(ErrorCode::Llm, "le modèle n'a renvoyé aucune réponse");
             }
-            history_.emplace_back(AssistantMessage{.text = response->text, .tool_calls = {}});
+            append(AssistantMessage{
+                .text = response->text, .tool_calls = {}, .usage = response->usage});
             return std::move(response->text);
         }
 
         const std::vector<ToolCall> calls = response->tool_calls;
-        history_.emplace_back(AssistantMessage{.text = std::move(response->text),
-                                               .tool_calls = std::move(response->tool_calls)});
+        append(AssistantMessage{.text = std::move(response->text),
+                                .tool_calls = std::move(response->tool_calls),
+                                .usage = response->usage});
         for (const auto& call : calls) {
             if (stop.stop_requested()) {
                 return std::unexpected(cancelled());
             }
             Execution result = execute(call);
-            history_.emplace_back(ToolResultMessage{
+            append(ToolResultMessage{
                 .call_id = call.id,
                 .content = std::move(result.content),
                 .is_error = result.is_error,
@@ -182,6 +184,23 @@ Agent::Execution Agent::execute(const ToolCall& call) {
     }
     return {.content = truncate_utf8(std::move(output->content), kMaxToolOutputChars),
             .is_error = false};
+}
+
+void Agent::append(Message message) {
+    history_.push_back(std::move(message));
+    if (observer_.appended) {
+        observer_.appended(history_.back());
+    }
+}
+
+void Agent::remove_last() {
+    if (history_.empty()) {
+        return;
+    }
+    history_.pop_back();
+    if (observer_.removed_last) {
+        observer_.removed_last();
+    }
 }
 
 std::size_t RequestJournal::undoable_count() const noexcept {

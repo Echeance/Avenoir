@@ -246,7 +246,7 @@ Les conversations sont **persistantes** : à la réouverture de l'application ou
 
 | Commande | Effet |
 |---|---|
-| `/nouvelle [titre]` | crée une conversation et bascule dessus |
+| `/nouvelle [titre]` | crée une conversation et bascule dessus (`/reset` en est un alias : rien n'est effacé) |
 | `/conversations` | liste les conversations (n°, titre, date, nombre de messages) |
 | `/ouvrir <n° ou titre>` | bascule sur une conversation et réaffiche ses messages |
 | `/renommer <titre>` | renomme la conversation en cours |
@@ -255,6 +255,7 @@ Les conversations sont **persistantes** : à la réouverture de l'application ou
 
 - **Défilement** : la conversation se remonte avec le défilement du terminal. Au démarrage et avec `/ouvrir`, les **50 derniers messages** sont réaffichés (pour ne pas inonder le terminal) ; `/historique` affiche tout. Les appels d'outils sont affichés de façon compacte (`⚙ launch_app « firefox »`).
 - **Historique des saisies de la CLI** : les lignes tapées sont aussi conservées (flèches haut/bas), dans `cli_history.txt`, en clair, dans le même dossier de données.
+- **Droits** : le dossier de données est réservé à l'utilisateur (`700`), la base et l'historique des saisies aussi (`600`) ; sous Windows, `%LOCALAPPDATA%` est déjà propre à l'utilisateur.
 - **Limites** : les conversations sont stockées **en clair** sur la machine (chiffrement optionnel envisagé plus tard) ; les actions d'annulation (`/annuler`) ne survivent pas à un redémarrage (les actions passées restent visibles dans l'historique, mais ne sont plus annulables) ; une très longue conversation reprise est renvoyée en entier au LLM (résumé automatique prévu au jalon 4).
 
 ---

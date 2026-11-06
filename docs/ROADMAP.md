@@ -128,15 +128,16 @@ L'ordre suit un principe : **chaque jalon produit un assistant utilisable**, plu
 
 **Fini quand :** les requêtes de référence passent avec au moins un modèle local et un modèle distant, sur Linux et Windows.
 
-### 1.9 Conversations persistantes (`avenoir::storage`) — P1
-- ⬜ Dépendance `sqlite3` (vcpkg) ; base `avenoir.db` dans le dossier de données de l'utilisateur
-- ⬜ Schéma : conversations (identifiant, titre, dates), messages (rôle, contenu, appels et résultats d'outils, horodatage, consommation) ; migrations versionnées
-- ⬜ Écriture immédiate de chaque message (transactions) ; aucune perte sur plantage ou Ctrl+C
-- ⬜ Agent : chargement d'un historique existant ; rattachement à une conversation
-- ⬜ CLI : reprise de la dernière conversation au lancement, réaffichage des 50 derniers messages
-- ⬜ CLI : `/nouvelle [titre]`, `/conversations`, `/ouvrir <n° ou titre>`, `/renommer <titre>`, `/supprimer [n° ou titre]` (avec confirmation), `/historique`
-- ⬜ Titre automatique (premiers mots de la première question)
-- ⬜ Tests : écriture puis relecture, reprise après « plantage » simulé, renommage, suppression, base créée si absente
+### 1.9 Conversations persistantes (`avenoir::storage`) — P1 ✅
+- ✅ Dépendance `sqlite3` (vcpkg) ; base `avenoir.db` dans le dossier de données de l'utilisateur (dossier en `700`, base en `600`)
+- ✅ Schéma versionné (`PRAGMA user_version`) : conversations (titre, dates, compteur d'activité pour un ordre fiable), messages (rôle, contenu JSON avec appels et résultats d'outils et consommation, horodatage) ; suppression en cascade ; WAL
+- ✅ Écriture immédiate de chaque message, requêtes toujours paramétrées (aucune injection SQL possible)
+- ✅ Agent : `load_history` et observateur de l'historique (le cœur ne dépend pas du stockage) ; consommation conservée dans chaque réponse
+- ✅ CLI : reprise de la dernière conversation au lancement, réaffichage des 50 derniers messages
+- ✅ CLI : `/nouvelle [titre]` (et `/reset`, alias), `/conversations`, `/ouvrir <n° ou titre>`, `/renommer <titre>`, `/supprimer [n° ou titre]` (avec confirmation), `/historique`
+- ✅ Titre automatique (premiers mots de la première question, sans couper un caractère UTF-8)
+- ✅ Tests : aller-retour JSON de chaque message, données conservées après fermeture, renommage, suppression en cascade, titres piégés (injection SQL), ordre des conversations, observateur et reprise dans l'agent
+- ✅ Essai réel : conversation, fermeture, réouverture — le LLM se souvient ; toutes les commandes essayées
 
 **Fini quand :** on ferme la CLI au milieu d'une conversation, on la rouvre, et tout est là ; on peut créer, lister, ouvrir, renommer et supprimer des conversations.
 
@@ -284,5 +285,5 @@ Par ordre conseillé :
 3. ~~Cœur : messages, outils, permissions, agent avec LLM scripté (1.3)~~ ✅
 4. ~~Fournisseurs LLM + CLI minimale : premier dialogue de bout en bout (1.4)~~ ✅
 5. ~~Outils natifs (1.5) ; confirmations, Ctrl+C, annulation et `/annuler` dans la CLI (1.7)~~ ✅
-6. Conversations persistantes (1.9)
-7. Hôte de modules v1 (1.6)
+6. ~~Conversations persistantes (1.9)~~ ✅
+7. Hôte de modules v1 (1.6), puis essais avec de vrais modèles (1.8)

@@ -451,3 +451,57 @@ TEST_CASE("annulation : les outils en lecture seule ne sont pas journalisés", "
     REQUIRE(agent.handle("vas-y").has_value());
     CHECK(agent.last_undoable() == nullptr);
 }
+
+// ─── Historique : observateur et reprise ────────────────────────────────────
+
+TEST_CASE("l'observateur voit chaque message ajouté, dans l'ordre", "[agent][history]") {
+    const Fixture f;
+    auto agent = f.make_agent({call_tool("flag"), answer("terminé")}, RiskLevel::ReadOnly,
+                              std::make_unique<AutoReject>());
+    const auto seen = std::make_shared<std::vector<Message>>();
+    agent.set_history_observer(HistoryObserver{
+        .appended = [seen](const Message& message) { seen->push_back(message); },
+        .removed_last = [seen] { seen->pop_back(); },
+    });
+
+    REQUIRE(agent.handle("vas-y").has_value());
+    REQUIRE(seen->size() == agent.history().size());
+    for (std::size_t i = 0; i < seen->size(); ++i) {
+        CHECK(seen->at(i) == agent.history()[i]);
+    }
+}
+
+TEST_CASE("l'observateur voit le retrait d'une question sans réponse", "[agent][history]") {
+    const Fixture f;
+    auto agent = f.make_agent({answer("")}, RiskLevel::ReadOnly, std::make_unique<AutoReject>());
+    const auto seen = std::make_shared<std::vector<Message>>();
+    agent.set_history_observer(HistoryObserver{
+        .appended = [seen](const Message& message) { seen->push_back(message); },
+        .removed_last = [seen] { seen->pop_back(); },
+    });
+
+    CHECK_FALSE(agent.handle("bonjour").has_value());
+    CHECK(seen->empty());
+}
+
+TEST_CASE("load_history reprend une conversation", "[agent][history]") {
+    const Fixture f;
+    auto agent = f.make_agent({answer("Tu t'appelles Nathan.")}, RiskLevel::ReadOnly,
+                              std::make_unique<AutoReject>());
+    agent.load_history({UserMessage{.content = "Je m'appelle Nathan."},
+                        AssistantMessage{.text = "Enchanté !", .tool_calls = {}}});
+
+    REQUIRE(agent.handle("Comment je m'appelle ?").has_value());
+    REQUIRE(agent.history().size() == 4);
+    CHECK(std::get<UserMessage>(agent.history()[0]).content == "Je m'appelle Nathan.");
+}
+
+TEST_CASE("la consommation est gardée dans le message de l'assistant", "[agent][history]") {
+    const Fixture f;
+    auto response = answer("ok");
+    response.usage = Usage{.input_tokens = 10, .output_tokens = 2};
+    auto agent = f.make_agent({response}, RiskLevel::ReadOnly, std::make_unique<AutoReject>());
+    REQUIRE(agent.handle("salut").has_value());
+    const auto& reply = std::get<AssistantMessage>(agent.history().back());
+    CHECK(reply.usage == Usage{.input_tokens = 10, .output_tokens = 2});
+}

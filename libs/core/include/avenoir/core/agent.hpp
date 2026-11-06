@@ -2,6 +2,7 @@
 
 #include <cstddef>
 #include <deque>
+#include <functional>
 #include <memory>
 #include <optional>
 #include <span>
@@ -61,6 +62,13 @@ struct UndoOutcome {
     std::string message; ///< Raison de l'échec, ou texte renvoyé par l'annulation.
 };
 
+/// Notifications des changements de l'historique, pour le conserver (base de
+/// conversations) sans que le cœur dépende du stockage.
+struct HistoryObserver {
+    std::function<void(const Message&)> appended; ///< Un message vient d'être ajouté.
+    std::function<void()> removed_last;           ///< Le dernier message a été retiré.
+};
+
 struct AgentOptions {
     PermissionPolicy policy;
     std::string system_prompt{kDefaultSystemPrompt};
@@ -92,6 +100,17 @@ class Agent {
         journals_.clear();
     }
 
+    /// Remplace l'historique (reprise d'une conversation enregistrée). Les
+    /// journaux d'annulation sont vidés : ils ne survivent pas à une reprise.
+    /// L'observateur n'est pas notifié.
+    void load_history(std::vector<Message> messages) {
+        history_ = std::move(messages);
+        journals_.clear();
+    }
+
+    /// Installe l'observateur de l'historique (remplace le précédent).
+    void set_history_observer(HistoryObserver observer) { observer_ = std::move(observer); }
+
     /// Journal de la requête la plus récente qui a encore des actions
     /// annulables, ou `nullptr`. Sert à proposer l'annulation après un
     /// Ctrl+C (requête interrompue) ou avec `/annuler`.
@@ -118,12 +137,17 @@ class Agent {
     /// rendus sous forme de texte pour que le LLM puisse s'adapter.
     [[nodiscard]] Execution execute(const ToolCall& call);
 
+    /// Seules façons de modifier l'historique : elles notifient l'observateur.
+    void append(Message message);
+    void remove_last();
+
     std::unique_ptr<LlmProvider> llm_;
     ToolRegistry tools_;
     std::unique_ptr<ConfirmationHandler> confirmer_;
     AgentOptions options_;
     std::vector<Message> history_;
     std::deque<RequestJournal> journals_;
+    HistoryObserver observer_;
 };
 
 } // namespace avenoir::core

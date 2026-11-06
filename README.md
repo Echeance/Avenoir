@@ -78,7 +78,7 @@ scripts/build.sh -r -- config.toml
 - `/annuler` : propose d'annuler les actions de la dernière requête (répétable pour remonter plus loin).
 - Les actions sensibles demandent une confirmation (« Autoriser ? [o/N] »).
 - Édition de ligne, flèches haut/bas pour les saisies précédentes (conservées dans `cli_history.txt`, dans le dossier de données d'Avenoir), Tab pour compléter les commandes.
-- Conversations (conservées entre deux lancements) : `/nouvelle [titre]`, `/conversations`, `/ouvrir <n° ou titre>`, `/renommer <titre>`, `/supprimer`, `/historique`. La conversation se remonte avec le défilement du terminal. *Prévu à l'étape 1.9 : pour l'instant, la conversation n'est pas conservée.*
+- **Conversations conservées** entre deux lancements (la dernière est reprise et réaffichée) : `/nouvelle [titre]` (ou `/reset`), `/conversations`, `/ouvrir <n° ou titre>`, `/renommer <titre>`, `/supprimer [n° ou titre]`, `/historique`. La conversation se remonte avec le défilement du terminal. Elles sont stockées en clair dans `avenoir.db`, dans le dossier de données d'Avenoir (`~/.local/share/avenoir`, `%LOCALAPPDATA%\avenoir`), lisible par vous seul.
 
 ## Configuration
 
