@@ -11,7 +11,7 @@ Feuille de route : **[docs/ROADMAP.md](docs/ROADMAP.md)**.
 
 ## Prérequis
 
-- Compilateur C++23 : GCC ≥ 14, Clang ≥ 18 ou MSVC (Visual Studio 2022 17.10+)
+- Compilateur C++23 : GCC ≥ 14, Clang ≥ 19 ou MSVC (Visual Studio 2022 17.10+)
 - CMake ≥ 3.28 et Ninja
 - [vcpkg](https://github.com/microsoft/vcpkg), avec la variable `VCPKG_ROOT` qui pointe dessus :
 

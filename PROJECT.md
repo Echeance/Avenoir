@@ -266,7 +266,7 @@ Ces règles priment sur toute considération de confort ou de rapidité.
 
 ### 4.2 C++
 
-- **C++23**, compilateurs cibles : GCC ≥ 14, Clang ≥ 18, MSVC 19.40+ (Visual Studio 2022 17.10+).
+- **C++23**, compilateurs cibles : GCC ≥ 14, Clang ≥ 19, MSVC 19.40+ (Visual Studio 2022 17.10+). Clang 18 ne convient pas : la libstdc++ n'y active pas `std::expected` (il faut `__cpp_concepts ≥ 202002L`).
 - **CMake ≥ 3.28** avec `CMakePresets.json` ; dépendances via **vcpkg** en mode manifeste (`vcpkg.json`).
 - Avertissements stricts et traités comme erreurs : `-Wall -Wextra -Wpedantic -Wconversion -Wshadow -Werror` (GCC/Clang), `/W4 /WX /permissive-` (MSVC).
 - `clang-format` (style du dépôt, `.clang-format`) et `clang-tidy` (`.clang-tidy`) **sans avertissement** avant chaque commit.

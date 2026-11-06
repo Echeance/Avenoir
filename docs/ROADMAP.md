@@ -51,7 +51,7 @@ L'ordre suit un principe : **chaque jalon produit un assistant utilisable**, plu
 **Fini quand :** `cmake --preset debug && cmake --build --preset debug && ctest --preset debug` fonctionne sur Linux et Windows.
 
 ### 1.2 Intégration continue et releases — P1 ✅
-- ✅ Workflow `ci` à chaque push / PR : Linux GCC 14, Linux Clang 18, Linux ASan + UBSan, Windows MSVC ; build sans avertissement + `ctest`
+- ✅ Workflow `ci` à chaque push / PR : Linux GCC 14, Linux Clang 20, Linux ASan + UBSan, Windows MSVC ; build sans avertissement + `ctest`
 - ✅ Vérification `clang-format` (même version majeure qu'en local)
 - ✅ Cache binaire vcpkg (action commune `.github/actions/setup-vcpkg`)
 - ✅ Workflow `release` sur tag `vX.Y.Z` : contrôle tag = version, build + tests Linux / Windows, publication de la release avec les binaires

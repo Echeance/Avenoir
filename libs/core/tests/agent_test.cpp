@@ -243,7 +243,9 @@ TEST_CASE("une requête annulée s'arrête avant d'appeler le LLM", "[agent]") {
     auto agent =
         f.make_agent({answer("jamais")}, RiskLevel::ReadOnly, std::make_unique<AutoReject>());
 
-    const std::stop_source source;
+    // Non const : request_stop() est non const dans la norme (MSVC le refuse sur
+    // un objet const ; libstdc++ l'accepte, d'où la fausse alerte de clang-tidy).
+    std::stop_source source; // NOLINT(misc-const-correctness)
     source.request_stop();
     const auto reply = agent.handle("bonjour", source.get_token());
     REQUIRE_FALSE(reply.has_value());

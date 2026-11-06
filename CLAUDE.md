@@ -69,7 +69,7 @@ En-têtes publics dans `libs/<nom>/include/avenoir/<nom>/`, tests Catch2 dans `l
 
 ## Règles C++
 
-- C++23 ; GCC ≥ 14, Clang ≥ 18, MSVC 19.40+. CMake ≥ 3.28, dépendances via `vcpkg.json`.
+- C++23 ; GCC ≥ 14, Clang ≥ 19 (`std::expected` de libstdc++), MSVC 19.40+. CMake ≥ 3.28, dépendances via `vcpkg.json`.
 - Avertissements traités comme erreurs (`-Wall -Wextra -Wpedantic -Wconversion -Wshadow -Werror` / `/W4 /WX /permissive-`).
 - RAII partout : pas de `new`/`delete`, `malloc`/`free`, pointeur nu propriétaire, cast C. `std::unique_ptr` par défaut.
 - Erreurs : `std::expected<T, Error>` dans les bibliothèques ; aucune exception ne traverse une bibliothèque (capturer et convertir celles des dépendances). Exceptions tolérées seulement au plus haut niveau de `apps/`.
