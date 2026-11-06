@@ -45,7 +45,7 @@ L'ordre suit un principe : **chaque jalon produit un assistant utilisable**, plu
 - ✅ `.clang-format`, `.clang-tidy` (conventions de nommage vérifiées), `.gitignore`
 - ✅ `avenoir::core` (version) + `apps/cli` (affiche la version) + premier test Catch2. Les autres bibliothèques sont créées à leur étape (1.4 à 1.6)
 - ✅ Chaîne complète vérifiée sous Linux avec vcpkg (`debug` et `asan` : build sans avertissement, tests, clang-tidy)
-- ⬜ Même vérification sous Windows (MSVC) — sera couverte par la CI (1.2)
+- ✅ Même vérification sous Windows (MSVC), par la CI
 
 **Fini quand :** `cmake --preset debug && cmake --build --preset debug && ctest --preset debug` fonctionne sur Linux et Windows.
 
@@ -54,7 +54,7 @@ L'ordre suit un principe : **chaque jalon produit un assistant utilisable**, plu
 - ✅ Vérification `clang-format` (même version majeure qu'en local)
 - ✅ Cache binaire vcpkg (action commune `.github/actions/setup-vcpkg`)
 - ✅ Workflow `release` sur tag `vX.Y.Z` : contrôle tag = version, build + tests Linux / Windows, publication de la release avec les binaires
-- ⬜ Premier passage au vert sur GitHub (dépôt public)
+- ✅ Premier passage au vert sur GitHub (dépôt public), y compris Windows MSVC
 - ⬜ Première release `v0.1.0`
 
 **Fini quand :** chaque push sur `main` est vérifié sur les deux OS, badge vert dans le README, et une release publie des binaires téléchargeables.
@@ -196,7 +196,6 @@ L'ordre suit un principe : **chaque jalon produit un assistant utilisable**, plu
 
 | Question | Bloque | Quand trancher |
 |---|---|---|
-| Licence (proposée : MIT OR Apache-2.0) | publication, contributions | jalon 1 |
 | Client MCP : bibliothèque existante ou maison ? | 1.6 / 4 | début du jalon 1.6 |
 | Moteur de recherche web par défaut | 2.3 | début du jalon 2 |
 | Technologie d'UI | jalon 6 | fin du jalon 3 |

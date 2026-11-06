@@ -59,3 +59,9 @@ git tag v0.2.0 && git push origin v0.2.0
 ```
 
 Le workflow `release` vérifie que le tag correspond à la version, compile et teste sous Linux et Windows, puis publie la release GitHub avec `avenoir-linux-x64.tar.gz` et `avenoir-windows-x64.zip`.
+
+## Licence
+
+Avenoir est publié sous la **[PolyForm Strict License 1.0.0](LICENSE.md)** : le code est consultable et utilisable à des fins **personnelles et non commerciales**, mais toute **modification, œuvre dérivée ou redistribution** (y compris d'un fork) est interdite sans l'accord écrit de l'auteur.
+
+Pour toute autre utilisation (modification, fork, contribution, usage commercial), ouvrez une *issue* ou contactez [@ympax14](https://github.com/ympax14) pour obtenir une autorisation.

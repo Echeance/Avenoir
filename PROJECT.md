@@ -309,12 +309,12 @@ Emplacement cible (phase 3) : `%APPDATA%\avenoir\config.toml` sous Windows, `$XD
 | 12 | Modèle synchrone + threads plutôt que coroutines / Asio | La boucle agent est séquentielle par nature ; plus simple à lire et à déboguer. À réévaluer pour le démon (phase 3) |
 | 13 | Voie rapide sans LLM, réponses en phrases françaises | Latence quasi nulle et fonctionnement hors ligne ; le texte de l'outil est affiché (et lu) tel quel |
 | 14 | Dépôt public, CI GitHub Actions (Linux + Windows) à chaque push, releases publiées automatiquement sur tag `vX.Y.Z` | Actions gratuit et illimité pour un dépôt public ; le code Windows est compilé et testé en continu sans machine Windows ; binaires téléchargeables à chaque version |
+| 15 | Licence **PolyForm Strict 1.0.0** (source consultable, pas open source) | Code lisible et utilisable à titre personnel et non commercial ; modification, œuvre dérivée et redistribution soumises à l'accord écrit de l'auteur. GitHub permet toujours de forker un dépôt public, mais la licence n'accorde aucun droit sur ce fork |
 
 ---
 
 ## 8. Questions ouvertes
 
-- Licence (proposée : MIT OR Apache-2.0).
 - Technologie d'UI (phase 6).
 - Moteur de recherche web par défaut.
 - Client MCP : bibliothèque C++ existante ou client maison complété ?

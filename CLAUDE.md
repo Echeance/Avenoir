@@ -2,6 +2,8 @@
 
 Avenoir est un assistant de système d'exploitation (Windows + Linux) écrit en **C++23**, piloté par un LLM configurable et extensible par des plugins MCP.
 
+Licence : **PolyForm Strict 1.0.0** (`LICENSE.md`) — ne pas la modifier ni ajouter de code tiers incompatible sans accord de l'utilisateur ; toute dépendance doit avoir une licence permissive compatible (MIT, BSD, Boost, Apache-2.0…).
+
 **`PROJECT.md` est le document de référence** (vision, architecture, sécurité, directives, journal des décisions). **`docs/ROADMAP.md`** donne le plan de travail détaillé. Les relire avant tout travail structurant et les tenir à jour.
 
 ## Git
