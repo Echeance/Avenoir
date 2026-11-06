@@ -91,6 +91,7 @@ L'ordre suit un principe : **chaque jalon produit un assistant utilisable**, plu
 - ⬜ Compatibilité MCP (`protocol = "mcp"`) : `initialize`, `tools/list`, `tools/call`
 - ⬜ stderr de chaque module redirigé vers un log dédié ; un module défaillant n'empêche pas le démarrage
 - ⬜ Configuration `[modules.<id>]` (activation, risque relevé) ; remplace `[[mcp_servers]]` et `McpServerConfig` dans `config.hpp`
+- ⬜ Baisse de risque : prise en compte seulement avec un accord enregistré (sinon ignorée + avertissement) ; commande CLI qui affiche avertissement et disclaimer et exige « Je sais ce que je fais »
 - ⬜ Un module d'exemple (ex. météo factice) qui sert de test d'intégration
 
 ### 1.7 CLI (`apps/cli`) — P1
@@ -156,6 +157,10 @@ L'ordre suit un principe : **chaque jalon produit un assistant utilisable**, plu
 *But : Avenoir tourne en permanence et répond instantanément.*
 
 - ⬜ **P1** Config à l'emplacement standard : `$XDG_CONFIG_HOME/avenoir/`, `%APPDATA%\avenoir\` ; création guidée au premier lancement
+- ⬜ **P1** Réglages modifiables uniquement par Avenoir (PROJECT.md § 5.1) : démon seul rédacteur (via l'IPC), changements journalisés
+- ⬜ **P1** Sceau HMAC-SHA256 des réglages, clé dans le trousseau du système (repli : fichier `0600`, signalé)
+- ⬜ **P1** Surveillance du fichier : sceau invalide → refus, restauration de la dernière version valide, alerte (avec le détail des changements), journal
+- ⬜ **P1** Tests : modification à la main, suppression du sceau, sceau d'une autre version → toutes rejetées et restaurées
 - ⬜ **P1** Journal d'audit dans un fichier dédié, avec rotation (`spdlog` rotating sink)
 - ⬜ **P1** Mode démon : unité systemd utilisateur / service Windows (ou démarrage à l'ouverture de session)
 - ⬜ **P1** IPC locale (socket Unix / named pipe) entre le démon et les interfaces (`avenoir::ipc`) ; la CLI devient un client
@@ -164,7 +169,7 @@ L'ordre suit un principe : **chaque jalon produit un assistant utilisable**, plu
 - ⬜ **P2** Réévaluer le modèle de concurrence (décision 12) pour le démon
 - ⬜ **P2** Raccourci clavier global qui ouvre une saisie rapide
 - ⬜ **P2** Mode « local uniquement » : refuse tout fournisseur distant (directive de sécurité n° 10)
-- ⬜ **P3** Secrets dans le trousseau du système (Credential Manager, Secret Service)
+- ⬜ **P2** Secrets (clés d'API) dans le trousseau du système (Credential Manager, Secret Service), qui sert déjà au sceau des réglages
 
 ---
 
@@ -221,6 +226,7 @@ L'ordre suit un principe : **chaque jalon produit un assistant utilisable**, plu
 - ⬜ Conversations ; historique des actions et logs, par conversation et global
 - ⬜ Permissions : liste des accords durables et des permissions de modules, révocation
 - ⬜ Modules installés : activation, risque, mise à jour, désinstallation
+- ⬜ Baisse du risque d'un outil : avertissement, disclaimer de responsabilité, saisie de « Je sais ce que je fais » ; baisses listées et annulables dans l'écran Permissions
 - ⬜ Magasin de modules (P2 : dépend de l'hébergement et de la signature)
 
 ---

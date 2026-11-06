@@ -44,7 +44,7 @@ cmake --preset release && cmake --build --preset release   # exécutable `avenoi
 AVENOIR_LOG=debug ./build/debug/apps/cli/avenoir
 ```
 
-`config.toml` est ignoré par git ; partir de `config.example.toml`.
+`config.toml` est ignoré par git ; partir de `config.example.toml`. L'éditer à la main n'est permis qu'en **développement**, jusqu'au jalon 3 : ensuite, les réglages ne se modifient que par Avenoir (fichier scellé, modification extérieure refusée — PROJECT.md § 5.1).
 
 ## Structure
 
@@ -93,7 +93,8 @@ En-têtes publics dans `libs/<nom>/include/avenoir/<nom>/`, tests Catch2 dans `l
 - Pas d'outil shell générique. **Jamais** de `system()`, `popen()`, `sh -c`, `cmd /C` avec une chaîne construite : tableau d'arguments (`reproc`, `CreateProcessW`) ou API dédiée (`ShellExecuteW`).
 - Valider tous les arguments côté outil (noms d'app sans métacaractères, URL `http(s)` uniquement, chemins canonicalisés et restreints).
 - Secrets uniquement via variables d'environnement ; jamais dans `config.toml` ni dans les logs.
-- Modules : risque du manifeste relevable par l'utilisateur, `sensitive` si absent ; appels entre modules uniquement via l'hôte (permissions + audit).
+- Réglages : le démon est le seul rédacteur ; ne jamais ajouter de chemin qui écrive ou relise les réglages sans vérifier le sceau (directive 14).
+- Modules : risque du manifeste relevable par l'utilisateur, `sensitive` si absent ; abaissable seulement depuis l'application ou la CLI après avertissement, disclaimer et saisie de « Je sais ce que je fais » (accord enregistré ; baisse sans accord ignorée) ; appels entre modules uniquement via l'hôte (permissions + audit).
 - Onglets web des modules : iframe isolée, origine propre, CSP sans réseau, `postMessage` validé ; confirmations toujours dessinées par Avenoir (PROJECT.md, directives 12 et 13).
 
 ## Écrire un outil natif

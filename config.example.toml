@@ -58,5 +58,8 @@ sensitive = "confirm"
 #
 # [modules.calendrier]
 # enabled = true
-# # Relever le risque d'un outil (jamais l'abaisser sous celui du manifeste) :
+# # Relever le risque d'un outil :
 # risk = { update_event = "sensitive" }
+# # L'ABAISSER sous celui du manifeste se fait uniquement depuis l'application
+# # (avertissement + saisie de « Je sais ce que je fais ») : une baisse écrite
+# # ici à la main est ignorée.

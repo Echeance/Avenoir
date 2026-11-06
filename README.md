@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/ympax14/Avenoir/actions/workflows/ci.yml/badge.svg)](https://github.com/ympax14/Avenoir/actions/workflows/ci.yml)
 
-Assistant de système d'exploitation pour Windows et Linux, écrit en C++23, piloté par un LLM configurable et extensible par des plugins MCP.
+Assistant de système d'exploitation pour Windows et Linux, écrit en C++23, piloté par un LLM configurable et extensible par des modules (compatibles MCP).
 
 Vision, architecture et directives : voir **[PROJECT.md](PROJECT.md)**.
 Feuille de route : **[docs/ROADMAP.md](docs/ROADMAP.md)**.
@@ -65,6 +65,10 @@ cmake --preset release && cmake --build --preset release
 Préréglage `asan` (Linux) : compilation avec AddressSanitizer + UndefinedBehaviorSanitizer.
 
 Avant de committer : `scripts/build.sh -k` (vérifie le formatage, lance clang-tidy sur tous les `.cpp` et les tests).
+
+## Configuration
+
+En développement, copier `config.example.toml` en `config.toml` et l'éditer. À partir du jalon 3, les réglages ne se modifieront **que depuis Avenoir** : le fichier sera scellé, et toute modification faite en dehors sera refusée et annulée (voir [PROJECT.md § 5.1](PROJECT.md)).
 
 ## Fournisseurs LLM (à venir)
 

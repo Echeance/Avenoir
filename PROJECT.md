@@ -200,7 +200,12 @@ kind = "declarative"                 # ou "web" (exige la permission ui.web)
 - **fonctions de fond** : un module peut travailler en continu (ex. récupérer la météo toutes les 30 min) et pousser des mises à jour de son onglet à l'hôte (notifications JSON-RPC) ;
 - **découverte par le LLM** : les outils des modules apparaissent dans la liste des outils de l'agent (ex. `calendrier__update_event`). Quand les modules seront nombreux, un outil de recherche de capacités évitera d'envoyer toute la liste au LLM ;
 - **compatibilité MCP** : `protocol = "mcp"` permet d'utiliser un serveur MCP existant comme module (outils seulement : `initialize`, `tools/list`, `tools/call`) ;
-- **risque** : celui du manifeste n'est qu'une proposition ; l'utilisateur peut le relever. Défaut `sensitive` si absent (on ne fait pas confiance à l'auto-déclaration d'un module).
+- **risque** : celui du manifeste est un minimum proposé par l'auteur ; défaut `sensitive` si absent (on ne fait pas confiance à l'auto-déclaration d'un module). L'utilisateur peut le **relever** librement. Il peut aussi l'**abaisser**, mais uniquement depuis l'application (ou une commande de la CLI), après :
+  - un **avertissement** : « Cet outil sera exécuté avec moins de contrôles que ne le prévoit son auteur. » ;
+  - un **disclaimer** : « Tout comportement ayant un impact négatif causé par ce changement relève de votre seule responsabilité. » ;
+  - la saisie exacte de la phrase **« Je sais ce que je fais »** (un clic ne suffit pas).
+
+  L'accord (phrase, date) est enregistré avec le réglage, inscrit au journal et visible dans l'écran Permissions, d'où la baisse s'annule. Une baisse sans accord enregistré (écrite à la main dans un fichier) est **ignorée**, avec un avertissement au démarrage.
 
 ### 2.7 Interface
 
@@ -231,12 +236,13 @@ Ces règles priment sur toute considération de confort ou de rapidité.
 5. **Jamais de `system()`, `popen()`, `cmd /C` ou `sh -c`** avec une chaîne construite à partir d'arguments. Lancer les processus avec un tableau d'arguments (`reproc`, `posix_spawn`, `CreateProcessW`) ou une API dédiée (`ShellExecuteW`).
 6. **Secrets** : uniquement via variables d'environnement (puis trousseau du système en phase ultérieure : Windows Credential Manager, Secret Service sous Linux). Jamais dans `config.toml`, jamais dans les logs.
 7. **Journal d'audit** : chaque exécution, refus ou échec d'outil est tracé (logger `spdlog` dédié : `audit`).
-8. **Modules** : risque `sensitive` par défaut, relevable par l'utilisateur ; permissions déclarées dans le manifeste, montrées à l'installation et révocables ; appels entre modules uniquement via l'hôte, avec contrôle des permissions et audit ; plus tard, bac à sable des processus.
+8. **Modules** : risque `sensitive` par défaut, relevable par l'utilisateur ; abaissable seulement depuis l'application, après avertissement, disclaimer et saisie de « Je sais ce que je fais » (§ 2.6) ; permissions déclarées dans le manifeste, montrées à l'installation et révocables ; appels entre modules uniquement via l'hôte, avec contrôle des permissions et audit ; plus tard, bac à sable des processus.
 9. **Voix** : une transcription peut être fausse. Pour une action sensible déclenchée à la voix, la confirmation reformule l'action (« Je vais supprimer 12 fichiers dans Téléchargements, je confirme ? »).
 10. **Vie privée** : avec un LLM distant, ce qui est envoyé quitte la machine. Le documenter clairement à l'utilisateur ; prévoir un mode « local uniquement ».
 11. **Sûreté mémoire** : l'assistant traite des données non fiables (réponses de LLM, pages web, modules). Les règles C++ de la section 4.2 (RAII, pas de mémoire gérée à la main, analyseurs en CI) en font une exigence de sécurité, pas seulement de qualité.
 12. **Onglets web des modules** : iframe `sandbox="allow-scripts"` uniquement (pas d'origine partagée, ni popup, ni formulaire, ni navigation de la fenêtre principale) ; une origine par module (`avenoir-module://<id>/`) qui ne sert que les fichiers du module ; CSP stricte **sans accès réseau** (`connect-src 'none'`) : les données passent par le processus du module, soumis à ses permissions ; seul canal : `postMessage`, avec une API minimale (recevoir les données de *son* module, lui envoyer des événements), chaque message étant validé par l'hôte.
 13. **Confirmations non imitables** : les demandes de confirmation et de permission sont toujours dessinées par Avenoir, hors de tout contenu de module.
+14. **Réglages modifiables uniquement par Avenoir** : le démon est le seul rédacteur ; fichier scellé (HMAC, clé dans le trousseau du système) ; toute modification extérieure est refusée, annulée par restauration de la dernière version valide, signalée et journalisée (§ 5.1). C'est une preuve de falsification, pas une protection contre un logiciel malveillant disposant des droits de l'utilisateur.
 
 ---
 
@@ -326,6 +332,19 @@ Fichier `config.toml` (voir `config.example.toml`) :
 
 Emplacement cible (phase 3) : `%APPDATA%\avenoir\config.toml` sous Windows, `$XDG_CONFIG_HOME/avenoir/config.toml` sous Linux.
 
+### 5.1 Réglages modifiables uniquement par Avenoir
+
+**Toute modification des réglages en dehors d'Avenoir est interdite** : les réglages se changent depuis l'application (ou la CLI officielle), jamais en éditant le fichier.
+
+- **Un seul rédacteur** : seul le démon écrit les réglages, à la demande des interfaces officielles (application, CLI) via l'IPC. Chaque changement est journalisé : qui, quand, valeur avant et après.
+- **Sceau d'intégrité** : le fichier de réglages est accompagné d'un sceau HMAC-SHA256 calculé avec une clé secrète rangée dans le **trousseau du système** (Windows Credential Manager, Secret Service sous Linux). Le démon vérifie le sceau au démarrage et à chaque modification du fichier, qu'il surveille.
+- **Modification extérieure détectée** (sceau invalide) : elle est **refusée** ; le démon **restaure** la dernière version valide (copie scellée), **alerte** l'utilisateur dans le widget et l'application en montrant ce qui a été changé, et l'inscrit au journal. Pas de « accepter quand même » : pour changer un réglage, on passe par l'application.
+- **Sans trousseau disponible** (Linux sans Secret Service) : clé dans un fichier lisible par l'utilisateur seul (`0600`) ; protection plus faible, signalée par Avenoir.
+
+**Limites** : c'est une **preuve de falsification**, pas une protection absolue. Le mécanisme détecte et annule les éditions à la main, les scripts et les programmes sans accès au trousseau ; il ne protège pas contre un logiciel malveillant qui s'exécute avec le compte de l'utilisateur et lit son trousseau, ni contre un administrateur. Une protection plus forte (démon sous un compte système dédié) reste possible plus tard.
+
+**Transition** : jusqu'au jalon 3 (démon et trousseau), `config.toml` reste éditable à la main, **en mode développement uniquement**. Ensuite, les réglages deviennent un fichier géré et scellé par le démon ; `config.example.toml` ne sert plus qu'au premier lancement ou à un import depuis l'application.
+
 ---
 
 ## 6. Feuille de route
@@ -403,6 +422,8 @@ Emplacement cible (phase 3) : `%APPDATA%\avenoir\config.toml` sous Windows, `$XD
 | 18 | **Démon et interface séparés** ; l'interface est un seul processus avec deux fenêtres (widget et application principale) | Le démon reste léger et toujours actif ; l'interface peut redémarrer ou être fermée sans interrompre l'assistant ; un seul état d'interface partagé par les deux fenêtres |
 | 19 | **Interface web** (HTML / CSS / TypeScript) dans la vue web du système, hébergée par un petit hôte C++ ; ni Electron, ni Qt | Écosystème le plus riche pour une interface moderne et très soignée (composants, animations Rive / Lottie) ; onglets web des modules naturels ; vue web système plutôt qu'Electron pour la légèreté. Contreparties acceptées : TypeScript en plus du C++, petits écarts de rendu WebView2 / WebKitGTK, mémoire supérieure à Qt Quick |
 | 20 | **Onglets de modules déclaratifs par défaut**, web isolés sur permission `ui.web` (directive de sécurité n° 12) | Liberté pour les modules qui en ont besoin, sans exécuter de code de module dans l'interface par défaut ni lui donner accès au réseau ou aux autres modules |
+| 21 | **Baisse du risque d'un outil de module** possible, uniquement depuis l'application ou la CLI, après avertissement, disclaimer de responsabilité et saisie de « Je sais ce que je fais » ; accord enregistré, journalisé, révocable ; baisse sans accord ignorée | Laisser l'utilisateur maître de sa machine tout en rendant le choix explicite et traçable. Abaisser un outil `sensitive` lui retire la confirmation obligatoire : la décision 6 reste vraie pour la politique par niveau, mais pour cet outil c'est l'utilisateur qui lève la protection, à ses risques |
+| 22 | **Réglages modifiables uniquement par Avenoir** : démon seul rédacteur, fichier scellé par HMAC (clé dans le trousseau du système), modification extérieure refusée et restaurée, alerte et journal ; `config.toml` éditable à la main seulement en développement, jusqu'au jalon 3 | Garantir que les protections (permissions, risques, baisses avec accord) ne se contournent pas en éditant un fichier, et que chaque changement est traçable. Limite assumée : preuve de falsification, pas protection contre un logiciel malveillant avec les droits de l'utilisateur |
 
 ---
 
