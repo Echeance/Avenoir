@@ -70,11 +70,17 @@ L'ordre suit un principe : **chaque jalon produit un assistant utilisable**, plu
 - ✅ Tests : LLM scripté, action sensible refusée non exécutée, troncature, règles de la voie rapide
 - ✅ 32 tests (agent avec LLM scripté, permissions, voie rapide, registre, configuration) ; annulation par `std::stop_token`
 
-### 1.4 Fournisseurs LLM (`avenoir::llm`) — P1
-- ⬜ `openai_compatible` (cpr + JSON) — testé avec Ollama
-- ⬜ `anthropic` (fusion des messages consécutifs de même rôle)
-- ⬜ `claude_code` : `claude -p` via `reproc`, outils de Claude Code désactivés, clés d'API retirées de l'environnement, prompt sur stdin, `--json-schema`, dossier de travail temporaire
-- ⬜ Tests de conversion des messages et de lecture des réponses, sans réseau
+### 1.4 Fournisseurs LLM (`avenoir::llm`) — P1 ✅
+- ✅ `openai_compatible` (cpr + JSON) : arguments d'outils en chaîne ou en objet, arguments illisibles transmis à l'outil (qui les refuse)
+- ⬜ `openai_compatible` testé avec un vrai serveur (Ollama non lancé lors de l'étape) — à faire en 1.8
+- ✅ `anthropic` (fusion des messages consécutifs de même rôle)
+- ✅ `claude_code` : `claude -p` via `reproc` (boucle `poll` non bloquante : entrée de toute taille, annulation, délai), outils de Claude Code désactivés, clés d'API neutralisées dans l'environnement, prompt sur stdin, `--json-schema` (`text` et `tool_calls` obligatoires), dossier de travail temporaire — testé en réel
+- ✅ Fabrique `make_provider` : clé lue dans la variable nommée par la config, jamais citée dans les erreurs
+- ✅ Consommation (`Usage` : tokens, coût indicatif) remontée par les trois fournisseurs
+- ✅ Annulation par `std::stop_token` (requêtes HTTP et processus `claude`)
+- ✅ Réponse finale vide → erreur explicite (cœur), au lieu d'une ligne blanche
+- ✅ Tests de conversion des messages et de lecture des réponses, sans réseau ; test d'intégration masqué `[.integration]` (`AVENOIR_TEST_CONFIG`)
+- ℹ️ La limite de l'abonnement n'apparaît pas dans la sortie `claude -p --output-format json` (Claude Code 2.1.319) : seules la consommation et le coût indicatif par appel sont disponibles
 
 ### 1.5 Outils natifs (`avenoir::tools`) — P1
 - ⬜ `current_time` : phrase française (« Il est 13 h 41, vendredi 6 novembre 2026. »)
@@ -94,8 +100,9 @@ L'ordre suit un principe : **chaque jalon produit un assistant utilisable**, plu
 - ⬜ Baisse de risque : prise en compte seulement avec un accord enregistré (sinon ignorée + avertissement) ; commande CLI qui affiche avertissement et disclaimer et exige « Je sais ce que je fais »
 - ⬜ Un module d'exemple (ex. météo factice) qui sert de test d'intégration
 
-### 1.7 CLI (`apps/cli`) — P1
-- ⬜ Boucle de saisie, commandes `/outils`, `/reset`, `/quitter`
+### 1.7 CLI (`apps/cli`) — P1 🔄
+- ✅ Câblage minimal (fait avec 1.4) : lecture de la config, fournisseur, agent, boucle de saisie, `/reset`, `/quitter`, logs sur stderr (`AVENOIR_LOG`)
+- ⬜ Commande `/outils`
 - ⬜ Confirmations au terminal (« Autoriser ? [o/N] »)
 - ⬜ Ctrl+C annule la requête en cours sans quitter (`std::stop_token`)
 - ⬜ P3 : historique et édition de ligne (`replxx` ou `linenoise-ng`), indicateur « réflexion en cours… », `/config`
@@ -250,5 +257,6 @@ Par ordre conseillé :
 1. ~~Projet CMake + vcpkg + préréglages + un test qui passe (1.1)~~ ✅
 2. ~~CI au vert sur GitHub + release `v0.1.0` (1.2)~~ ✅
 3. ~~Cœur : messages, outils, permissions, agent avec LLM scripté (1.3)~~ ✅
-4. Fournisseur `openai_compatible` + outil `current_time` + CLI minimale : premier dialogue de bout en bout (1.4, 1.5, 1.7)
-5. Les autres fournisseurs et outils, puis l'hôte de modules v1 (1.6)
+4. ~~Fournisseurs LLM + CLI minimale : premier dialogue de bout en bout (1.4)~~ ✅
+5. Outils natifs (1.5), puis confirmations et Ctrl+C dans la CLI (1.7)
+6. Hôte de modules v1 (1.6)

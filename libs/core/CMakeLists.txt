@@ -5,6 +5,7 @@ avenoir_add_library(core
     SOURCES
         src/agent.cpp
         src/config.cpp
+        src/env.cpp
         src/error.cpp
         src/permission.cpp
         src/router.cpp

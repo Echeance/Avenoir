@@ -30,6 +30,8 @@ include(AvenoirOptions)
 find_package(nlohmann_json CONFIG REQUIRED)
 find_package(tomlplusplus CONFIG REQUIRED)
 find_package(spdlog CONFIG REQUIRED)
+find_package(cpr CONFIG REQUIRED)
+find_package(reproc++ CONFIG REQUIRED)
 
 # ─── Tests ──────────────────────────────────────────────────────────────────
 if(AVENOIR_BUILD_TESTS)
@@ -40,4 +42,5 @@ endif()
 
 # ─── Bibliothèques et applications ──────────────────────────────────────────
 add_subdirectory(libs/core)
+add_subdirectory(libs/llm)
 add_subdirectory(apps/cli)

@@ -64,7 +64,8 @@ Result<std::string> Agent::handle(std::string_view input, const std::stop_token&
     if (options_.router) {
         if (auto route = options_.router->route(input); route && tools_.find(route->tool)) {
             spdlog::debug("voie rapide : {}", route->tool);
-            const ToolCall call{.id = "fast-path", .name = route->tool, .arguments = std::move(route->arguments)};
+            const ToolCall call{
+                .id = "fast-path", .name = route->tool, .arguments = std::move(route->arguments)};
             Execution result = execute(call);
             // Trace dans l'historique pour que le LLM ait le contexte ensuite.
             history_.emplace_back(UserMessage{.content = std::string(input)});
@@ -97,6 +98,17 @@ Result<std::string> Agent::handle(std::string_view input, const std::stop_token&
         spdlog::debug("étape {} : {} appel(s) d'outil", step, response->tool_calls.size());
 
         if (response->tool_calls.empty()) {
+            // Ni texte ni outil : le modèle n'a rien répondu. On le signale
+            // plutôt que d'afficher une réponse vide. Si rien d'autre ne
+            // s'est passé, la question est retirée de l'historique pour
+            // pouvoir être reposée telle quelle ; sinon (des outils ont déjà
+            // agi), l'historique est conservé.
+            if (response->text.empty()) {
+                if (step == 0) {
+                    history_.pop_back();
+                }
+                return make_error(ErrorCode::Llm, "le modèle n'a renvoyé aucune réponse");
+            }
             history_.emplace_back(AssistantMessage{.text = response->text, .tool_calls = {}});
             return std::move(response->text);
         }

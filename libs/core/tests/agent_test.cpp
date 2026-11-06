@@ -260,3 +260,25 @@ TEST_CASE("reset oublie la conversation", "[agent]") {
     agent.reset();
     CHECK(agent.history().empty());
 }
+
+TEST_CASE("une réponse finale vide est une erreur, pas une ligne blanche", "[agent]") {
+    const Fixture f;
+    auto agent = f.make_agent({answer("")}, RiskLevel::ReadOnly, std::make_unique<AutoReject>());
+
+    const auto reply = agent.handle("bonjour");
+    REQUIRE_FALSE(reply.has_value());
+    CHECK(reply.error().code == ErrorCode::Llm);
+    CHECK(agent.history().empty());
+}
+
+TEST_CASE("une réponse vide après des outils garde l'historique", "[agent]") {
+    const Fixture f;
+    auto agent = f.make_agent({call_tool("flag"), answer("")}, RiskLevel::ReadOnly,
+                              std::make_unique<AutoReject>());
+
+    const auto reply = agent.handle("vas-y");
+    REQUIRE_FALSE(reply.has_value());
+    CHECK(*f.tool_calls == 1);
+    // Utilisateur, Assistant (appel), Résultat : l'action a eu lieu.
+    CHECK(agent.history().size() == 3);
+}
