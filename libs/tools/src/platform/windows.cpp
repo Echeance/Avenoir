@@ -7,8 +7,11 @@
 #include <string>
 #include <string_view>
 
-#include <shellapi.h>
+// windows.h doit précéder shellapi.h : ordre protégé du tri de clang-format.
+// clang-format off
 #include <windows.h>
+#include <shellapi.h>
+// clang-format on
 
 #include "avenoir/core/env.hpp"
 
