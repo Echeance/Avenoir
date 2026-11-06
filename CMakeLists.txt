@@ -43,4 +43,5 @@ endif()
 # ─── Bibliothèques et applications ──────────────────────────────────────────
 add_subdirectory(libs/core)
 add_subdirectory(libs/llm)
+add_subdirectory(libs/tools)
 add_subdirectory(apps/cli)

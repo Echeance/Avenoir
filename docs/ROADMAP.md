@@ -82,13 +82,17 @@ L'ordre suit un principe : **chaque jalon produit un assistant utilisable**, plu
 - ✅ Tests de conversion des messages et de lecture des réponses, sans réseau ; test d'intégration masqué `[.integration]` (`AVENOIR_TEST_CONFIG`)
 - ℹ️ La limite de l'abonnement n'apparaît pas dans la sortie `claude -p --output-format json` (Claude Code 2.1.319) : seules la consommation et le coût indicatif par appel sont disponibles
 
-### 1.5 Outils natifs (`avenoir::tools`) — P1
-- ⬜ `current_time` : phrase française (« Il est 13 h 41, vendredi 6 novembre 2026. »)
-- ⬜ `system_info`
-- ⬜ `launch_app` : nom validé strictement ; Linux `gtk-launch` puis PATH ; Windows **`ShellExecuteW`** (jamais `cmd.exe`)
-- ⬜ `open_url` : `http(s)` uniquement ; Linux `xdg-open` ; Windows `ShellExecuteW`
-- ⬜ Tests de validation, y compris tentatives d'injection
-- ⬜ Actions d'annulation pour les outils qui le permettent (aucun des quatre outils de base n'est annulable de façon sûre : `launch_app` et `open_url` sont listés comme non annulables) ; les outils du jalon 2 (volume, luminosité, mode sombre) le seront
+### 1.5 Outils natifs (`avenoir::tools`) — P1 ✅
+- ✅ `current_time` : phrase française (« Il est 13 h 41, vendredi 6 novembre 2026. »), fuseau du système (`std::chrono::current_zone`)
+- ✅ `system_info` : système, distribution (`/etc/os-release`), architecture, machine, cœurs, en une phrase
+- ✅ `launch_app` : nom validé strictement ; Linux `gtk-launch` puis exécutable du PATH via `setsid -f` (détaché, existence vérifiée avant) ; Windows **`ShellExecuteW`** (jamais `cmd.exe`)
+- ✅ `open_url` : `http(s)` uniquement ; Linux `setsid -f xdg-open` ; Windows `ShellExecuteW`
+- ✅ Code par OS dans `src/platform/{linux,windows,unsupported}.cpp` ; `launch_app` et `open_url` non enregistrés là où ils ne sont pas pris en charge
+- ✅ Tests : validation (cas valides et 24 tentatives d'injection), phrases de l'heure et du système ; aucun test ne lance d'application
+- ✅ Branchés dans la CLI : « quelle heure est-il ? » passe par la voie rapide ; `system_info` testé en réel via Claude Code
+- ✅ `launch_app` (`gtk-launch`, application détachée) et `open_url` essayés en réel sous Linux ; application inexistante → message clair
+- ⬜ Essai réel sous Windows — à faire en 1.8 ; d'ici là, le code Windows n'est vérifié que par la CI
+- ✅ Annulation : aucun des quatre outils n'est annulable de façon sûre (`launch_app` et `open_url` seront listés comme non annulables) ; les outils du jalon 2 (volume, luminosité, mode sombre) le seront
 
 ### 1.6 Hôte de modules v1 (`avenoir::modules`) — P1
 - ⬜ Découverte des modules : `<installation>/modules/` et dossier utilisateur ; lecture et validation de `module.toml` (PROJECT.md § 2.6)
@@ -265,5 +269,5 @@ Par ordre conseillé :
 2. ~~CI au vert sur GitHub + release `v0.1.0` (1.2)~~ ✅
 3. ~~Cœur : messages, outils, permissions, agent avec LLM scripté (1.3)~~ ✅
 4. ~~Fournisseurs LLM + CLI minimale : premier dialogue de bout en bout (1.4)~~ ✅
-5. Outils natifs (1.5), puis confirmations et Ctrl+C dans la CLI (1.7)
+5. ~~Outils natifs (1.5)~~ ✅ ; confirmations, Ctrl+C, annulation et `/annuler` dans la CLI (1.7)
 6. Hôte de modules v1 (1.6)

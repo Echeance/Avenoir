@@ -3,8 +3,8 @@
 // Usage : avenoir [chemin/vers/config.toml]      (défaut : config.toml)
 // Logs  : variable AVENOIR_LOG (trace, debug, info, warn, error ; défaut warn).
 //
-// Câblage minimal (étape 1.4) : dialogue avec le LLM configuré, sans outils.
-// Confirmations, Ctrl+C et /outils arrivent avec l'étape 1.7.
+// Câblage minimal : dialogue avec le LLM configuré et outils natifs.
+// Confirmations, Ctrl+C, /outils et /annuler arrivent avec l'étape 1.7.
 
 #include <cstdio>
 #include <cstdlib>
@@ -25,6 +25,7 @@
 #include "avenoir/core/router.hpp"
 #include "avenoir/core/version.hpp"
 #include "avenoir/llm/factory.hpp"
+#include "avenoir/tools/tools.hpp"
 
 namespace {
 
@@ -85,9 +86,15 @@ int run(int argc, char** argv) {
         options.router = std::move(*router);
     }
 
-    // Pas encore d'outils (étape 1.5) ni de confirmation interactive (1.7) :
-    // toute action à confirmer est refusée.
-    core::Agent agent(std::move(*llm), core::ToolRegistry{}, std::make_unique<core::AutoReject>(),
+    core::ToolRegistry tools;
+    if (auto registered = tools::register_native_tools(tools); !registered) {
+        report_error(core::describe(registered.error()).c_str());
+        return EXIT_FAILURE;
+    }
+
+    // Pas encore de confirmation interactive (étape 1.7) : toute action à
+    // confirmer (risque sensitive) est refusée.
+    core::Agent agent(std::move(*llm), std::move(tools), std::make_unique<core::AutoReject>(),
                       std::move(options));
 
     std::println("avenoir {} — LLM : {} — {} outil(s). Commandes : /reset, /quitter",
