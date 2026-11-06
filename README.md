@@ -52,13 +52,18 @@ clang-tidy -p build/debug <fichiers .cpp modifiés>
 ## Publier une version
 
 1. Mettre à jour la version dans `CMakeLists.txt` (`project(... VERSION x.y.z)`) et `vcpkg.json`.
-2. Committer, puis pousser un tag du même numéro :
+2. Committer et pousser `main`, puis pousser un tag :
+
+| Type | Tag | Sur GitHub |
+|---|---|---|
+| Stable | `v1.2.0` | **Latest** |
+| Pré-version | `v1.2.0-alpha.1`, `v1.2.0-beta.1`, `v1.2.0-rc.1` | Pre-release |
 
 ```sh
-git tag v0.2.0 && git push origin v0.2.0
+git tag v1.2.0-beta.1 && git push origin v1.2.0-beta.1
 ```
 
-Le workflow `release` vérifie que le tag correspond à la version, compile et teste sous Linux et Windows, puis publie la release GitHub avec `avenoir-linux-x64.tar.gz` et `avenoir-windows-x64.zip`.
+Le workflow `release` vérifie que le numéro du tag correspond à la version du projet, compile et teste sous Linux et Windows, puis publie la release avec `avenoir-linux-x64.tar.gz` et `avenoir-windows-x64.zip`. Les versions `0.x` sont toujours publiées en pré-version. Le binaire affiche la version complète (`avenoir 1.2.0-beta.1`).
 
 ## Licence
 

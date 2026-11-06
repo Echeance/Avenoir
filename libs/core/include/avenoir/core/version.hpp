@@ -4,7 +4,8 @@
 
 namespace avenoir::core {
 
-/// Version du projet (`PROJECT_VERSION` de CMake), au format « majeur.mineur.correctif ».
+/// Version du projet au format SemVer « majeur.mineur.correctif », suivie d'un
+/// éventuel suffixe de pré-version (« 1.2.0 », « 1.2.0-beta.1 »).
 [[nodiscard]] std::string_view version() noexcept;
 
 } // namespace avenoir::core

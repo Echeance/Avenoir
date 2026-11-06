@@ -6,7 +6,7 @@ avenoir_add_library(core
         src/version.cpp)
 
 target_compile_definitions(avenoir_core PRIVATE
-    AVENOIR_VERSION="${PROJECT_VERSION}")
+    AVENOIR_VERSION="${AVENOIR_FULL_VERSION}")
 
 avenoir_add_tests(core
     SOURCES

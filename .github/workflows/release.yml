@@ -1,8 +1,14 @@
 name: Release
 
 # Publier une version : mettre à jour la version dans CMakeLists.txt et
-# vcpkg.json, committer, puis pousser un tag du même numéro :
-#   git tag v0.2.0 && git push origin v0.2.0
+# vcpkg.json, committer, puis pousser un tag du même numéro.
+#
+#   Stable (« Latest »)  : git tag v1.2.0         && git push origin v1.2.0
+#   Pré-version          : git tag v1.2.0-beta.1  && git push origin v1.2.0-beta.1
+#                          (suffixes acceptés : -alpha.N, -beta.N, -rc.N)
+#
+# Les versions 0.x et tous les tags avec suffixe sont publiés en pré-version ;
+# seule une version stable ≥ 1.0.0 devient « Latest ».
 on:
   push:
     tags: ['v*.*.*']
@@ -25,13 +31,18 @@ jobs:
       - name: Vérifier que le tag correspond à la version du projet
         shell: bash
         run: |
+          if [[ ! "$GITHUB_REF_NAME" =~ ^v([0-9]+\.[0-9]+\.[0-9]+)(-(alpha|beta|rc)\.[0-9]+)?$ ]]; then
+            echo "::error::Tag invalide : $GITHUB_REF_NAME (attendu : vX.Y.Z ou vX.Y.Z-alpha|beta|rc.N)"; exit 1
+          fi
+          number="${BASH_REMATCH[1]}"
+          suffix="${BASH_REMATCH[2]}"
           project=$(sed -nE 's/^ +VERSION ([0-9]+\.[0-9]+\.[0-9]+)$/\1/p' CMakeLists.txt)
           manifest=$(python3 -c "import json; print(json.load(open('vcpkg.json'))['version'])" 2>/dev/null \
                      || python -c "import json; print(json.load(open('vcpkg.json'))['version'])")
-          tag="${GITHUB_REF_NAME#v}"
-          echo "tag=$tag CMakeLists.txt=$project vcpkg.json=$manifest"
-          [ "$tag" = "$project" ] && [ "$tag" = "$manifest" ] || {
-            echo "::error::Le tag v$tag ne correspond pas à la version du projet ($project / $manifest)"; exit 1; }
+          echo "tag=$GITHUB_REF_NAME numéro=$number suffixe=$suffix CMakeLists.txt=$project vcpkg.json=$manifest"
+          [ "$number" = "$project" ] && [ "$number" = "$manifest" ] || {
+            echo "::error::Le numéro du tag ($number) ne correspond pas à la version du projet ($project / $manifest)"; exit 1; }
+          echo "AVENOIR_VERSION_SUFFIX=$suffix" >> "$GITHUB_ENV"
 
       - name: Outils Linux (GCC 14, Ninja)
         if: runner.os == 'Linux'
@@ -52,10 +63,13 @@ jobs:
         # libstdc++ liée statiquement : le binaire tourne sur d'autres distributions.
         run: >
           cmake --preset release -DAVENOIR_BUILD_TESTS=ON
+          "-DAVENOIR_VERSION_SUFFIX=${{ env.AVENOIR_VERSION_SUFFIX }}"
           "-DCMAKE_EXE_LINKER_FLAGS=-static-libstdc++ -static-libgcc"
       - name: Configurer (Windows)
         if: runner.os == 'Windows'
-        run: cmake --preset release -DAVENOIR_BUILD_TESTS=ON -DVCPKG_TARGET_TRIPLET=x64-windows-static-md
+        run: >
+          cmake --preset release -DAVENOIR_BUILD_TESTS=ON -DVCPKG_TARGET_TRIPLET=x64-windows-static-md
+          "-DAVENOIR_VERSION_SUFFIX=${{ env.AVENOIR_VERSION_SUFFIX }}"
 
       - name: Compiler
         run: cmake --build --preset release
@@ -96,5 +110,7 @@ jobs:
         with:
           files: dist/*
           generate_release_notes: true
-          # 0.x.y : versions de développement.
-          prerelease: ${{ startsWith(github.ref_name, 'v0.') }}
+          # Pré-version : tag avec suffixe (-alpha/-beta/-rc) ou version 0.x.
+          prerelease: ${{ contains(github.ref_name, '-') || startsWith(github.ref_name, 'v0.') }}
+          # « Latest » uniquement pour une version stable ≥ 1.0.0.
+          make_latest: ${{ (contains(github.ref_name, '-') || startsWith(github.ref_name, 'v0.')) && 'false' || 'true' }}

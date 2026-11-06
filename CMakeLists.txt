@@ -9,6 +9,11 @@ project(avenoir
 option(AVENOIR_BUILD_TESTS "Compiler les tests (Catch2)" ON)
 option(AVENOIR_WARNINGS_AS_ERRORS "Traiter les avertissements comme des erreurs" ON)
 option(AVENOIR_SANITIZE "Activer AddressSanitizer + UndefinedBehaviorSanitizer (GCC/Clang)" OFF)
+set(AVENOIR_VERSION_SUFFIX "" CACHE STRING
+    "Suffixe de pré-version ajouté à PROJECT_VERSION (ex. « -beta.1 »), fourni par le workflow de release")
+
+# Version complète affichée par l'application : 1.2.0, 1.2.0-beta.1…
+set(AVENOIR_FULL_VERSION "${PROJECT_VERSION}${AVENOIR_VERSION_SUFFIX}")
 
 # ─── Langage ────────────────────────────────────────────────────────────────
 set(CMAKE_CXX_STANDARD 23)
