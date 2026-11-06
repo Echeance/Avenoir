@@ -32,6 +32,7 @@ find_package(tomlplusplus CONFIG REQUIRED)
 find_package(spdlog CONFIG REQUIRED)
 find_package(cpr CONFIG REQUIRED)
 find_package(reproc++ CONFIG REQUIRED)
+find_package(replxx CONFIG REQUIRED)
 
 # ─── Tests ──────────────────────────────────────────────────────────────────
 if(AVENOIR_BUILD_TESTS)

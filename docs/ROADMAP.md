@@ -106,16 +106,18 @@ L'ordre suit un principe : **chaque jalon produit un assistant utilisable**, plu
 - ⬜ Annulation pour les outils de modules : action d'annulation renvoyée par l'outil, exécutée par `avenoir/undo`
 - ⬜ Un module d'exemple (ex. météo factice) qui sert de test d'intégration
 
-### 1.7 CLI (`apps/cli`) — P1 🔄
+### 1.7 CLI (`apps/cli`) — P1 ✅
 - ✅ Câblage minimal (fait avec 1.4) : lecture de la config, fournisseur, agent, boucle de saisie, `/reset`, `/quitter`, logs sur stderr (`AVENOIR_LOG`)
-- ⬜ Commande `/outils`
-- ⬜ Confirmations au terminal (« Autoriser ? [o/N] »)
-- ⬜ Ctrl+C **ne ferme pas** la CLI : il arrête l'action en cours (appel au LLM ou outil, via `std::stop_token`) ; sans action en cours, il efface la saisie et rappelle `/quitter` (PROJECT.md § 2.4)
-- ⬜ Cœur : `ToolOutput` peut contenir une action d'annulation ; journal d'annulation par requête dans l'agent ; annulation en ordre inverse, avec vérification d'état, échecs signalés sans bloquer, audit (PROJECT.md § 2.4, décision 23)
-- ⬜ À l'interruption : liste des actions effectuées (✓ annulables, ✗ non annulables) et question « Annuler les N actions annulables ? [o/N] »
-- ⬜ Commande `/annuler` : même proposition pour la dernière requête terminée ; répétée, remonte aux précédentes
-- ⬜ Tests : annulation en ordre inverse, refus si l'état a changé, Ctrl+C pendant la question = pas d'annulation
-- ⬜ P3 : historique et édition de ligne (`replxx` ou `linenoise-ng`), indicateur « réflexion en cours… », `/config`
+- ✅ Commandes `/aide` et `/outils`
+- ✅ Confirmations au terminal (« Autoriser ? [o/N] ») ; tout sauf o/oui/y/yes vaut refus, Ctrl+C aussi — testé en réel
+- ✅ Ctrl+C **ne ferme pas** la CLI : la requête tourne dans un thread de travail ; le gestionnaire de signal (`sigaction` / `SetConsoleCtrlHandler`) ne lève qu'un indicateur, le thread principal demande l'arrêt (`std::stop_token`) ; sans action en cours, il efface la saisie et rappelle `/quitter` — testé en réel (arrêt d'un appel à Claude Code, aucun processus orphelin)
+- ✅ Cœur : `ToolOutput` peut contenir une action d'annulation (`UndoAction`) ; journal d'annulation par requête dans l'agent (20 dernières requêtes, outils à effet de bord seulement) ; annulation en ordre inverse, échecs signalés sans bloquer, audit
+- ✅ À l'interruption : liste des actions effectuées (✓ annulables, ✗ non annulables) et question « Annuler N action(s) annulable(s) ? [o/N] »
+- ✅ Commande `/annuler` : même proposition pour la dernière requête ; répétée, remonte aux précédentes
+- ✅ Tests : ordre inverse, refus si l'état a changé (sans écraser), remontée des requêtes, requête interrompue, outils en lecture seule non journalisés
+- ✅ Saisie avec **replxx** : édition de ligne, historique des saisies conservé (`cli_history.txt` dans le dossier de données), complétion des commandes (Tab), Ctrl+C distingué de Ctrl+D
+- ⬜ Essai interactif de Ctrl+C sous Windows (le code n'est vérifié que par la CI) — à faire en 1.8
+- ⬜ P3 : indicateur « réflexion en cours… », `/config`
 
 ### 1.8 Essais avec de vrais modèles — P1
 - ⬜ Jeu de ~20 requêtes de référence (simples, multi-outils, ambiguës, tentatives d'injection) dans `evals/`
@@ -281,6 +283,6 @@ Par ordre conseillé :
 2. ~~CI au vert sur GitHub + release `v0.1.0` (1.2)~~ ✅
 3. ~~Cœur : messages, outils, permissions, agent avec LLM scripté (1.3)~~ ✅
 4. ~~Fournisseurs LLM + CLI minimale : premier dialogue de bout en bout (1.4)~~ ✅
-5. ~~Outils natifs (1.5)~~ ✅ ; confirmations, Ctrl+C, annulation et `/annuler` dans la CLI (1.7)
+5. ~~Outils natifs (1.5) ; confirmations, Ctrl+C, annulation et `/annuler` dans la CLI (1.7)~~ ✅
 6. Conversations persistantes (1.9)
 7. Hôte de modules v1 (1.6)

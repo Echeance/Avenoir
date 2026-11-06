@@ -254,6 +254,7 @@ Les conversations sont **persistantes** : à la réouverture de l'application ou
 | `/historique` | réaffiche toute la conversation en cours |
 
 - **Défilement** : la conversation se remonte avec le défilement du terminal. Au démarrage et avec `/ouvrir`, les **50 derniers messages** sont réaffichés (pour ne pas inonder le terminal) ; `/historique` affiche tout. Les appels d'outils sont affichés de façon compacte (`⚙ launch_app « firefox »`).
+- **Historique des saisies de la CLI** : les lignes tapées sont aussi conservées (flèches haut/bas), dans `cli_history.txt`, en clair, dans le même dossier de données.
 - **Limites** : les conversations sont stockées **en clair** sur la machine (chiffrement optionnel envisagé plus tard) ; les actions d'annulation (`/annuler`) ne survivent pas à un redémarrage (les actions passées restent visibles dans l'historique, mais ne sont plus annulables) ; une très longue conversation reprise est renvoyée en entier au LLM (résumé automatique prévu au jalon 4).
 
 ---

@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cstddef>
 #include <memory>
+#include <ranges>
 #include <stop_token>
 #include <string>
 #include <string_view>
@@ -60,6 +61,16 @@ std::string_view Agent::llm_name() const {
 }
 
 Result<std::string> Agent::handle(std::string_view input, const std::stop_token& stop) {
+    // Nouveau journal d'annulation pour cette requête. Celui de la requête
+    // précédente est oublié s'il est vide ; on n'en garde qu'un nombre limité.
+    if (!journals_.empty() && journals_.back().actions.empty()) {
+        journals_.pop_back();
+    }
+    journals_.push_back(RequestJournal{.request = std::string(input), .actions = {}});
+    while (journals_.size() > kMaxUndoJournals) {
+        journals_.pop_front();
+    }
+
     // 1. Voie rapide (sans LLM), si une règle correspond à un outil existant.
     if (options_.router) {
         if (auto route = options_.router->route(input); route && tools_.find(route->tool)) {
@@ -161,8 +172,61 @@ Agent::Execution Agent::execute(const ToolCall& call) {
         audit()->warn("échec : {} : {}", call.name, message);
         return {.content = std::move(message), .is_error = true};
     }
+    // Journal d'annulation : seules les actions à effet de bord y figurent.
+    if (spec.risk != RiskLevel::ReadOnly && !journals_.empty()) {
+        journals_.back().actions.push_back(ActionRecord{
+            .tool = call.name,
+            .summary = call.name + " " + call.arguments.dump(),
+            .undo = std::move(output->undo),
+        });
+    }
     return {.content = truncate_utf8(std::move(output->content), kMaxToolOutputChars),
             .is_error = false};
+}
+
+std::size_t RequestJournal::undoable_count() const noexcept {
+    return static_cast<std::size_t>(
+        std::ranges::count_if(actions, [](const ActionRecord& a) { return a.undo.has_value(); }));
+}
+
+const RequestJournal* Agent::last_undoable() const {
+    for (const auto& journal : journals_ | std::views::reverse) {
+        if (journal.undoable_count() > 0) {
+            return &journal;
+        }
+    }
+    return nullptr;
+}
+
+std::vector<UndoOutcome> Agent::undo_last() {
+    std::vector<UndoOutcome> outcomes;
+    const auto it =
+        std::ranges::find_if(journals_ | std::views::reverse, [](const RequestJournal& journal) {
+            return journal.undoable_count() > 0;
+        });
+    if (it == journals_.rend()) {
+        return outcomes;
+    }
+    // Ordre inverse : la dernière action est défaite en premier.
+    for (const auto& action : it->actions | std::views::reverse) {
+        if (!action.undo || !action.undo->run) {
+            continue;
+        }
+        const std::string& description = action.undo->description;
+        audit()->info("annulation : {} ({})", description, action.tool);
+        auto result = action.undo->run();
+        if (result) {
+            outcomes.push_back(
+                {.description = description, .succeeded = true, .message = result->content});
+        } else {
+            std::string message = describe(result.error());
+            audit()->warn("échec de l'annulation : {} : {}", description, message);
+            outcomes.push_back(
+                {.description = description, .succeeded = false, .message = std::move(message)});
+        }
+    }
+    journals_.erase(std::next(it).base());
+    return outcomes;
 }
 
 } // namespace avenoir::core

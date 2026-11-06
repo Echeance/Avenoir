@@ -37,11 +37,6 @@ struct ToolSpec {
     RiskLevel risk = RiskLevel::Sensitive;
 };
 
-/// Résultat d'un outil : texte court, relu par le LLM et parfois affiché tel quel.
-struct ToolOutput {
-    std::string content;
-};
-
 enum class ToolErrorKind : std::uint8_t {
     InvalidArguments,
     Execution,
@@ -53,10 +48,26 @@ struct ToolError {
     std::string message;
 };
 
+struct ToolOutput;
+using ToolResult = std::expected<ToolOutput, ToolError>;
+
+/// Moyen de défaire une action (PROJECT.md § 2.4, « Annulation des actions »).
+/// `run` doit **vérifier que l'état n'a pas changé** depuis l'action avant de
+/// restaurer, et échouer sinon plutôt que d'écraser quelque chose.
+struct UndoAction {
+    std::string description;         ///< Lisible : « remettre le volume à 45 % ».
+    std::function<ToolResult()> run; ///< Exécute l'annulation.
+};
+
+/// Résultat d'un outil : texte court, relu par le LLM et parfois affiché tel quel.
+struct ToolOutput {
+    std::string content;
+    /// Présente seulement si l'outil sait défaire son action de façon sûre.
+    std::optional<UndoAction> undo = std::nullopt;
+};
+
 /// Message lisible, renvoyé au LLM.
 [[nodiscard]] std::string describe(const ToolError& error);
-
-using ToolResult = std::expected<ToolOutput, ToolError>;
 
 /// Tout ce que l'assistant peut *faire*. Les outils natifs et ceux des
 /// modules externes implémentent la même interface.

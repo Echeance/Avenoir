@@ -8,6 +8,7 @@
     "catch2",
     "cpr",
     "nlohmann-json",
+    "replxx",
     "reproc",
     "spdlog",
     "tomlplusplus"

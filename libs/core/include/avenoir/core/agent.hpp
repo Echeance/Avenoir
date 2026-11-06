@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstddef>
+#include <deque>
 #include <memory>
 #include <optional>
 #include <span>
@@ -35,6 +36,31 @@ inline constexpr std::string_view kDefaultSystemPrompt =
     "- Si une action est refusée par l'utilisateur ou la politique de sécurité, "
     "n'essaie pas de la contourner par un autre outil.";
 
+/// Nombre de requêtes dont le journal d'annulation est conservé.
+inline constexpr std::size_t kMaxUndoJournals = 20;
+
+/// Action effectuée pendant une requête (outils à effet de bord seulement).
+struct ActionRecord {
+    std::string tool;
+    std::string summary;            ///< Ex. « launch_app {"name":"firefox"} ».
+    std::optional<UndoAction> undo; ///< Vide si l'action n'est pas annulable.
+};
+
+/// Journal d'annulation d'une requête (PROJECT.md § 2.4).
+struct RequestJournal {
+    std::string request; ///< Texte de la requête de l'utilisateur.
+    std::vector<ActionRecord> actions;
+
+    [[nodiscard]] std::size_t undoable_count() const noexcept;
+};
+
+/// Résultat de l'annulation d'une action.
+struct UndoOutcome {
+    std::string description;
+    bool succeeded = false;
+    std::string message; ///< Raison de l'échec, ou texte renvoyé par l'annulation.
+};
+
 struct AgentOptions {
     PermissionPolicy policy;
     std::string system_prompt{kDefaultSystemPrompt};
@@ -60,8 +86,27 @@ class Agent {
     [[nodiscard]] std::span<const Message> history() const noexcept { return history_; }
     [[nodiscard]] std::string_view llm_name() const;
 
-    /// Oublie la conversation en cours.
-    void reset() noexcept { history_.clear(); }
+    /// Oublie la conversation en cours (et les journaux d'annulation).
+    void reset() noexcept {
+        history_.clear();
+        journals_.clear();
+    }
+
+    /// Journal de la requête la plus récente qui a encore des actions
+    /// annulables, ou `nullptr`. Sert à proposer l'annulation après un
+    /// Ctrl+C (requête interrompue) ou avec `/annuler`.
+    [[nodiscard]] const RequestJournal* last_undoable() const;
+
+    /// Journal de la dernière requête traitée (même sans action), ou
+    /// `nullptr`. Après un Ctrl+C, c'est celui de la requête interrompue.
+    [[nodiscard]] const RequestJournal* last_journal() const noexcept {
+        return journals_.empty() ? nullptr : &journals_.back();
+    }
+
+    /// Annule, dans l'ordre inverse, les actions annulables de ce journal,
+    /// puis le retire : un nouvel appel remonte à la requête précédente. Un
+    /// échec est signalé sans bloquer les annulations suivantes.
+    [[nodiscard]] std::vector<UndoOutcome> undo_last();
 
   private:
     struct Execution {
@@ -78,6 +123,7 @@ class Agent {
     std::unique_ptr<ConfirmationHandler> confirmer_;
     AgentOptions options_;
     std::vector<Message> history_;
+    std::deque<RequestJournal> journals_;
 };
 
 } // namespace avenoir::core

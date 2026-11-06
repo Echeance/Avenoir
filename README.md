@@ -72,12 +72,13 @@ Avant de committer : `scripts/build.sh -k` (vérifie le formatage, lance clang-t
 scripts/build.sh -r -- config.toml
 ```
 
+- `/aide` : liste des commandes ; `/outils` : outils disponibles et leur niveau de risque.
 - `/reset` : oublie la conversation en cours ; `/quitter` (ou Ctrl+D) : quitte.
-- **Ctrl+C ne ferme pas Avenoir** : il arrête l'action en cours (réponse du LLM, outil), puis propose d'annuler les actions déjà effectuées qui peuvent l'être.
+- **Ctrl+C ne ferme pas Avenoir** : il arrête l'action en cours (réponse du LLM, outil), puis propose d'annuler les actions déjà effectuées qui peuvent l'être. Sur une ligne vide, il efface la saisie.
 - `/annuler` : propose d'annuler les actions de la dernière requête (répétable pour remonter plus loin).
-- Conversations (conservées entre deux lancements) : `/nouvelle [titre]`, `/conversations`, `/ouvrir <n° ou titre>`, `/renommer <titre>`, `/supprimer`, `/historique`. La conversation se remonte avec le défilement du terminal.
-
-*Ctrl+C et `/annuler` arrivent à l'étape 1.7, les conversations persistantes à l'étape 1.9 : pour l'instant, Ctrl+C quitte encore la CLI et la conversation n'est pas conservée.*
+- Les actions sensibles demandent une confirmation (« Autoriser ? [o/N] »).
+- Édition de ligne, flèches haut/bas pour les saisies précédentes (conservées dans `cli_history.txt`, dans le dossier de données d'Avenoir), Tab pour compléter les commandes.
+- Conversations (conservées entre deux lancements) : `/nouvelle [titre]`, `/conversations`, `/ouvrir <n° ou titre>`, `/renommer <titre>`, `/supprimer`, `/historique`. La conversation se remonte avec le défilement du terminal. *Prévu à l'étape 1.9 : pour l'instant, la conversation n'est pas conservée.*
 
 ## Configuration
 

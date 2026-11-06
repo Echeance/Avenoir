@@ -284,3 +284,170 @@ TEST_CASE("une réponse vide après des outils garde l'historique", "[agent]") {
     // Utilisateur, Assistant (appel), Résultat : l'action a eu lieu.
     CHECK(agent.history().size() == 3);
 }
+
+// ─── Annulation des actions ─────────────────────────────────────────────────
+
+namespace {
+
+/// Outil annulable : met `*value` à l'argument « to ». Son annulation remet
+/// l'ancienne valeur, seulement si personne ne l'a changée entre-temps.
+class SetValueTool final : public Tool {
+  public:
+    explicit SetValueTool(std::shared_ptr<int> value) : value_(std::move(value)) {}
+
+    [[nodiscard]] ToolSpec spec() const override {
+        return ToolSpec{.name = "set_value",
+                        .description = "test",
+                        .input_schema = nlohmann::json::object(),
+                        .risk = RiskLevel::Reversible};
+    }
+    [[nodiscard]] ToolResult call(const nlohmann::json& arguments) const override {
+        const int previous = *value_;
+        const int next = arguments.value("to", 0);
+        *value_ = next;
+        const auto value = value_;
+        return ToolOutput{
+            .content = "ok",
+            .undo = UndoAction{.description = "remettre la valeur à " + std::to_string(previous),
+                               .run = [value, previous, next] -> ToolResult {
+                                   if (*value != next) {
+                                       return std::unexpected(
+                                           ToolError{.kind = ToolErrorKind::Execution,
+                                                     .message = "la valeur a changé"});
+                                   }
+                                   *value = previous;
+                                   return ToolOutput{.content = "valeur remise"};
+                               }}};
+    }
+
+  private:
+    std::shared_ptr<int> value_;
+};
+
+LlmResponse set_value(int to, std::string id = "1") {
+    return LlmResponse{.text = {},
+                       .tool_calls = {ToolCall{.id = std::move(id),
+                                               .name = "set_value",
+                                               .arguments = nlohmann::json{{"to", to}}}}};
+}
+
+struct UndoFixture {
+    std::shared_ptr<int> value = std::make_shared<int>(0);
+    std::shared_ptr<int> llm_calls = std::make_shared<int>(0);
+    std::shared_ptr<int> flag_calls = std::make_shared<int>(0);
+
+    [[nodiscard]] Agent make_agent(std::deque<Result<LlmResponse>> script) const {
+        ToolRegistry tools;
+        REQUIRE(tools.add(std::make_shared<SetValueTool>(value)).has_value());
+        REQUIRE(tools.add(std::make_shared<CountingTool>("flag", RiskLevel::Reversible, flag_calls))
+                    .has_value());
+        return {std::make_unique<ScriptedLlm>(std::move(script), llm_calls), std::move(tools),
+                std::make_unique<AutoReject>(), AgentOptions{}};
+    }
+};
+
+} // namespace
+
+TEST_CASE("annulation : ordre inverse et non annulables listées", "[agent][undo]") {
+    const UndoFixture f;
+    auto agent =
+        f.make_agent({set_value(1, "a"), set_value(2, "b"), call_tool("flag"), answer("fait")});
+
+    REQUIRE(agent.handle("vas-y").has_value());
+    CHECK(*f.value == 2);
+
+    const RequestJournal* journal = agent.last_undoable();
+    REQUIRE(journal != nullptr);
+    CHECK(journal->request == "vas-y");
+    REQUIRE(journal->actions.size() == 3);
+    CHECK(journal->undoable_count() == 2);
+    CHECK_FALSE(journal->actions[2].undo.has_value()); // « flag » n'est pas annulable
+
+    const auto outcomes = agent.undo_last();
+    REQUIRE(outcomes.size() == 2);
+    CHECK(outcomes[0].description == "remettre la valeur à 1"); // la dernière d'abord
+    CHECK(outcomes[1].description == "remettre la valeur à 0");
+    CHECK(outcomes[0].succeeded);
+    CHECK(outcomes[1].succeeded);
+    CHECK(*f.value == 0);
+    CHECK(agent.last_undoable() == nullptr);
+}
+
+TEST_CASE("annulation : refusée si l'état a changé, sans bloquer les suivantes", "[agent][undo]") {
+    const UndoFixture f;
+    auto agent = f.make_agent({set_value(5), answer("fait")});
+    REQUIRE(agent.handle("vas-y").has_value());
+
+    *f.value = 99; // quelqu'un a changé la valeur entre-temps
+    const auto outcomes = agent.undo_last();
+    REQUIRE(outcomes.size() == 1);
+    CHECK_FALSE(outcomes[0].succeeded);
+    CHECK(outcomes[0].message.find("la valeur a changé") != std::string::npos);
+    CHECK(*f.value == 99); // rien n'a été écrasé
+}
+
+TEST_CASE("annulation : /annuler répété remonte aux requêtes précédentes", "[agent][undo]") {
+    const UndoFixture f;
+    auto agent = f.make_agent({set_value(1), answer("un"), set_value(2), answer("deux")});
+    REQUIRE(agent.handle("première").has_value());
+    REQUIRE(agent.handle("seconde").has_value());
+
+    REQUIRE(agent.last_undoable() != nullptr);
+    CHECK(agent.last_undoable()->request == "seconde");
+    CHECK(agent.undo_last().size() == 1);
+    CHECK(*f.value == 1);
+
+    REQUIRE(agent.last_undoable() != nullptr);
+    CHECK(agent.last_undoable()->request == "première");
+    CHECK(agent.undo_last().size() == 1);
+    CHECK(*f.value == 0);
+    CHECK(agent.undo_last().empty());
+}
+
+TEST_CASE("annulation : une requête interrompue garde son journal", "[agent][undo]") {
+    const UndoFixture f;
+    // Le LLM demande deux actions ; la seconde demande l'arrêt (comme un
+    // Ctrl+C) : la requête est interrompue avant l'étape suivante.
+    std::stop_source source; // NOLINT(misc-const-correctness) : request_stop() est non const
+    struct StopOnCall final : public Tool {
+        explicit StopOnCall(std::stop_source* s) : source(s) {}
+        std::stop_source* source;
+        [[nodiscard]] ToolSpec spec() const override {
+            return ToolSpec{.name = "stop",
+                            .description = "test",
+                            .input_schema = nlohmann::json::object(),
+                            .risk = RiskLevel::ReadOnly};
+        }
+        [[nodiscard]] ToolResult call(const nlohmann::json& /*arguments*/) const override {
+            source->request_stop();
+            return ToolOutput{.content = "arrêt"};
+        }
+    };
+    ToolRegistry tools;
+    REQUIRE(tools.add(std::make_shared<SetValueTool>(f.value)).has_value());
+    REQUIRE(tools.add(std::make_shared<StopOnCall>(&source)).has_value());
+    const LlmResponse both{
+        .text = {},
+        .tool_calls = {
+            ToolCall{.id = "1", .name = "set_value", .arguments = nlohmann::json{{"to", 7}}},
+            ToolCall{.id = "2", .name = "stop", .arguments = nlohmann::json::object()}}};
+    Agent interrupted(std::make_unique<ScriptedLlm>(
+                          std::deque<Result<LlmResponse>>{both, answer("x")}, f.llm_calls),
+                      std::move(tools), std::make_unique<AutoReject>());
+
+    const auto reply = interrupted.handle("fais-le", source.get_token());
+    REQUIRE_FALSE(reply.has_value());
+    CHECK(reply.error().code == ErrorCode::Cancelled);
+    CHECK(*f.value == 7);
+    REQUIRE(interrupted.last_undoable() != nullptr);
+    CHECK(interrupted.undo_last().size() == 1);
+    CHECK(*f.value == 0);
+}
+
+TEST_CASE("annulation : les outils en lecture seule ne sont pas journalisés", "[agent][undo]") {
+    const Fixture f;
+    auto agent = f.make_agent({call_tool("flag"), answer("ok")}, RiskLevel::ReadOnly,
+                              std::make_unique<AutoReject>());
+    REQUIRE(agent.handle("vas-y").has_value());
+    CHECK(agent.last_undoable() == nullptr);
+}
