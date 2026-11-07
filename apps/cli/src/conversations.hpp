@@ -43,6 +43,9 @@ class Conversations {
     void remove(std::string_view target); ///< /supprimer [n° ou titre]
     void show_history();                  ///< /historique
 
+    /// Base d'Avenoir, ou `nullptr` si elle n'a pas pu être ouverte.
+    [[nodiscard]] storage::Store* store() noexcept { return store_ ? &*store_ : nullptr; }
+
     /// « Titre » (n° 3), ou « conversation non conservée ».
     [[nodiscard]] std::string describe_current() const;
 

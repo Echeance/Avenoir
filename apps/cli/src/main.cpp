@@ -9,6 +9,7 @@
 // Ctrl+C ne ferme pas Avenoir : il arrête l'action en cours puis propose
 // d'annuler ce qui peut l'être (PROJECT.md § 2.4). /quitter ou Ctrl+D quitte.
 
+#include <algorithm>
 #include <atomic>
 #include <chrono>
 #include <cstdio>
@@ -16,6 +17,8 @@
 #include <exception>
 #include <filesystem>
 #include <format>
+#include <functional>
+#include <iterator>
 #include <memory>
 #include <optional>
 #include <span>
@@ -36,6 +39,8 @@
 #include "avenoir/core/permission.hpp"
 #include "avenoir/core/router.hpp"
 #include "avenoir/llm/factory.hpp"
+#include "avenoir/modules/discovery.hpp"
+#include "avenoir/modules/host.hpp"
 #include "avenoir/storage/store.hpp"
 #include "avenoir/terminal/style.hpp"
 #include "avenoir/tools/tools.hpp"
@@ -43,6 +48,7 @@
 #include "console.hpp"
 #include "conversations.hpp"
 #include "display.hpp"
+#include "modules.hpp"
 #include "prompt.hpp"
 
 namespace {
@@ -74,13 +80,24 @@ void setup_logging() {
     }
 }
 
-/// Commandes proposées à la complétion (Tab).
-std::vector<std::string> command_names() {
-    return {"/aide",   "/annuler", "/conversations", "/historique", "/nouvelle", "/ouvrir",
-            "/outils", "/quitter", "/renommer",      "/reset",      "/supprimer"};
+/// Commandes d'Avenoir (sans « / »), alias compris : un module ne peut pas
+/// en déclarer une du même nom.
+std::vector<std::string> builtin_commands() {
+    return {"aide",     "annuler", "conversations", "help",      "historique", "modules",
+            "nouvelle", "ouvrir",  "outils",        "q",         "quit",       "quitter",
+            "renommer", "reset",   "risque",        "supprimer", "tools"};
 }
 
-void print_help() {
+/// Commandes proposées à la complétion (Tab).
+std::vector<std::string> command_names(const cli::ModulesUi& modules) {
+    std::vector<std::string> names{
+        "/aide",   "/annuler", "/conversations", "/historique", "/modules", "/nouvelle", "/ouvrir",
+        "/outils", "/quitter", "/renommer",      "/reset",      "/risque",  "/supprimer"};
+    std::ranges::copy(modules.completion_names(), std::back_inserter(names));
+    return names;
+}
+
+void print_help(const cli::ModulesUi& modules) {
     const auto title = [](std::string_view text) {
         return paint(text, {.color = Color::White, .bold = true});
     };
@@ -93,6 +110,11 @@ void print_help() {
     out += command("/outils", "outils disponibles et leur niveau de risque") + "\n";
     out += command("/annuler", "annuler les actions de la dernière requête (répétable)") + "\n";
     out += command("/quitter", "quitter (ou Ctrl+D)") + "\n";
+    out += title("Modules") + "\n";
+    out += command("/modules", "modules installés, permissions et outils") + "\n";
+    out +=
+        command("/risque [outil niveau]", "voir ou changer le risque d'un outil de module") + "\n";
+    out += modules.help();
     out += title("Conversations") +
            paint("  conservées entre deux lancements", {.color = Color::Gray}) + "\n";
     out += command("/nouvelle [titre]", "nouvelle conversation (/reset : idem)") + "\n";
@@ -110,7 +132,7 @@ void print_help() {
 void print_tools(const core::Agent& agent) {
     for (const auto& spec : agent.tools().specs()) {
         display().plain(std::format("  {} {}  {}", paint("⚙", {.color = Color::Yellow}),
-                                    terminal::pad(paint(spec.name, {.bold = true}), 14),
+                                    terminal::pad(paint(spec.name, {.bold = true}), 24),
                                     terminal::risk_badge(spec.risk)));
         display().plain("    " +
                         paint(terminal::ellipsize(spec.description, 66), {.color = Color::Gray}));
@@ -165,9 +187,12 @@ void offer_undo(core::Agent& agent, cli::Prompt& prompt, const core::RequestJour
     }
 }
 
+/// Travail exécuté dans le thread de la requête : agent ou commande de module.
+using Work = std::function<core::Result<std::string>(const std::stop_token&)>;
+
 /// Exécute une requête dans un thread de travail. Le thread principal anime
 /// la toupie et transforme un Ctrl+C en demande d'arrêt de la requête.
-void run_request(core::Agent& agent, cli::Prompt& prompt, const std::string& line) {
+void run_request(core::Agent& agent, cli::Prompt& prompt, const Work& work) {
     using namespace std::chrono_literals;
     (void)cli::take_interrupt(); // Oublie un Ctrl+C antérieur.
 
@@ -175,8 +200,8 @@ void run_request(core::Agent& agent, cli::Prompt& prompt, const std::string& lin
     std::atomic<bool> done{false};
     display().start_thinking();
     {
-        std::jthread worker([&agent, &line, &result, &done](const std::stop_token& stop) {
-            result = agent.handle(line, stop);
+        std::jthread worker([&work, &result, &done](const std::stop_token& stop) {
+            result = work(stop);
             done = true;
         });
         bool stop_announced = false;
@@ -222,7 +247,7 @@ std::string_view trim(std::string_view text) {
 
 /// Traite une commande (ligne commençant par « / »). Renvoie faux pour quitter.
 bool run_command(core::Agent& agent, cli::Prompt& prompt, cli::Conversations& conversations,
-                 std::string_view line) {
+                 cli::ModulesUi& modules, std::string_view line) {
     // « /commande argument libre »
     const auto space = line.find(' ');
     const std::string_view command = line.substr(0, space);
@@ -233,7 +258,7 @@ bool run_command(core::Agent& agent, cli::Prompt& prompt, cli::Conversations& co
         return false;
     }
     if (command == "/aide" || command == "/help") {
-        print_help();
+        print_help(modules);
     } else if (command == "/nouvelle" || command == "/reset") {
         conversations.create(argument);
     } else if (command == "/conversations") {
@@ -254,6 +279,18 @@ bool run_command(core::Agent& agent, cli::Prompt& prompt, cli::Conversations& co
         } else {
             display().info("Rien à annuler.");
         }
+    } else if (command == "/modules") {
+        modules.print_status();
+    } else if (command == "/risque") {
+        modules.risk(argument, prompt, conversations.store());
+    } else if (const auto* own = modules.find_command(command.substr(1))) {
+        // Commande d'un module : l'outil est appelé sans LLM, sous contrôle
+        // des permissions, comme par la voie rapide.
+        const core::ToolCall call = cli::ModulesUi::make_call(*own, argument);
+        const std::string input(line);
+        run_request(agent, prompt, [&agent, &input, &call](const std::stop_token& stop) {
+            return agent.run_tool(input, call, stop);
+        });
     } else {
         display().warning(std::format("Commande inconnue : {} (voir /aide)", command));
     }
@@ -316,7 +353,44 @@ int run(int argc, char** argv) {
     } else {
         display().error("dossier de données introuvable — conversations non conservées");
     }
-    cli::Prompt prompt(command_names(), history_file);
+
+    // Modules : découverts, lancés, puis leurs outils, règles et commandes
+    // rejoignent ceux d'Avenoir. Leurs messages sont montrés après l'accueil.
+    std::vector<std::string> startup_warnings;
+    modules::HostOptions host_options;
+    if (directory) {
+        host_options.data_root = *directory / "module-data";
+        host_options.log_root = *directory / "logs" / "modules";
+    }
+    modules::ModuleHost host(host_options);
+    {
+        std::vector<modules::RiskOverride> overrides;
+        if (store) {
+            if (auto choices = store->risk_choices()) {
+                for (auto& choice : *choices) {
+                    overrides.push_back({.tool = std::move(choice.tool),
+                                         .risk = choice.risk,
+                                         .agreed = choice.agreed});
+                }
+            } else {
+                startup_warnings.push_back(core::describe(choices.error()));
+            }
+        }
+        const auto discovery = modules::discover(modules::default_search_directories(directory));
+        for (const auto& problem : discovery.problems) {
+            startup_warnings.push_back(std::format("module ignoré ({}) : {}",
+                                                   problem.directory.string(), problem.message));
+        }
+        host.load(discovery, config->modules, overrides);
+        host.register_tools(tools);
+        if (options.router) {
+            host.register_fast_path(*options.router);
+        }
+    }
+    cli::ModulesUi modules_ui(host, host.commands(builtin_commands()));
+    std::ranges::move(host.take_warnings(), std::back_inserter(startup_warnings));
+
+    cli::Prompt prompt(command_names(modules_ui), history_file);
     // Chaque saisie (requête, confirmation) passe par la barre de saisie.
     prompt.set_hooks(cli::Prompt::Hooks{
         .before = [] { display().prepare_input(); },
@@ -366,6 +440,9 @@ int run(int argc, char** argv) {
     } const screen_guard;
 
     display().banner(agent.llm_name(), agent.tools().size(), conversations.describe_current());
+    for (const auto& warning : startup_warnings) {
+        display().warning(warning);
+    }
     conversations.show_recent();
 
     while (true) {
@@ -382,12 +459,15 @@ int run(int argc, char** argv) {
             continue;
         }
         if (line.starts_with('/')) {
-            if (!run_command(agent, prompt, conversations, line)) {
+            if (!run_command(agent, prompt, conversations, modules_ui, line)) {
                 break;
             }
             continue;
         }
-        run_request(agent, prompt, std::string(line));
+        const std::string request(line);
+        run_request(agent, prompt, [&agent, &request](const std::stop_token& stop) {
+            return agent.handle(request, stop);
+        });
     }
     display().info("À bientôt !");
     return EXIT_SUCCESS;

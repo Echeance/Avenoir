@@ -5,12 +5,14 @@ add_executable(avenoir_cli
     src/conversations.cpp
     src/display.cpp
     src/main.cpp
+    src/modules.cpp
     src/prompt.cpp)
 set_target_properties(avenoir_cli PROPERTIES OUTPUT_NAME avenoir)
 avenoir_utf8_manifest(avenoir_cli)
 target_link_libraries(avenoir_cli PRIVATE
     avenoir::core
     avenoir::llm
+    avenoir::modules
     avenoir::storage
     avenoir::terminal
     avenoir::tools
