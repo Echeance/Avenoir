@@ -60,7 +60,9 @@ AVENOIR_LOG=debug ./build/debug/apps/cli/avenoir
 - `apps/cli` : interface texte (exécutable `avenoir`) ; `apps/daemon` : démon résident ; `apps/ui` : hôte C++ des fenêtres (widget + application principale). Les applications de `apps/` assemblent le tout.
 - `ui/` : interface web en TypeScript strict ; ne parle qu'à l'hôte C++ des fenêtres.
 
-Ces dossiers sont créés à leur étape de la roadmap. Existent aujourd'hui : `libs/core`, `libs/llm`, `libs/tools`, `libs/storage`, `libs/terminal` et `apps/cli` (avec un test de bout en bout dans `apps/cli/tests/`).
+- `modules/` : modules fournis avec Avenoir, programmes séparés (`modules/meteo/`) ; compilés dans `modules/` à côté de l'exécutable et livrés dans les archives de release.
+
+Ces dossiers sont créés à leur étape de la roadmap. Existent aujourd'hui : `libs/core`, `libs/llm`, `libs/tools`, `libs/modules`, `libs/storage`, `libs/terminal`, `apps/cli` (avec un test de bout en bout dans `apps/cli/tests/`) et `modules/meteo`.
 
 En-têtes publics dans `libs/<nom>/include/avenoir/<nom>/`, tests Catch2 dans `libs/<nom>/tests/`.
 
@@ -88,8 +90,10 @@ En-têtes publics dans `libs/<nom>/include/avenoir/<nom>/`, tests Catch2 dans `l
 - Un outil indisponible sur un OS n'est pas enregistré sur cet OS.
 - UTF-8 partout ; conversion UTF-16 seulement à l'appel des API Windows `…W`.
 
-## Sécurité (prime sur le confort)
+## Sécurité et confidentialité (primordiales, priment sur tout le reste)
 
+- La confidentialité et la sécurité sont les aspects primordiaux de l'assistant : en cas de conflit avec une fonctionnalité, le confort ou la rapidité, elles l'emportent.
+- Ne jamais faire entièrement confiance à un module communautaire : manifeste validé avant lancement, module utilisateur désactivé par défaut, environnement minimal, risque `sensitive` par défaut, réponses bornées et traitées comme des données, permissions et audit à chaque appel (PROJECT.md, directive 15).
 - `RiskLevel` : `read_only` / `reversible` / `sensitive`. En cas de doute, choisir le plus élevé.
 - `sensitive` n'est **jamais** `allow` ; confirmation obligatoire.
 - Ctrl+C n'arrête jamais l'application : il interrompt l'action en cours (`std::stop_token`) ; toute nouvelle opération longue doit vérifier son `stop_token`.

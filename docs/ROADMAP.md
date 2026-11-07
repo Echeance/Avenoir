@@ -95,17 +95,21 @@ L'ordre suit un principe : **chaque jalon produit un assistant utilisable**, plu
 - ⬜ Essai réel sous Windows — à faire en 1.8 ; d'ici là, le code Windows n'est vérifié que par la CI
 - ✅ Annulation : aucun des quatre outils n'est annulable de façon sûre (`launch_app` et `open_url` seront listés comme non annulables) ; les outils du jalon 2 (volume, luminosité, mode sombre) le seront
 
-### 1.6 Hôte de modules v1 (`avenoir::modules`) — P1
-- ⬜ Découverte des modules : `<installation>/modules/` et dossier utilisateur ; lecture et validation de `module.toml` (PROJECT.md § 2.6)
-- ⬜ Lancement du module (`reproc`), JSON-RPC 2.0 sur stdio, thread de lecture, délai max par requête
-- ⬜ Protocole `avenoir` v1 : poignée de main, appel d'outil ; outils exposés en `module__outil` ; risque du manifeste relevable par l'utilisateur, `sensitive` si absent
-- ⬜ Commandes (`/meteo`) et règles de voie rapide déclarées par les modules (limitées à leurs propres outils)
-- ⬜ Compatibilité MCP (`protocol = "mcp"`) : `initialize`, `tools/list`, `tools/call`
-- ⬜ stderr de chaque module redirigé vers un log dédié ; un module défaillant n'empêche pas le démarrage
-- ⬜ Configuration `[modules.<id>]` (activation, risque relevé) ; remplace `[[mcp_servers]]` et `McpServerConfig` dans `config.hpp`
-- ⬜ Baisse de risque : prise en compte seulement avec un accord enregistré (sinon ignorée + avertissement) ; commande CLI qui affiche avertissement et disclaimer et exige « Je sais ce que je fais »
-- ⬜ Annulation pour les outils de modules : action d'annulation renvoyée par l'outil, exécutée par `avenoir/undo`
-- ⬜ Un module d'exemple (ex. météo factice) qui sert de test d'intégration
+### 1.6 Hôte de modules v1 (`avenoir::modules`) — P1 ✅
+- ✅ Découverte des modules : `<installation>/modules/` et dossier de données de l'utilisateur ; lecture et validation stricte de `module.toml` (PROJECT.md § 2.6) ; module utilisateur désactivé par défaut
+- ✅ Lancement du module (API C de `reproc`, sans shell), JSON-RPC 2.0 sur stdio, thread de lecture, délai max par requête, messages bornés, SIGPIPE ignoré
+- ✅ Protocole `avenoir` v1 = sur-ensemble de MCP : poignée de main, `tools/list` paginé, `tools/call` ; outils exposés en `module__outil` ; risque du manifeste relevable par l'utilisateur, `sensitive` si absent
+- ✅ Commandes (`/meteo`) et règles de voie rapide déclarées par les modules (limitées à leurs propres outils, arguments fixes possibles), sans masquer celles d'Avenoir
+- ✅ Compatibilité MCP (`protocol = "mcp"`) : `initialize`, `tools/list`, `tools/call`
+- ✅ stderr de chaque module redirigé vers `logs/modules/<id>.log` ; un module défaillant n'empêche pas le démarrage ; environnement minimal
+- ✅ Configuration `[modules.<id>]` (activation, risque relevé) ; remplace `[[mcp_servers]]` et `McpServerConfig`
+- ✅ Baisse de risque : prise en compte seulement avec un accord enregistré (sinon ignorée + avertissement) ; commande `/risque` qui affiche avertissement et disclaimer et exige « Je sais ce que je fais » ; appliquée à chaud
+- ✅ Annulation pour les outils de modules : action d'annulation renvoyée par l'outil (`_meta`), exécutée par `avenoir/undo`
+- ✅ Ctrl+C pendant un appel de module : `Tool::call` reçoit un `std::stop_token`, le module reçoit `notifications/cancelled`
+- ✅ Module de test (plantage, lenteur, sorties piégées, mode MCP) pour les tests d'intégration de l'hôte
+- ✅ **Module météo** fourni (`modules/meteo/`) : conditions actuelles, prévisions sur 7 jours, ville par défaut annulable ; Open-Meteo, sans clé ; `/meteo`, `/previsions`, `/ville` et voie rapide ; livré dans les archives de release
+
+**Fini quand :** un module (fourni ou installé) expose ses outils, commandes et règles ; un module qui plante, traîne ou triche ne fait pas tomber l'assistant ; le module météo répond à « quel temps fait-il à Lyon ? ».
 
 ### 1.7 CLI (`apps/cli`) — P1 ✅
 - ✅ Câblage minimal (fait avec 1.4) : lecture de la config, fournisseur, agent, boucle de saisie, `/reset`, `/quitter`, logs sur stderr (`AVENOIR_LOG`)
@@ -288,4 +292,5 @@ Par ordre conseillé :
 4. ~~Fournisseurs LLM + CLI minimale : premier dialogue de bout en bout (1.4)~~ ✅
 5. ~~Outils natifs (1.5) ; confirmations, Ctrl+C, annulation et `/annuler` dans la CLI (1.7)~~ ✅
 6. ~~Conversations persistantes (1.9)~~ ✅
-7. Hôte de modules v1 (1.6), puis essais avec de vrais modèles (1.8)
+7. ~~Hôte de modules v1 et module météo (1.6)~~ ✅
+8. Essais avec de vrais modèles et `docs/FONCTIONNEMENT.md` (1.8)

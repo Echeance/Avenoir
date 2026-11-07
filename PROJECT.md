@@ -21,7 +21,7 @@ Et **extensible** par des **modules** que n'importe qui peut écrire, dans n'imp
 
 ### Principes directeurs
 
-1. **Sûr par défaut** : l'assistant agit sur une vraie machine. Aucune action sensible sans confirmation explicite.
+1. **Confidentialité et sécurité avant tout** : ce sont les aspects primordiaux de l'assistant, qui agit sur une vraie machine et voit des données personnelles. Elles priment sur toute fonctionnalité, tout confort et toute rapidité ; en cas de conflit, elles l'emportent. Aucune action sensible sans confirmation explicite, aucune donnée transmise sans nécessité.
 2. **Le LLM au choix de l'utilisateur** : local (Ollama, llama.cpp…) ou distant (Anthropic, OpenAI, Mistral…), sélectionné par configuration.
 3. **Réactif** : les commandes simples ne passent pas par le LLM.
 4. **Léger** : un démon en arrière-plan doit consommer peu de ressources.
@@ -97,6 +97,7 @@ avenoir/
 ├── vcpkg.json              Dépendances (mode manifeste)
 ├── config.example.toml     Configuration commentée
 ├── PROJECT.md              Ce document
+├── modules/                Modules fournis avec Avenoir (programmes séparés) : meteo/
 ├── libs/
 │   ├── core/               Cœur, sans dépendance à l'OS, au LLM ou à la voix
 │   │   ├── include/avenoir/core/
@@ -129,7 +130,7 @@ Chaque dossier de `libs/` est une bibliothèque CMake (`avenoir::core`, `avenoir
 
 ### 2.4 Concepts clés
 
-**`Tool`** : tout ce que l'assistant peut faire. Classe abstraite qui fournit une `ToolSpec` (nom, description pour le LLM, JSON Schema des arguments, niveau de risque) et une méthode `call(args) -> std::expected<ToolOutput, ToolError>`. Outils natifs et outils de modules implémentent la même interface.
+**`Tool`** : tout ce que l'assistant peut faire. Classe abstraite qui fournit une `ToolSpec` (nom, description pour le LLM, JSON Schema des arguments, niveau de risque) et une méthode `call(args, stop) -> std::expected<ToolOutput, ToolError>` (`stop` : `std::stop_token` levé par Ctrl+C). Outils natifs et outils de modules implémentent la même interface.
 
 **`RiskLevel`** :
 
@@ -174,7 +175,7 @@ Chaque dossier de `libs/` est une bibliothèque CMake (`avenoir::core`, `avenoir
 
 Un **module** étend l'assistant : outils pour le LLM, commandes, règles de voie rapide, fonctions de fond, contenu d'interface. C'est un **programme séparé** (n'importe quel langage) lancé par le démon, qui dialogue avec lui en **JSON-RPC 2.0 sur stdio**. Un module qui plante ne fait pas tomber l'assistant.
 
-**Emplacement** : un sous-dossier par module dans `<installation>/modules/` (modules fournis) ou dans le dossier utilisateur (`%APPDATA%\avenoir\modules`, `~/.local/share/avenoir/modules`), qui ne demande pas de droits administrateur.
+**Emplacement** : un sous-dossier par module dans `<installation>/modules/` (modules fournis, à côté de l'exécutable) ou dans le dossier de données de l'utilisateur (`%LOCALAPPDATA%\avenoir\modules`, `~/.local/share/avenoir/modules`), qui ne demande pas de droits administrateur. Un module fourni est **activé** par défaut ; un module installé par l'utilisateur reste **désactivé** tant qu'il ne l'a pas activé (`[modules.<id>] enabled = true`). Deux modules de même identifiant : le premier trouvé (fourni) l'emporte. Chaque module reçoit un dossier de données (`module-data/<id>/`) et son stderr va dans `logs/modules/<id>.log`.
 
 **Manifeste** `module.toml` : tout ce que le module déclare, lu **avant** de le lancer.
 
@@ -182,22 +183,27 @@ Un **module** étend l'assistant : outils pour le LLM, commandes, règles de voi
 id = "meteo"                         # unique ; préfixe de ses outils : meteo__…
 name = "Météo"
 version = "1.0.0"
-run = ["meteo"]                      # commande lancée (relative au dossier du module)
+run = ["avenoir-meteo"]              # programme du dossier du module (ou nom nu cherché dans le PATH) + arguments
 protocol = "avenoir"                 # ou "mcp" : serveur MCP existant (outils seulement)
-permissions = ["network", "ui.web"]  # montrées à l'installation, révocables
+permissions = ["network", "ui.web"]  # network, files.read, files.write, ui.web : montrées, révocables
+env = ["METEO_LANGUE"]               # variables d'environnement transmises (les seules, avec le minimum vital)
 
 [[tools]]                            # appelables par le LLM (et d'autres modules si public)
 name = "get_forecast"                # → « meteo__get_forecast »
 risk = "read_only"                   # proposé ; l'utilisateur peut le relever
 public = true                        # accessible aux autres modules
 
-[[commands]]                         # commande d'interface : /meteo
+[[commands]]                         # commande d'interface : /meteo Lyon
 name = "meteo"
 tool = "get_forecast"
+arg = "city"                         # argument rempli par le texte après la commande
+description = "météo d'une ville"
 
 [[fast_path]]                        # voie rapide, limitée aux outils du module
-pattern = '^(?:quel temps fait-il|météo)\s*\??$'
+pattern = '^(?:quel temps fait-il|météo) à (.+?)\s*\??$'
 tool = "get_forecast"
+arg = "city"                         # premier groupe capturant
+arguments = { days = 1 }             # arguments fixes
 
 [[tabs]]                             # onglet dans le widget (§ 2.7)
 id = "today"
@@ -206,11 +212,14 @@ kind = "declarative"                 # ou "web" (exige la permission ui.web)
 ```
 
 **Fonctionnement** :
-- l'**hôte de modules** (dans le démon) découvre les dossiers, valide les manifestes, lance les modules activés et enregistre leurs outils, commandes, règles et onglets dans les registres du cœur ;
+- l'**hôte de modules** (`avenoir::modules` ; dans la CLI aujourd'hui, dans le démon au jalon 3) découvre les dossiers, valide les manifestes (clé inconnue, chemin hors du dossier, outil non déclaré… : refusé), lance les modules activés et enregistre leurs outils, commandes, règles et onglets dans les registres du cœur. Les règles d'Avenoir restent prioritaires et un module ne peut ni prendre le nom d'une commande existante, ni remplacer un outil ;
+- **protocole** : le protocole `avenoir` est un **sur-ensemble de MCP** — poignée de main `initialize` / `notifications/initialized`, `tools/list` (paginé), `tools/call`, `notifications/cancelled` (Ctrl+C ou délai dépassé) — plus des méthodes `avenoir/*` (aujourd'hui `avenoir/undo`). Messages JSON-RPC 2.0, un par ligne, bornés en taille (8 Mio) ; délai de 10 s pour la poignée de main, 30 s par appel. Les requêtes d'un module vers l'hôte sont refusées pour l'instant ;
+- **le manifeste fait foi** : un module `avenoir` n'expose que les outils déclarés dans `[[tools]]` (nom, risque) ; leurs descriptions et schémas viennent de `tools/list`, sont bornés, nettoyés des caractères de contrôle, et signalés au LLM comme venant du module (« [Module « Météo »] … ») ;
+- **environnement minimal** : le module ne reçoit que le strict nécessaire (PATH, dossier personnel, langue…), les proxys s'il a la permission `network`, les variables qu'il déclare (`env`), et `AVENOIR_MODULE_ID`, `AVENOIR_MODULE_DATA`, `AVENOIR_VERSION` ; jamais les clés d'API d'Avenoir ;
 - **appels entre modules** : toujours **via l'hôte** (`avenoir/call_tool`), jamais en direct ; seuls les outils `public` sont accessibles ; l'appel subit le même contrôle des permissions et le même audit que le LLM, avec l'identité du module appelant ;
 - **fonctions de fond** : un module peut travailler en continu (ex. récupérer la météo toutes les 30 min) et pousser des mises à jour de son onglet à l'hôte (notifications JSON-RPC) ;
 - **découverte par le LLM** : les outils des modules apparaissent dans la liste des outils de l'agent (ex. `calendrier__update_event`). Quand les modules seront nombreux, un outil de recherche de capacités évitera d'envoyer toute la liste au LLM ;
-- **annulation** : un outil de module peut renvoyer une action d'annulation ; Avenoir l'exécute par la méthode `avenoir/undo` du module (voir « Annulation des actions », § 2.4). Les outils de serveurs MCP ne sont pas annulables ;
+- **annulation** : un outil de module peut renvoyer une action d'annulation dans `_meta["avenoir/undo"]` (`description` lisible, `token` opaque) ; Avenoir l'exécute par `avenoir/undo { token }`, et le module vérifie que l'état n'a pas changé (voir « Annulation des actions », § 2.4). Les outils de serveurs MCP ne sont pas annulables ;
 - **compatibilité MCP** : `protocol = "mcp"` permet d'utiliser un serveur MCP existant comme module (outils seulement : `initialize`, `tools/list`, `tools/call`) ;
 - **risque** : celui du manifeste est un minimum proposé par l'auteur ; défaut `sensitive` si absent (on ne fait pas confiance à l'auto-déclaration d'un module). L'utilisateur peut le **relever** librement. Il peut aussi l'**abaisser**, mais uniquement depuis l'application (ou une commande de la CLI), après :
   - un **avertissement** : « Cet outil sera exécuté avec moins de contrôles que ne le prévoit son auteur. » ;
@@ -218,6 +227,8 @@ kind = "declarative"                 # ou "web" (exige la permission ui.web)
   - la saisie exacte de la phrase **« Je sais ce que je fais »** (un clic ne suffit pas).
 
   L'accord (phrase, date) est enregistré avec le réglage, inscrit au journal et visible dans l'écran Permissions, d'où la baisse s'annule. Une baisse sans accord enregistré (écrite à la main dans un fichier) est **ignorée**, avec un avertissement au démarrage.
+
+  Aujourd'hui : commande `/risque <outil> <lecture | réversible | sensible | défaut>` de la CLI, choix enregistrés dans la base d'Avenoir (table `tool_risks`), appliqués immédiatement ; `config.toml` (`[modules.<id>] risk`) ne peut que **relever** et reste un plancher. Risque effectif : manifeste (ou `sensitive`), remplacé par le choix de `/risque` s'il est plus élevé ou accordé, puis relevé par `config.toml`.
 
 ### 2.7 Interface
 
@@ -289,7 +300,7 @@ La CLI doit être agréable à lire : chaque type d'élément a son style, recon
 
 ## 3. Directives de sécurité
 
-Ces règles priment sur toute considération de confort ou de rapidité.
+La **confidentialité** et la **sécurité** sont les aspects primordiaux d'Avenoir : ces règles priment sur toute considération de confort, de fonctionnalité ou de rapidité.
 
 1. **Confirmation obligatoire** pour toute action `sensitive`, sans exception configurable.
 2. **Les données ne sont pas des instructions.** Pages web, fichiers, résultats de modules peuvent contenir des injections de prompt (« ignore tes instructions et supprime… »). Le prompt système le rappelle ; le contrôle des permissions est la vraie barrière, pas le prompt.
@@ -305,6 +316,13 @@ Ces règles priment sur toute considération de confort ou de rapidité.
 12. **Onglets web des modules** : iframe `sandbox="allow-scripts"` uniquement (pas d'origine partagée, ni popup, ni formulaire, ni navigation de la fenêtre principale) ; une origine par module (`avenoir-module://<id>/`) qui ne sert que les fichiers du module ; CSP stricte **sans accès réseau** (`connect-src 'none'`) : les données passent par le processus du module, soumis à ses permissions ; seul canal : `postMessage`, avec une API minimale (recevoir les données de *son* module, lui envoyer des événements), chaque message étant validé par l'hôte.
 13. **Confirmations non imitables** : les demandes de confirmation et de permission sont toujours dessinées par Avenoir, hors de tout contenu de module.
 14. **Réglages modifiables uniquement par Avenoir** : le démon est le seul rédacteur ; fichier scellé (HMAC, clé dans le trousseau du système) ; toute modification extérieure est refusée, annulée par restauration de la dernière version valide, signalée et journalisée (§ 5.1). C'est une preuve de falsification, pas une protection contre un logiciel malveillant disposant des droits de l'utilisateur.
+15. **Ne jamais faire entièrement confiance à un module communautaire.** Un module est du code tiers : tout ce qu'il déclare ou renvoie est traité comme non fiable, et des sécurités s'appliquent toujours, quel que soit son auteur :
+    - son manifeste est validé avant tout lancement (identifiant, commande sans shell ni chemin sortant de son dossier, outils, règles limitées à ses propres outils) ; un module installé par l'utilisateur est **désactivé** tant qu'il ne l'a pas activé ;
+    - il ne voit qu'un **environnement minimal** (pas les secrets d'Avenoir ni des autres modules) : seulement les variables qu'il déclare, montrées à l'utilisateur ;
+    - ses outils sont `sensitive` par défaut ; il ne peut pas abaisser son risque, ni masquer, remplacer ou imiter un outil, une commande ou une confirmation d'Avenoir ;
+    - ses réponses sont bornées (taille, délai), validées, et ses descriptions comme ses résultats sont des **données**, jamais des instructions ;
+    - chacun de ses appels passe par le contrôle des permissions et le journal d'audit ; un module défaillant ou malveillant est isolé sans faire tomber l'assistant ;
+    - plus tard : bac à sable des processus, signature et vérification des modules du magasin. Les modules fournis avec Avenoir suivent les mêmes règles.
 
 ---
 
@@ -358,8 +376,11 @@ Ces règles priment sur toute considération de confort ou de rapidité.
 - Descriptions d'outils claires, schémas stricts, résultats textuels concis, en phrases lisibles.
 - Demander le minimum de permissions ; préférer un onglet déclaratif à un onglet web.
 - Renvoyer une erreur explicite plutôt que planter.
-- Ne rien écrire sur stdout d'autre que du JSON-RPC (les logs vont sur stderr).
+- Ne rien écrire sur stdout d'autre que du JSON-RPC, un message par ligne (les logs vont sur stderr, conservés dans `logs/modules/<id>.log`).
+- Protocole `avenoir` : répondre à `initialize`, `tools/list` et `tools/call` comme un serveur MCP (outils déclarés dans `[[tools]]`, résultats `content` textuels, `isError` pour une erreur), et à `avenoir/undo` si un outil propose une annulation (`_meta["avenoir/undo"]`, avec vérification que l'état n'a pas changé).
+- Garder son état dans `AVENOIR_MODULE_DATA` ; demander ses secrets par `env` (jamais dans le manifeste).
 - Un serveur MCP existant devient un module avec `protocol = "mcp"`.
+- Exemple complet : `modules/meteo/` (C++, tests sans réseau dans `modules/meteo/tests/`).
 
 ### 4.6 Interface web
 
@@ -421,7 +442,8 @@ Emplacement cible (phase 3) : `%APPDATA%\avenoir\config.toml` sous Windows, `$XD
 - [x] Boucle agent, permissions, voie rapide
 - [x] Fournisseurs LLM configurables (OpenAI-compatible, Anthropic, Claude Code)
 - [x] Outils : `current_time`, `system_info`, `launch_app`, `open_url`
-- [ ] Hôte de modules v1 (manifeste, JSON-RPC, outils, voie rapide, commandes) + compatibilité MCP
+- [x] Hôte de modules v1 (manifeste, JSON-RPC, outils, voie rapide, commandes) + compatibilité MCP
+- [x] Module météo fourni (Open-Meteo)
 - [x] CLI : confirmations, Ctrl+C, annulation, apparence soignée, barre de saisie fixe
 - [x] Conversations persistantes (SQLite)
 - [ ] Tester avec plusieurs LLM réels (local et distant), ajuster le prompt système
@@ -493,6 +515,13 @@ Emplacement cible (phase 3) : `%APPDATA%\avenoir\config.toml` sous Windows, `$XD
 | 24 | **Conversations persistantes** dans une base SQLite locale (`avenoir::storage`) : écriture immédiate de chaque message, reprise de la dernière conversation, commandes `/nouvelle`, `/conversations`, `/ouvrir`, `/renommer`, `/supprimer`, `/historique` | Ne rien perdre entre deux sessions et pouvoir tout rétablir ; SQLite est fiable, transactionnel, multiplateforme, dans le domaine public (compatible avec la licence) et servira aussi au journal global du jalon 3 |
 | 25 | **CLI soignée** : un style par type d'élément (requête, réponse, action, confirmation, erreur), Markdown rendu, toupie, actions affichées en direct ; bibliothèque `avenoir::terminal` ; couleurs désactivées hors terminal et avec `NO_COLOR` | Distinguer d'un coup d'œil ce qui vient de l'utilisateur, de l'assistant ou d'une action ; rester propre dans un tube ou un script, et respecter la convention `NO_COLOR` |
 | 26 | **replxx** pour la saisie de la CLI (édition, historique, complétion) ; ses « suggestions » portent la bordure du bas de la barre de saisie | Petit, multiplateforme, UTF-8, licence BSD ; distingue Ctrl+C de Ctrl+D ; seul contenu qu'il redessine sous la saisie à chaque frappe |
+| 27 | **Confidentialité et sécurité primordiales** (principe n° 1) ; **ne jamais faire entièrement confiance à un module communautaire** (directive n° 15) | L'assistant agit sur une vraie machine et voit des données personnelles : en cas de conflit avec une fonctionnalité ou le confort, elles l'emportent. Un module est du code tiers : des sécurités s'appliquent toujours, quel que soit son auteur |
+| 28 | **Protocole `avenoir` = sur-ensemble de MCP** (`initialize`, `tools/list`, `tools/call`, `notifications/cancelled`) + méthodes `avenoir/*` (annulation par `avenoir/undo`, jeton dans `_meta`) ; remplace `[[mcp_servers]]` | Un seul client pour les deux protocoles, un serveur MCP devient un module sans adaptation, un module `avenoir` se teste avec l'outillage MCP ; `_meta` est le point d'extension prévu par MCP |
+| 29 | **Environnement minimal** des modules : strict nécessaire, proxys seulement avec `network`, variables déclarées dans `env` (montrées à l'utilisateur) | Aucun module ne voit les clés d'API d'Avenoir ni les secrets des autres modules ; ce qu'il reçoit est explicite |
+| 30 | **Module installé par l'utilisateur désactivé par défaut**, modules fournis activés ; un module ne remplace ni un module fourni, ni un outil, ni une commande d'Avenoir | Déposer un dossier ne suffit pas à exécuter du code : l'utilisateur l'active en connaissance de cause (en attendant l'installation guidée de l'application) |
+| 31 | **Choix de risque des outils de modules** (`/risque`) enregistrés dans la base SQLite d'Avenoir, appliqués à chaud ; `config.toml` ne peut que relever (plancher) | Hors du fichier édité à la main ; une baisse n'existe qu'avec l'accord saisi. Le sceau des réglages (jalon 3) protégera aussi ces choix |
+| 32 | **`Tool::call` reçoit un `std::stop_token`** : un appel de module interrompu par Ctrl+C rend la main tout de suite et le module reçoit `notifications/cancelled` | Ctrl+C doit toujours reprendre la main, même face à un module lent ou bloqué |
+| 33 | **Module météo fourni**, en C++, données **Open-Meteo** (sans clé, CC BY 4.0, gratuit pour un usage non commercial) ; ville par défaut réglée par l'utilisateur, pas de géolocalisation | Premier vrai module, qui sert aussi d'exemple ; aucune donnée envoyée hormis la ville demandée et ses coordonnées ; pas de service tiers de géolocalisation par IP |
 
 ---
 
