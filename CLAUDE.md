@@ -29,7 +29,7 @@ Avenoir est un projet **développé par son auteur, assisté par IA** — et non
 - Une tâche de la roadmap terminée → la cocher dans `docs/ROADMAP.md`.
 - **Documentation toujours à jour ensemble** : chaque évolution met à jour, dans le même temps, `README.md` (usage), `PROJECT.md` (architecture, décisions) et `docs/ROADMAP.md` (avancement) — pas seulement l'un d'eux.
 - Publier une version : même numéro dans `CMakeLists.txt` et `vcpkg.json`, commit, puis tag poussé : `vX.Y.Z` (stable, « Latest » si ≥ 1.0.0) ou `vX.Y.Z-alpha|beta|rc.N` (pré-version). Le workflow `release` publie les binaires. Ne jamais créer de tag sans demande de l'utilisateur.
-- CI (`.github/workflows/ci.yml`) : Linux GCC / Clang / ASan + Windows MSVC + clang-format. Une CI rouge se corrige avant de continuer.
+- CI (`.github/workflows/ci.yml`) : Linux GCC 14 / Clang 20 / ASan + Windows MSVC + clang-format, shellcheck, PSScriptAnalyzer. Une CI rouge se corrige avant de continuer : vérifier son résultat après chaque push.
 
 ## Commandes
 
@@ -60,7 +60,7 @@ AVENOIR_LOG=debug ./build/debug/apps/cli/avenoir
 - `apps/cli` : interface texte (exécutable `avenoir`) ; `apps/daemon` : démon résident ; `apps/ui` : hôte C++ des fenêtres (widget + application principale). Les applications de `apps/` assemblent le tout.
 - `ui/` : interface web en TypeScript strict ; ne parle qu'à l'hôte C++ des fenêtres.
 
-Ces dossiers sont créés à leur étape de la roadmap ; seuls `libs/core` et `apps/cli` existent aujourd'hui.
+Ces dossiers sont créés à leur étape de la roadmap. Existent aujourd'hui : `libs/core`, `libs/llm`, `libs/tools`, `libs/storage`, `libs/terminal` et `apps/cli` (avec un test de bout en bout dans `apps/cli/tests/`).
 
 En-têtes publics dans `libs/<nom>/include/avenoir/<nom>/`, tests Catch2 dans `libs/<nom>/tests/`.
 
@@ -79,7 +79,7 @@ En-têtes publics dans `libs/<nom>/include/avenoir/<nom>/`, tests Catch2 dans `l
 - Concurrence : synchrone + `std::jthread` / `std::stop_token` ; pas d'état partagé sans synchronisation.
 - Logs : `spdlog` ; audit des outils sur le logger `audit` ; niveau via `AVENOIR_LOG`.
 - Nommage : `PascalCase` (types), `snake_case` (fonctions, variables), membres privés suffixés `_`, constantes `kPascalCase`, espaces de noms `avenoir::<bibliothèque>`.
-- Bibliothèques retenues : `nlohmann/json`, `toml++`, `cpr`, `reproc`, `spdlog`, `Catch2`. En ajouter une → la justifier et l'inscrire dans `vcpkg.json`.
+- Bibliothèques retenues : `nlohmann/json`, `toml++`, `cpr`, `reproc`, `spdlog`, `Catch2`, `replxx` (saisie de la CLI), `sqlite3` (conversations). En ajouter une → la justifier et l'inscrire dans `vcpkg.json`.
 - Fonctionnalités lourdes (voix, UI) derrière des options CMake.
 
 ## Multiplateforme

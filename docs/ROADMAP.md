@@ -57,6 +57,7 @@ L'ordre suit un principe : **chaque jalon produit un assistant utilisable**, plu
 - ✅ Workflow `release` sur tag `vX.Y.Z` : contrôle tag = version, build + tests Linux / Windows, publication de la release avec les binaires
 - ✅ Premier passage au vert sur GitHub (dépôt public), y compris Windows MSVC
 - ✅ Première release `v0.1.0` (pré-version, binaires Linux et Windows)
+- ✅ Release `v0.2.0` (pré-version) : CLI complète — outils natifs, confirmations, annulation, conversations persistantes, apparence soignée
 
 **Fini quand :** chaque push sur `main` est vérifié sur les deux OS, badge vert dans le README, et une release publie des binaires téléchargeables.
 

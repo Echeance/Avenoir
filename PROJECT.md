@@ -329,7 +329,7 @@ Ces règles priment sur toute considération de confort ou de rapidité.
 - **Nommage** : types en `PascalCase`, fonctions et variables en `snake_case`, membres privés suffixés `_`, constantes en `kPascalCase`, espaces de noms `avenoir::<bibliothèque>`.
 - En-têtes publics minimaux ; détails d'implémentation dans les `.cpp` ou un espace de noms `detail`.
 - Fonctionnalités optionnelles lourdes (moteurs vocaux, UI) derrière des **options CMake** (`AVENOIR_WITH_VOICE`…).
-- Bibliothèques de référence : `nlohmann/json`, `toml++`, `cpr` (HTTP), `reproc` (sous-processus), `spdlog`, `Catch2` (tests).
+- Bibliothèques de référence : `nlohmann/json`, `toml++`, `cpr` (HTTP), `reproc` (sous-processus), `spdlog`, `Catch2` (tests), `replxx` (saisie de la CLI), `sqlite3` (conversations).
 
 ### 4.3 Multiplateforme
 
@@ -379,6 +379,7 @@ Ces règles priment sur toute considération de confort ou de rapidité.
 
 - Branches courtes, messages de commit au format *Conventional Commits* (`feat:`, `fix:`, `refactor:`…).
 - Toute décision d'architecture notable : ajout d'une entrée dans la section 7 (« Journal des décisions »).
+- Images du README dans `docs/readme/`, avec leurs générateurs : `penguin.py` (pingouin SVG, à garder identique à `Display::banner`), `capture.sh` + `terminal_render.py` (capture réelle de la CLI rendue en PNG).
 
 ---
 
@@ -418,10 +419,11 @@ Emplacement cible (phase 3) : `%APPDATA%\avenoir\config.toml` sous Windows, `$XD
 - [x] Projet CMake + vcpkg + préréglages
 - [x] CI Windows + Linux au vert, releases automatiques
 - [x] Boucle agent, permissions, voie rapide
-- [ ] Fournisseurs LLM configurables (OpenAI-compatible, Anthropic, Claude Code)
-- [ ] Outils : `current_time`, `system_info`, `launch_app`, `open_url`
+- [x] Fournisseurs LLM configurables (OpenAI-compatible, Anthropic, Claude Code)
+- [x] Outils : `current_time`, `system_info`, `launch_app`, `open_url`
 - [ ] Hôte de modules v1 (manifeste, JSON-RPC, outils, voie rapide, commandes) + compatibilité MCP
-- [ ] CLI avec confirmations
+- [x] CLI : confirmations, Ctrl+C, annulation, apparence soignée, barre de saisie fixe
+- [x] Conversations persistantes (SQLite)
 - [ ] Tester avec plusieurs LLM réels (local et distant), ajuster le prompt système
 
 ### Phase 2 : contrôle système
@@ -490,6 +492,7 @@ Emplacement cible (phase 3) : `%APPDATA%\avenoir\config.toml` sous Windows, `$XD
 | 23 | **Annulation des actions** : chaque outil déclare s'il sait défaire son action ; journal d'annulation par requête ; proposé à l'interruption (Ctrl+C) et par la commande `/annuler` ; annulations en ordre inverse, avec vérification de l'état et confirmation de l'utilisateur | Pouvoir revenir en arrière sans rien promettre d'impossible : « réversible » ne veut pas dire « annulable automatiquement » (une URL ouverte ou une application lancée ne se défont pas proprement) ; la vérification d'état évite qu'une annulation écrase un changement fait entre-temps |
 | 24 | **Conversations persistantes** dans une base SQLite locale (`avenoir::storage`) : écriture immédiate de chaque message, reprise de la dernière conversation, commandes `/nouvelle`, `/conversations`, `/ouvrir`, `/renommer`, `/supprimer`, `/historique` | Ne rien perdre entre deux sessions et pouvoir tout rétablir ; SQLite est fiable, transactionnel, multiplateforme, dans le domaine public (compatible avec la licence) et servira aussi au journal global du jalon 3 |
 | 25 | **CLI soignée** : un style par type d'élément (requête, réponse, action, confirmation, erreur), Markdown rendu, toupie, actions affichées en direct ; bibliothèque `avenoir::terminal` ; couleurs désactivées hors terminal et avec `NO_COLOR` | Distinguer d'un coup d'œil ce qui vient de l'utilisateur, de l'assistant ou d'une action ; rester propre dans un tube ou un script, et respecter la convention `NO_COLOR` |
+| 26 | **replxx** pour la saisie de la CLI (édition, historique, complétion) ; ses « suggestions » portent la bordure du bas de la barre de saisie | Petit, multiplateforme, UTF-8, licence BSD ; distingue Ctrl+C de Ctrl+D ; seul contenu qu'il redessine sous la saisie à chaque frappe |
 
 ---
 

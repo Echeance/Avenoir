@@ -1,98 +1,216 @@
+<div align="center">
+
+<img src="docs/readme/avenoir-penguin.svg" alt="Le pingouin d'Avenoir en pixel art" width="140">
+
 # Avenoir
 
+**L'assistant de votre système d'exploitation, piloté par l'IA.**<br>
+Sûr par défaut, extensible par des modules, avec le LLM de votre choix — local ou dans le cloud.
+
 [![CI](https://github.com/ympax14/Avenoir/actions/workflows/ci.yml/badge.svg)](https://github.com/ympax14/Avenoir/actions/workflows/ci.yml)
+[![Version](https://img.shields.io/github/v/release/ympax14/Avenoir?include_prereleases&label=version&color=343f5c)](https://github.com/ympax14/Avenoir/releases)
+![C++23](https://img.shields.io/badge/C%2B%2B-23-00599C?logo=cplusplus&logoColor=white)
+![Plateformes](https://img.shields.io/badge/plateformes-Linux%20%7C%20Windows-f5a028)
+[![Licence](https://img.shields.io/badge/licence-PolyForm%20Strict%201.0.0-lightgrey)](LICENSE.md)
 
-Assistant de système d'exploitation pour Windows et Linux, écrit en C++23, piloté par un LLM configurable et extensible par des modules (compatibles MCP).
+[Fonctionnalités](#-fonctionnalités) ·
+[Installation](#-installation) ·
+[Utilisation](#-utilisation) ·
+[Architecture](#-architecture) ·
+[Feuille de route](#-feuille-de-route) ·
+[Documentation](PROJECT.md)
 
-Vision, architecture et directives : voir **[PROJECT.md](PROJECT.md)**.
-Feuille de route : **[docs/ROADMAP.md](docs/ROADMAP.md)**.
+</div>
 
-> 🚧 Jalon 1 en cours : le projet compile (exécutable `avenoir` qui affiche sa version) ; la boucle de conversation arrive ensuite.
+> [!NOTE]
+> Avenoir est en développement actif (jalon 1, versions `0.x`). La CLI est déjà utilisable au quotidien ; les modules, le démon résident, la voix et l'interface graphique arrivent dans les prochains jalons.
 
-## Prérequis
+<div align="center">
+  <img src="docs/readme/cli-demo.png" alt="Avenoir dans un terminal : accueil avec le pingouin, une requête par la voie rapide, une requête au LLM qui appelle un outil, et la barre de saisie fixe en bas" width="900">
+</div>
 
-- Compilateur C++23 : GCC ≥ 14, Clang ≥ 19 ou MSVC (Visual Studio 2022 17.10+)
-- CMake ≥ 3.28 et Ninja
-- [vcpkg](https://github.com/microsoft/vcpkg), avec la variable `VCPKG_ROOT` qui pointe dessus :
+---
+
+## ✨ Fonctionnalités
+
+### Aujourd'hui
+
+- 💬 **Dialogue en langage naturel** avec le LLM de votre choix : modèle local (Ollama, llama.cpp…), API distante (OpenAI, Mistral, Anthropic…) ou **votre abonnement Claude** via Claude Code, sans clé d'API.
+- 🛠️ **Des actions réelles** sur votre machine : lancer une application, ouvrir une page web, donner l'heure ou des informations sur le système.
+- ⚡ **Voie rapide** : les commandes simples (« lance firefox », « quelle heure est-il ? ») sont exécutées instantanément, sans LLM, même hors ligne.
+- 🛡️ **Sûr par défaut** : chaque outil a un niveau de risque ; les actions sensibles demandent toujours votre accord.
+- ↩️ **Ctrl+C arrête, sans quitter**, puis propose d'**annuler** ce qui peut l'être ; `/annuler` remonte les requêtes précédentes.
+- 🗂️ **Conversations conservées** entre deux lancements, reprises et réaffichées automatiquement.
+- 🎨 **Une CLI soignée** : barre de saisie fixe en bas du terminal, réponses en Markdown, actions affichées en direct, toupie pendant la réflexion — et respect de `NO_COLOR`.
+- 🐧 **Linux et Windows**, compilés et testés à chaque modification.
+
+### Bientôt
+
+- 🧩 **Modules** : n'importe qui pourra étendre Avenoir dans n'importe quel langage (outils, commandes, onglets d'interface), y compris avec les serveurs **MCP** existants.
+- 🔊 **Contrôle du système** : volume, luminosité, mode sombre, multimédia, notifications, recherche web.
+- 🌙 **Assistant résident** : démon en arrière-plan, raccourci clavier global, journal des actions.
+- 🎙️ **Voix** : mot de réveil, reconnaissance et synthèse vocales, en local.
+- 🖥️ **Interface graphique** : un widget discret en haut de l'écran (avec le pingouin animé) et une application de réglages.
+
+---
+
+## 🛡️ Sécurité d'abord
+
+Avenoir agit sur une vraie machine : la sécurité passe avant le confort.
+
+| Niveau de risque | Exemples | Par défaut |
+|---|---|---|
+| `lecture seule` | heure, informations système | exécuté |
+| `réversible` | lancer une application, ouvrir une URL | exécuté |
+| `SENSIBLE` | supprimer, envoyer, éteindre | **toujours confirmé** — même si la configuration dit le contraire |
+
+- **Les données ne sont jamais des instructions** : une page web ou un fichier piégé ne peut pas déclencher d'action sensible sans votre accord.
+- **Arguments validés** par chaque outil, **jamais de shell** construit à partir d'un texte : 24 tentatives d'injection sont testées.
+- **Vos clés d'API ne sont jamais écrites** dans la configuration : seul le *nom* de la variable d'environnement l'est.
+- **Vos conversations restent chez vous**, dans un fichier lisible par vous seul.
+
+Toutes les règles : [PROJECT.md — Directives de sécurité](PROJECT.md#3-directives-de-sécurité).
+
+---
+
+## 🚀 Installation
+
+### Binaires
+
+Téléchargez la dernière version pour **Linux** (`avenoir-linux-x64.tar.gz`) ou **Windows** (`avenoir-windows-x64.zip`) depuis la page [Releases](https://github.com/ympax14/Avenoir/releases).
+
+> [!NOTE]
+> Les versions `0.x` sont des pré-versions : la CLI fonctionne, mais l'hôte de modules et l'interface graphique sont encore à venir.
+
+### Depuis les sources
+
+**Prérequis** : un compilateur C++23 (GCC ≥ 14, Clang ≥ 19 ou MSVC 2022 17.10+), CMake ≥ 3.28, Ninja et [vcpkg](https://github.com/microsoft/vcpkg).
 
 ```sh
 git clone https://github.com/microsoft/vcpkg ~/vcpkg
-~/vcpkg/bootstrap-vcpkg.sh -disableMetrics      # Windows : bootstrap-vcpkg.bat
-export VCPKG_ROOT=~/vcpkg                        # fish : set -Ux VCPKG_ROOT ~/vcpkg
+~/vcpkg/bootstrap-vcpkg.sh -disableMetrics       # Windows : bootstrap-vcpkg.bat
+export VCPKG_ROOT=~/vcpkg                         # fish : set -Ux VCPKG_ROOT ~/vcpkg
+
+git clone https://github.com/ympax14/Avenoir && cd Avenoir
+scripts/build.sh release                          # Windows : scripts\build.ps1 release
 ```
 
-Les dépendances (`vcpkg.json`) sont téléchargées et compilées automatiquement à la première configuration.
+L'exécutable est créé dans `build/release/apps/cli/avenoir`. Les dépendances sont téléchargées et compilées automatiquement par vcpkg au premier build.
 
-## Compiler et tester
+---
 
-Le plus rapide : le script `scripts/build.sh` (Linux) enchaîne configuration, compilation et tests.
+## ⚙️ Configuration
 
 ```sh
-scripts/build.sh                  # debug + tests
-scripts/build.sh release -r       # release, puis lance avenoir
-scripts/build.sh -r -- cc.toml    # debug + tests, puis `avenoir cc.toml`
-scripts/build.sh asan -c          # build propre avec ASan + UBSan
-scripts/build.sh -f               # reformate le code avant de compiler
-scripts/build.sh -k               # avant de committer : formatage, clang-tidy, tests
-scripts/build.sh -h               # toutes les options
+cp config.example.toml config.toml
 ```
 
-`VCPKG_ROOT` vaut `~/vcpkg` par défaut si la variable n'est pas définie.
+Choisissez ensuite votre fournisseur LLM dans la section `[llm]` :
 
-Sous Windows, `scripts\build.ps1` fait la même chose (PowerShell 5.1 ou 7) et charge tout seul l'environnement Visual Studio (MSVC, Ninja) :
+| Fournisseur | `provider` | Pour qui | Mise en place |
+|---|---|---|---|
+| **Local** | `openai_compatible` | Ollama, llama.cpp, LM Studio, vLLM… | `ollama pull qwen3:8b` (tout modèle gérant le *tool calling*) |
+| **API distante** | `openai_compatible` ou `anthropic` | OpenAI, Mistral, OpenRouter, Anthropic… | exporter la variable indiquée par `api_key_env` |
+| **Abonnement Claude** | `claude_code` | Claude Pro / Max, **sans clé d'API** | installer Claude Code, puis `claude` → `/login` |
 
-```powershell
-scripts\build.ps1                       # debug + tests
-scripts\build.ps1 release -r            # release, puis lance avenoir
-scripts\build.ps1 -r -RunArgs cc.toml   # debug + tests, puis `avenoir cc.toml`
-scripts\build.ps1 -k                    # avant de committer
-Get-Help scripts\build.ps1 -Detailed    # toutes les options
+```toml
+[llm]
+provider = "claude_code"
+model = "sonnet"
 ```
 
-Si PowerShell refuse d'exécuter le script : `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned`.
+Les autres sections règlent l'agent (`[agent]`), les permissions par niveau de risque (`[permissions]`) et, bientôt, les modules (`[modules.<id>]`). Tout est commenté dans [`config.example.toml`](config.example.toml).
 
-Avec CMake directement :
+> [!IMPORTANT]
+> À partir du jalon 3, les réglages ne se modifieront **que depuis Avenoir** : le fichier sera scellé et toute modification faite en dehors sera refusée ([PROJECT.md § 5.1](PROJECT.md#51-réglages-modifiables-uniquement-par-avenoir)).
+
+---
+
+## 💬 Utilisation
 
 ```sh
-cmake --preset debug             # configuration (+ dépendances vcpkg)
-cmake --build --preset debug     # compilation
-ctest --preset debug             # tests
-
-cmake --preset release && cmake --build --preset release
-./build/release/apps/cli/avenoir
+avenoir                      # utilise config.toml dans le dossier courant
+avenoir chemin/config.toml
 ```
 
-Préréglage `asan` (Linux) : compilation avec AddressSanitizer + UndefinedBehaviorSanitizer.
+Écrivez simplement ce que vous voulez : *« quelle heure est-il ? »*, *« lance firefox »*, *« décris mon ordinateur »*…
 
-Avant de committer : `scripts/build.sh -k` (vérifie le formatage, lance clang-tidy sur tous les `.cpp` et les tests).
+### Commandes
 
-## Utilisation de la CLI
+| Commande | Effet |
+|---|---|
+| `/aide` | liste des commandes |
+| `/outils` | outils disponibles et leur niveau de risque |
+| `/annuler` | annuler les actions de la dernière requête (répétable) |
+| `/nouvelle [titre]` | nouvelle conversation (`/reset` : idem, rien n'est effacé) |
+| `/conversations` | liste des conversations |
+| `/ouvrir <n° ou titre>` | reprendre une conversation |
+| `/renommer <titre>` | renommer la conversation en cours |
+| `/supprimer [n° ou titre]` | supprimer une conversation, après confirmation |
+| `/historique` | réafficher toute la conversation |
+| `/quitter` | quitter |
+
+### Raccourcis
+
+| Touche | Effet |
+|---|---|
+| <kbd>Ctrl</kbd>+<kbd>C</kbd> | arrête l'action en cours sans quitter, puis propose d'annuler ; sur une ligne vide, efface la saisie |
+| <kbd>Ctrl</kbd>+<kbd>D</kbd> | quitte |
+| <kbd>↑</kbd> / <kbd>↓</kbd> | saisies précédentes (conservées entre deux lancements) |
+| <kbd>Tab</kbd> | complète les commandes |
+
+Les conversations sont enregistrées dans `avenoir.db`, dans le dossier de données d'Avenoir (`~/.local/share/avenoir` sous Linux, `%LOCALAPPDATA%\avenoir` sous Windows), lisible par vous seul. Le journal d'audit des actions s'affiche avec `AVENOIR_LOG=info`.
+
+---
+
+## 🧭 Architecture
+
+```mermaid
+flowchart LR
+    U([Vous]) -->|texte| CLI["CLI avenoir"]
+    CLI --> A["Agent"]
+    A -->|commande simple| R["Voie rapide"]
+    A <-->|requête, appels d'outils| L{{"LLM : local, API, Claude Code"}}
+    R --> P{"Permissions"}
+    A --> P
+    P --> T["Outils natifs"]
+    P -.->|bientôt| M["Modules : JSON-RPC, MCP"]
+    A --> S[("Conversations SQLite")]
+```
+
+Le cœur est écrit en **C++23**, découpé en bibliothèques indépendantes :
+
+| Bibliothèque | Rôle |
+|---|---|
+| `avenoir::core` | agent, outils, permissions, voie rapide, configuration — sans dépendance au système, au LLM ni à l'interface |
+| `avenoir::llm` | fournisseurs : API compatible OpenAI, Anthropic, Claude Code |
+| `avenoir::tools` | outils natifs ; code propre à chaque système isolé |
+| `avenoir::storage` | conversations persistantes (SQLite) |
+| `avenoir::terminal` | rendu dans le terminal : couleurs, cadres, Markdown, pixel art |
+| `apps/cli` | l'interface en ligne de commande |
+
+Vision, décisions et directives : **[PROJECT.md](PROJECT.md)**.
+
+---
+
+## 🛠️ Développement
 
 ```sh
-scripts/build.sh -r -- config.toml
+scripts/build.sh                      # debug + tests
+scripts/build.sh -r -- config.toml    # compile, teste, puis lance Avenoir
+scripts/build.sh asan -c              # build propre avec AddressSanitizer + UBSan
+scripts/build.sh -k                   # avant de committer : formatage, clang-tidy, tests
+scripts/build.sh -h                   # toutes les options
 ```
 
-L'accueil présente le pingouin d'Avenoir en pixel art. La barre de saisie est fixe en bas du terminal ; la conversation défile au-dessus. La barre grandit pour les saisies longues et suit les changements de taille de la fenêtre ; les confirmations s'y répondent. Une toupie indique, avec les réponses, que le LLM réfléchit. Chaque élément a son style : vos requêtes (`❯`), les réponses d'Avenoir (`◆ Avenoir`, Markdown rendu), les actions en direct (`⚙ … ✓/✗`), les confirmations (cadre jaune, badge de risque), les erreurs (en rouge). Les couleurs sont désactivées hors d'un terminal ou si la variable `NO_COLOR` est définie ; le journal d'audit s'affiche avec `AVENOIR_LOG=info`.
+Sous Windows, `scripts\build.ps1` offre les mêmes options et charge tout seul l'environnement Visual Studio. Avec CMake directement : `cmake --preset debug`, `cmake --build --preset debug`, `ctest --preset debug`.
 
-- `/aide` : liste des commandes ; `/outils` : outils disponibles et leur niveau de risque.
-- `/reset` : oublie la conversation en cours ; `/quitter` (ou Ctrl+D) : quitte.
-- **Ctrl+C ne ferme pas Avenoir** : il arrête l'action en cours (réponse du LLM, outil), puis propose d'annuler les actions déjà effectuées qui peuvent l'être. Sur une ligne vide, il efface la saisie.
-- `/annuler` : propose d'annuler les actions de la dernière requête (répétable pour remonter plus loin).
-- Les actions sensibles demandent une confirmation (« Autoriser ? [o/N] »).
-- Édition de ligne, flèches haut/bas pour les saisies précédentes (conservées dans `cli_history.txt`, dans le dossier de données d'Avenoir), Tab pour compléter les commandes.
-- **Conversations conservées** entre deux lancements (la dernière est reprise et réaffichée) : `/nouvelle [titre]` (ou `/reset`), `/conversations`, `/ouvrir <n° ou titre>`, `/renommer <titre>`, `/supprimer [n° ou titre]`, `/historique`. La conversation se remonte avec le défilement du terminal. Elles sont stockées en clair dans `avenoir.db`, dans le dossier de données d'Avenoir (`~/.local/share/avenoir`, `%LOCALAPPDATA%\avenoir`), lisible par vous seul.
+**Qualité** : avertissements traités comme des erreurs, `clang-format`, `clang-tidy`, AddressSanitizer + UndefinedBehaviorSanitizer, et plus de 90 tests — dont un test de bout en bout de la CLI. La [CI](https://github.com/ympax14/Avenoir/actions) vérifie chaque modification sous Linux (GCC, Clang, sanitizers) et Windows (MSVC).
 
-## Configuration
+Les images de ce README sont générées par les scripts de [`docs/readme/`](docs/readme/) : `penguin.py` (pingouin) et `capture.sh` (enregistre une vraie session de la CLI et la dessine en PNG).
 
-En développement, copier `config.example.toml` en `config.toml` et l'éditer. À partir du jalon 3, les réglages ne se modifieront **que depuis Avenoir** : le fichier sera scellé, et toute modification faite en dehors sera refusée et annulée (voir [PROJECT.md § 5.1](PROJECT.md)).
-
-## Fournisseurs LLM (à venir)
-
-- **Local** avec Ollama : `ollama pull qwen3:8b` (ou tout modèle gérant le *tool calling*).
-- **API distante** : exporter la variable indiquée par `api_key_env`.
-- **Abonnement Claude** (Pro / Max), sans clé d'API : installer Claude Code, s'y connecter (`claude` puis `/login`), et choisir `provider = "claude_code"` (option D de `config.example.toml`).
-
-## Publier une version
+<details>
+<summary><b>Publier une version</b></summary>
 
 1. Mettre à jour la version dans `CMakeLists.txt` (`project(... VERSION x.y.z)`) et `vcpkg.json`.
 2. Committer et pousser `main`, puis pousser un tag :
@@ -106,10 +224,36 @@ En développement, copier `config.example.toml` en `config.toml` et l'éditer. �
 git tag v1.2.0-beta.1 && git push origin v1.2.0-beta.1
 ```
 
-Le workflow `release` vérifie que le numéro du tag correspond à la version du projet, compile et teste sous Linux et Windows, puis publie la release avec `avenoir-linux-x64.tar.gz` et `avenoir-windows-x64.zip`. Les versions `0.x` sont toujours publiées en pré-version. Le binaire affiche la version complète (`avenoir 1.2.0-beta.1`).
+Le workflow `release` vérifie que le numéro du tag correspond à la version du projet, compile et teste sous Linux et Windows, puis publie les binaires. Les versions `0.x` sont toujours des pré-versions.
 
-## Licence
+</details>
 
-Avenoir est publié sous la **[PolyForm Strict License 1.0.0](LICENSE.md)** : le code est consultable et utilisable à des fins **personnelles et non commerciales**, mais toute **modification, œuvre dérivée ou redistribution** (y compris d'un fork) est interdite sans l'accord écrit de l'auteur.
+---
 
-Pour toute autre utilisation (modification, fork, contribution, usage commercial), ouvrez une *issue* ou contactez [@ympax14](https://github.com/ympax14) pour obtenir une autorisation.
+## 📅 Feuille de route
+
+| Jalon | Contenu | État |
+|---|---|---|
+| **0 · Conception** | vision, architecture, sécurité, choix techniques | ✅ |
+| **1 · Socle** | cœur, LLM, outils, CLI, conversations, modules v1 | 🔄 en cours |
+| **2 · Au quotidien** | volume, écran, multimédia, applications, recherche web | ⬜ |
+| **3 · Résident** | démon, journal, permissions durables, réglages scellés | ⬜ |
+| **4 · Tâches et modules** | fichiers, mémoire, appels entre modules | ⬜ |
+| **5 · Voix** | mot de réveil, reconnaissance et synthèse vocales | ⬜ |
+| **6 · Interface graphique** | widget avec le pingouin animé, application principale | ⬜ |
+
+Le détail, étape par étape : **[docs/ROADMAP.md](docs/ROADMAP.md)**.
+
+---
+
+## 📄 Licence
+
+Avenoir est publié sous la **[PolyForm Strict License 1.0.0](LICENSE.md)** : le code est consultable et utilisable à des fins **personnelles et non commerciales**. Toute **modification, œuvre dérivée ou redistribution** — y compris d'un fork — est interdite sans l'accord écrit de l'auteur.
+
+Pour toute autre utilisation (modification, fork, contribution, usage commercial), [ouvrez une *issue*](https://github.com/ympax14/Avenoir/issues) ou contactez [@ympax14](https://github.com/ympax14).
+
+<div align="center">
+<br>
+<img src="docs/readme/avenoir-penguin.svg" alt="" width="40"><br>
+<sub>Avenoir · conçu et développé par <a href="https://github.com/ympax14">@ympax14</a>, assisté par IA.</sub>
+</div>
