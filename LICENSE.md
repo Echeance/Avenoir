@@ -1,4 +1,4 @@
-Required Notice: Copyright (c) 2026 GHYS Nathan (https://github.com/ympax14)
+Required Notice: Copyright (c) 2026 GHYS Nathan (https://github.com/echeance)
 
 # PolyForm Strict License 1.0.0
 

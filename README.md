@@ -7,8 +7,8 @@
 **L'assistant de votre système d'exploitation, piloté par l'IA.**<br>
 Sûr par défaut, extensible par des modules, avec le LLM de votre choix — local ou dans le cloud.
 
-[![CI](https://github.com/ympax14/Avenoir/actions/workflows/ci.yml/badge.svg)](https://github.com/ympax14/Avenoir/actions/workflows/ci.yml)
-[![Version](https://img.shields.io/github/v/release/ympax14/Avenoir?include_prereleases&label=version&color=343f5c)](https://github.com/ympax14/Avenoir/releases)
+[![CI](https://github.com/echeance/Avenoir/actions/workflows/ci.yml/badge.svg)](https://github.com/echeance/Avenoir/actions/workflows/ci.yml)
+[![Version](https://img.shields.io/github/v/release/echeance/Avenoir?include_prereleases&label=version&color=343f5c)](https://github.com/echeance/Avenoir/releases)
 ![C++23](https://img.shields.io/badge/C%2B%2B-23-00599C?logo=cplusplus&logoColor=white)
 ![Plateformes](https://img.shields.io/badge/plateformes-Linux%20%7C%20Windows-f5a028)
 [![Licence](https://img.shields.io/badge/licence-PolyForm%20Strict%201.0.0-lightgrey)](LICENSE.md)
@@ -77,7 +77,7 @@ Toutes les règles : [PROJECT.md — Directives de sécurité](PROJECT.md#3-dire
 
 ### Binaires
 
-Téléchargez la dernière version pour **Linux** (`avenoir-linux-x64.tar.gz`) ou **Windows** (`avenoir-windows-x64.zip`) depuis la page [Releases](https://github.com/ympax14/Avenoir/releases).
+Téléchargez la dernière version pour **Linux** (`avenoir-linux-x64.tar.gz`) ou **Windows** (`avenoir-windows-x64.zip`) depuis la page [Releases](https://github.com/echeance/Avenoir/releases).
 
 > [!NOTE]
 > Les versions `0.x` sont des pré-versions : la CLI fonctionne, mais l'hôte de modules et l'interface graphique sont encore à venir.
@@ -91,7 +91,7 @@ git clone https://github.com/microsoft/vcpkg ~/vcpkg
 ~/vcpkg/bootstrap-vcpkg.sh -disableMetrics       # Windows : bootstrap-vcpkg.bat
 export VCPKG_ROOT=~/vcpkg                         # fish : set -Ux VCPKG_ROOT ~/vcpkg
 
-git clone https://github.com/ympax14/Avenoir && cd Avenoir
+git clone https://github.com/echeance/Avenoir && cd Avenoir
 scripts/build.sh release                          # Windows : scripts\build.ps1 release
 ```
 
@@ -205,7 +205,7 @@ scripts/build.sh -h                   # toutes les options
 
 Sous Windows, `scripts\build.ps1` offre les mêmes options et charge tout seul l'environnement Visual Studio. Avec CMake directement : `cmake --preset debug`, `cmake --build --preset debug`, `ctest --preset debug`.
 
-**Qualité** : avertissements traités comme des erreurs, `clang-format`, `clang-tidy`, AddressSanitizer + UndefinedBehaviorSanitizer, et plus de 90 tests — dont un test de bout en bout de la CLI. La [CI](https://github.com/ympax14/Avenoir/actions) vérifie chaque modification sous Linux (GCC, Clang, sanitizers) et Windows (MSVC).
+**Qualité** : avertissements traités comme des erreurs, `clang-format`, `clang-tidy`, AddressSanitizer + UndefinedBehaviorSanitizer, et plus de 90 tests — dont un test de bout en bout de la CLI. La [CI](https://github.com/echeance/Avenoir/actions) vérifie chaque modification sous Linux (GCC, Clang, sanitizers) et Windows (MSVC).
 
 Les images de ce README sont générées par les scripts de [`docs/readme/`](docs/readme/) : `penguin.py` (pingouin) et `capture.sh` (enregistre une vraie session de la CLI et la dessine en PNG).
 
@@ -250,10 +250,10 @@ Le détail, étape par étape : **[docs/ROADMAP.md](docs/ROADMAP.md)**.
 
 Avenoir est publié sous la **[PolyForm Strict License 1.0.0](LICENSE.md)** : le code est consultable et utilisable à des fins **personnelles et non commerciales**. Toute **modification, œuvre dérivée ou redistribution** — y compris d'un fork — est interdite sans l'accord écrit de l'auteur.
 
-Pour toute autre utilisation (modification, fork, contribution, usage commercial), [ouvrez une *issue*](https://github.com/ympax14/Avenoir/issues) ou contactez [@ympax14](https://github.com/ympax14).
+Pour toute autre utilisation (modification, fork, contribution, usage commercial), [ouvrez une *issue*](https://github.com/echeance/Avenoir/issues) ou contactez [@echeance](https://github.com/echeance).
 
 <div align="center">
 <br>
 <img src="docs/readme/avenoir-penguin.svg" alt="" width="40"><br>
-<sub>Avenoir · conçu et développé par <a href="https://github.com/ympax14">@ympax14</a>, assisté par IA.</sub>
+<sub>Avenoir · conçu et développé par <a href="https://github.com/echeance">@echeance</a>, assisté par IA.</sub>
 </div>
