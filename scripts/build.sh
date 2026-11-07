@@ -62,7 +62,8 @@ export VCPKG_ROOT="${VCPKG_ROOT:-$HOME/vcpkg}"
 command -v ninja >/dev/null || fail "Ninja n'est pas installé"
 
 build_dir="build/$preset"
-sources() { git ls-files '*.cpp' '*.hpp'; }
+# Fichiers suivis et nouveaux fichiers non ignorés (pas encore ajoutés à git).
+sources() { git ls-files --cached --others --exclude-standard '*.cpp' '*.hpp'; }
 
 # ─── Formatage ───────────────────────────────────────────────────────────────
 if $format; then
@@ -99,7 +100,8 @@ if $check; then
 
     step "Analyse statique (clang-tidy)"
     # Le code propre à Windows ne s'analyse pas ici (windows.h absent).
-    git ls-files '*.cpp' | grep -v '/platform/windows\.cpp$' | xargs clang-tidy -p "$build_dir" --quiet
+    sources | grep '\.cpp$' | grep -v '/platform/windows\.cpp$' |
+        xargs clang-tidy -p "$build_dir" --quiet
 
     printf '\n\033[1;32mTout est bon : prêt à committer.\033[0m\n'
 fi

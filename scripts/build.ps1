@@ -80,7 +80,8 @@ function Invoke-Native {
 }
 
 function Get-SourceFile([string[]]$Patterns) {
-    $files = @(git ls-files @Patterns)
+    # Fichiers suivis et nouveaux fichiers non ignorés (pas encore ajoutés à git).
+    $files = @(git ls-files --cached --others --exclude-standard @Patterns)
     if ($LASTEXITCODE -ne 0) { Exit-WithError 'git ls-files a échoué' }
     return $files
 }
