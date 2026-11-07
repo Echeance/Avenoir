@@ -1,7 +1,7 @@
 {
   "$schema": "https://raw.githubusercontent.com/microsoft/vcpkg-tool/main/docs/vcpkg.schema.json",
   "name": "avenoir",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Assistant de système d'exploitation piloté par un LLM",
   "builtin-baseline": "b8dfe957ec8b5c0ef5c4b31eea594b8486af744f",
   "dependencies": [
