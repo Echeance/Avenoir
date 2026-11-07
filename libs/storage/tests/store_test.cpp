@@ -147,3 +147,29 @@ TEST_CASE("base vide : aucune conversation récente", "[store]") {
     REQUIRE(recent.has_value());
     CHECK_FALSE(recent->has_value());
 }
+
+TEST_CASE("choix de risque des outils de modules", "[store]") {
+    auto store = memory_store();
+    auto choices = store.risk_choices();
+    REQUIRE(choices.has_value());
+    CHECK(choices->empty());
+
+    REQUIRE(store.set_risk_choice("meteo__set_city", core::RiskLevel::Sensitive, false));
+    REQUIRE(store.set_risk_choice("notes__delete", core::RiskLevel::Reversible, true));
+    // Un nouveau choix remplace l'ancien.
+    REQUIRE(store.set_risk_choice("meteo__set_city", core::RiskLevel::ReadOnly, true));
+
+    choices = store.risk_choices();
+    REQUIRE(choices.has_value());
+    REQUIRE(choices->size() == 2);
+    CHECK((*choices)[0].tool == "meteo__set_city");
+    CHECK((*choices)[0].risk == core::RiskLevel::ReadOnly);
+    CHECK((*choices)[0].agreed);
+    CHECK_FALSE((*choices)[0].chosen_at.empty());
+    CHECK((*choices)[1].risk == core::RiskLevel::Reversible);
+
+    REQUIRE(store.remove_risk_choice("meteo__set_city"));
+    choices = store.risk_choices();
+    REQUIRE(choices.has_value());
+    CHECK(choices->size() == 1);
+}

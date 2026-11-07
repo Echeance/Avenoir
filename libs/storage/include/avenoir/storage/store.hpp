@@ -13,6 +13,7 @@
 
 #include "avenoir/core/error.hpp"
 #include "avenoir/core/message.hpp"
+#include "avenoir/core/tool.hpp"
 
 namespace avenoir::storage {
 
@@ -22,6 +23,14 @@ struct ConversationInfo {
     std::string created_at; ///< Heure locale, « AAAA-MM-JJ HH:MM:SS ».
     std::string updated_at; ///< Heure locale de la dernière activité.
     std::size_t message_count = 0;
+};
+
+/// Risque d'un outil de module choisi avec /risque (PROJECT.md § 2.6).
+struct RiskChoice {
+    std::string tool; ///< Nom complet (`id__outil`).
+    core::RiskLevel risk = core::RiskLevel::Sensitive;
+    bool agreed = false;   ///< « Je sais ce que je fais » saisi.
+    std::string chosen_at; ///< Heure locale du choix.
 };
 
 /// Base des conversations (SQLite). Chaque message est écrit dès qu'il est
@@ -58,6 +67,13 @@ class Store {
     [[nodiscard]] core::Result<void> remove_last_message(std::int64_t conversation);
     [[nodiscard]] core::Result<std::vector<core::Message>>
     messages(std::int64_t conversation) const;
+
+    /// Choix de risque des outils de modules. Écrits uniquement par Avenoir
+    /// (commande /risque) ; une baisse n'est prise en compte qu'avec accord.
+    [[nodiscard]] core::Result<std::vector<RiskChoice>> risk_choices() const;
+    [[nodiscard]] core::Result<void> set_risk_choice(std::string_view tool, core::RiskLevel risk,
+                                                     bool agreed);
+    [[nodiscard]] core::Result<void> remove_risk_choice(std::string_view tool);
 
   private:
     struct Impl;

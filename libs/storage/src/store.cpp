@@ -19,7 +19,7 @@ namespace {
 
 /// Version du schéma (PRAGMA user_version). À incrémenter avec chaque
 /// migration ajoutée dans `migrate`.
-constexpr int kSchemaVersion = 1;
+constexpr int kSchemaVersion = 2;
 
 struct DatabaseDeleter {
     void operator()(sqlite3* db) const noexcept { sqlite3_close_v2(db); }
@@ -160,6 +160,25 @@ core::Result<void> migrate(sqlite3* db) {
             );
             CREATE INDEX messages_by_conversation ON messages(conversation_id, id);
             PRAGMA user_version = 1;
+            COMMIT;
+        )");
+            !created) {
+            return created;
+        }
+    }
+    if (version < 2) {
+        // Risque des outils de modules choisi par l'utilisateur (/risque).
+        if (auto created = execute(db, R"(
+            BEGIN;
+            CREATE TABLE tool_risks (
+                tool      TEXT PRIMARY KEY,
+                risk      TEXT NOT NULL,
+                -- 1 si « Je sais ce que je fais » a été saisi (baisse sous
+                -- le risque du manifeste).
+                agreed    INTEGER NOT NULL DEFAULT 0,
+                chosen_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M:%f', 'now'))
+            );
+            PRAGMA user_version = 2;
             COMMIT;
         )");
             !created) {
@@ -382,6 +401,59 @@ core::Result<std::vector<core::Message>> Store::messages(std::int64_t conversati
         }
         out.push_back(std::move(*message));
     }
+}
+
+// ─── Risque des outils de modules ───────────────────────────────────────────
+
+core::Result<std::vector<RiskChoice>> Store::risk_choices() const {
+    auto statement = Statement::prepare(
+        impl_->db.get(), "SELECT tool, risk, agreed, datetime(chosen_at, 'localtime') "
+                         "FROM tool_risks ORDER BY tool");
+    if (!statement) {
+        return std::unexpected(std::move(statement.error()));
+    }
+    std::vector<RiskChoice> out;
+    while (true) {
+        auto row = statement->step();
+        if (!row) {
+            return std::unexpected(std::move(row.error()));
+        }
+        if (!*row) {
+            return out;
+        }
+        const auto risk = core::risk_level_from_string(statement->text(1));
+        if (!risk) {
+            continue; // Valeur inconnue : ignorée plutôt que mal interprétée.
+        }
+        out.push_back(RiskChoice{.tool = statement->text(0),
+                                 .risk = *risk,
+                                 .agreed = statement->integer(2) != 0,
+                                 .chosen_at = statement->text(3)});
+    }
+}
+
+core::Result<void> Store::set_risk_choice(std::string_view tool, core::RiskLevel risk,
+                                          bool agreed) {
+    auto statement = Statement::prepare(
+        impl_->db.get(),
+        "INSERT INTO tool_risks (tool, risk, agreed) VALUES (?1, ?2, ?3) "
+        "ON CONFLICT(tool) DO UPDATE SET risk = excluded.risk, agreed = excluded.agreed, "
+        "chosen_at = strftime('%Y-%m-%d %H:%M:%f', 'now')");
+    if (!statement) {
+        return std::unexpected(std::move(statement.error()));
+    }
+    return statement->bind(1, tool)
+        .bind(2, core::to_string(risk))
+        .bind(3, std::int64_t{agreed ? 1 : 0})
+        .run();
+}
+
+core::Result<void> Store::remove_risk_choice(std::string_view tool) {
+    auto statement = Statement::prepare(impl_->db.get(), "DELETE FROM tool_risks WHERE tool = ?1");
+    if (!statement) {
+        return std::unexpected(std::move(statement.error()));
+    }
+    return statement->bind(1, tool).run();
 }
 
 } // namespace avenoir::storage
