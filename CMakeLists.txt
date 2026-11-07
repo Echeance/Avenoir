@@ -8,6 +8,7 @@ project(avenoir
 # ─── Options ────────────────────────────────────────────────────────────────
 option(AVENOIR_BUILD_TESTS "Compiler les tests (Catch2)" ON)
 option(AVENOIR_WARNINGS_AS_ERRORS "Traiter les avertissements comme des erreurs" ON)
+option(AVENOIR_MODULE_METEO "Compiler le module météo fourni avec Avenoir" ON)
 option(AVENOIR_SANITIZE "Activer AddressSanitizer + UndefinedBehaviorSanitizer (GCC/Clang)" OFF)
 set(AVENOIR_VERSION_SUFFIX "" CACHE STRING
     "Suffixe de pré-version ajouté à PROJECT_VERSION (ex. « -beta.1 »), fourni par le workflow de release")
@@ -50,3 +51,10 @@ add_subdirectory(libs/modules)
 add_subdirectory(libs/storage)
 add_subdirectory(libs/terminal)
 add_subdirectory(apps/cli)
+
+# ─── Modules fournis ────────────────────────────────────────────────────────
+# Placés dans `modules/` à côté de l'exécutable : l'hôte les y trouve.
+set(AVENOIR_MODULES_OUTPUT_DIR "${CMAKE_BINARY_DIR}/apps/cli/modules")
+if(AVENOIR_MODULE_METEO)
+    add_subdirectory(modules/meteo)
+endif()

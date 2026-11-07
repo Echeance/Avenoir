@@ -1,0 +1,75 @@
+# Module météo, fourni avec Avenoir. Données : Open-Meteo.com (CC BY 4.0),
+# sans clé d'API ; seule la ville demandée est envoyée au service.
+
+id = "meteo"
+name = "Météo"
+version = "1.0.0"
+description = "Météo actuelle, prévisions sur 7 jours et ville par défaut (Open-Meteo.com, CC BY 4.0)"
+run = ["avenoir-meteo"]
+protocol = "avenoir"
+permissions = ["network"]
+
+[[tools]]
+name = "current"
+risk = "read_only"
+public = true
+
+[[tools]]
+name = "forecast"
+risk = "read_only"
+public = true
+
+[[tools]]
+name = "set_city"
+risk = "reversible"
+
+[[commands]]
+name = "meteo"
+tool = "current"
+arg = "city"
+description = "météo actuelle (ville par défaut, ou celle donnée)"
+
+[[commands]]
+name = "previsions"
+tool = "forecast"
+arg = "city"
+description = "prévisions sur 3 jours"
+
+[[commands]]
+name = "ville"
+tool = "set_city"
+arg = "city"
+description = "régler la ville par défaut de la météo"
+
+# Voie rapide : phrases simples traitées sans LLM. Les règles sont strictes :
+# dans le doute, la phrase part au LLM, qui sait aussi utiliser ces outils.
+[[fast_path]]
+pattern = '^(?:quel temps fait-il|il fait quel temps|quelle est la météo|la météo|météo)\s*\??$'
+tool = "current"
+
+[[fast_path]]
+pattern = '^(?:quel temps fait-il|il fait quel temps|quelle est la météo|la météo|météo) (?:à|a|au|aux|en|sur) (.+?)\s*\??$'
+tool = "current"
+arg = "city"
+
+[[fast_path]]
+pattern = '''^(?:quel temps fera-t-il|va-t-il pleuvoir|est-ce qu(?:'|’)il va pleuvoir|la météo de|météo de) demain\s*\??$'''
+tool = "forecast"
+arguments = { days = 2 }
+
+[[fast_path]]
+pattern = '''^(?:quel temps fera-t-il|va-t-il pleuvoir|est-ce qu(?:'|’)il va pleuvoir|la météo de|météo de) demain (?:à|a|au|aux|en|sur) (.+?)\s*\??$'''
+tool = "forecast"
+arg = "city"
+arguments = { days = 2 }
+
+[[fast_path]]
+pattern = '^(?:les )?prévisions(?: météo)?(?: de la semaine)?\s*\??$'
+tool = "forecast"
+arguments = { days = 7 }
+
+[[fast_path]]
+pattern = '^(?:les )?prévisions(?: météo)?(?: de la semaine)? (?:à|a|au|aux|en|sur|pour) (.+?)\s*\??$'
+tool = "forecast"
+arg = "city"
+arguments = { days = 7 }

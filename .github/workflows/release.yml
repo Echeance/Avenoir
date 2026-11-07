@@ -81,6 +81,8 @@ jobs:
         run: |
           mkdir -p dist/avenoir
           cp README.md LICENSE.md config.example.toml dist/avenoir/
+          # Modules fournis (programme + module.toml), à côté de l'exécutable.
+          cp -r build/release/apps/cli/modules dist/avenoir/
           if [ "$RUNNER_OS" = "Windows" ]; then
             cp build/release/apps/cli/avenoir.exe dist/avenoir/
             (cd dist && 7z a -bso0 "${{ matrix.archive }}" avenoir)
