@@ -2,6 +2,7 @@
 #include <chrono>
 #include <exception>
 #include <memory>
+#include <stop_token>
 #include <string>
 
 #include "avenoir/tools/tools.hpp"
@@ -51,7 +52,8 @@ class CurrentTimeTool final : public core::Tool {
         };
     }
 
-    [[nodiscard]] core::ToolResult call(const nlohmann::json& /*arguments*/) const override {
+    [[nodiscard]] core::ToolResult call(const nlohmann::json& /*arguments*/,
+                                        const std::stop_token& /*stop*/) const override {
         try {
             const std::chrono::zoned_time now{std::chrono::current_zone(),
                                               std::chrono::system_clock::now()};

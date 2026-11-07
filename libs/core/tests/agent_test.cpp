@@ -52,7 +52,8 @@ class CountingTool final : public Tool {
                         .input_schema = nlohmann::json::object(),
                         .risk = risk_};
     }
-    [[nodiscard]] ToolResult call(const nlohmann::json& /*arguments*/) const override {
+    [[nodiscard]] ToolResult call(const nlohmann::json& /*arguments*/,
+                                  const std::stop_token& /*stop*/) const override {
         ++*calls_;
         return ToolOutput{.content = output_};
     }
@@ -301,7 +302,8 @@ class SetValueTool final : public Tool {
                         .input_schema = nlohmann::json::object(),
                         .risk = RiskLevel::Reversible};
     }
-    [[nodiscard]] ToolResult call(const nlohmann::json& arguments) const override {
+    [[nodiscard]] ToolResult call(const nlohmann::json& arguments,
+                                  const std::stop_token& /*stop*/) const override {
         const int previous = *value_;
         const int next = arguments.value("to", 0);
         *value_ = next;
@@ -418,7 +420,8 @@ TEST_CASE("annulation : une requête interrompue garde son journal", "[agent][un
                             .input_schema = nlohmann::json::object(),
                             .risk = RiskLevel::ReadOnly};
         }
-        [[nodiscard]] ToolResult call(const nlohmann::json& /*arguments*/) const override {
+        [[nodiscard]] ToolResult call(const nlohmann::json& /*arguments*/,
+                                      const std::stop_token& /*stop*/) const override {
             source->request_stop();
             return ToolOutput{.content = "arrêt"};
         }
@@ -504,4 +507,32 @@ TEST_CASE("la consommation est gardée dans le message de l'assistant", "[agent]
     REQUIRE(agent.handle("salut").has_value());
     const auto& reply = std::get<AssistantMessage>(agent.history().back());
     CHECK(reply.usage == Usage{.input_tokens = 10, .output_tokens = 2});
+}
+
+TEST_CASE("une commande exécute un outil sans LLM, sous contrôle des permissions", "[agent]") {
+    const Fixture f;
+    auto agent = f.make_agent({}, RiskLevel::ReadOnly, std::make_unique<AutoReject>(), {},
+                              "résultat direct");
+    const auto reply = agent.run_tool(
+        "/flag", ToolCall{.id = {}, .name = "flag", .arguments = nlohmann::json::object()});
+    REQUIRE(reply.has_value());
+    CHECK(*reply == "résultat direct");
+    CHECK(*f.tool_calls == 1);
+    CHECK(*f.llm_calls == 0);
+    REQUIRE(agent.history().size() == 2); // saisie + réponse, pour le contexte du LLM
+
+    CHECK_FALSE(
+        agent
+            .run_tool("/absent",
+                      ToolCall{.id = {}, .name = "absent", .arguments = nlohmann::json::object()})
+            .has_value());
+
+    // Sensible + refus : l'outil n'est pas exécuté.
+    const Fixture g;
+    auto guarded = g.make_agent({}, RiskLevel::Sensitive, std::make_unique<AutoReject>());
+    const auto refused = guarded.run_tool(
+        "/flag", ToolCall{.id = {}, .name = "flag", .arguments = nlohmann::json::object()});
+    REQUIRE(refused.has_value());
+    CHECK(*g.tool_calls == 0);
+    CHECK(refused->contains("refusé"));
 }

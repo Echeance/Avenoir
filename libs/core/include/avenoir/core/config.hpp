@@ -8,7 +8,6 @@
 #include <string>
 #include <string_view>
 #include <variant>
-#include <vector>
 
 #include "avenoir/core/error.hpp"
 #include "avenoir/core/permission.hpp"
@@ -49,23 +48,24 @@ struct AgentConfig {
     bool fast_path = true;
 };
 
-/// Serveur MCP lancé en sous-processus (transport stdio).
-struct McpServerConfig {
-    std::string name; ///< Préfixe des outils : `nom__outil`.
-    std::string command;
-    std::vector<std::string> args;
-    std::map<std::string, std::string> env;
-    /// Appliqué à tous les outils du serveur. Par défaut `Sensitive` : on ne
-    /// fait pas confiance à ce qu'un serveur déclare sur lui-même.
-    RiskLevel risk = RiskLevel::Sensitive;
-    bool enabled = true;
+/// Réglages de l'utilisateur pour un module (`[modules.<id>]`). Le module
+/// lui-même se décrit dans son `module.toml` (PROJECT.md § 2.6).
+struct ModuleSettings {
+    /// Absent : activé pour un module fourni avec Avenoir, désactivé pour un
+    /// module installé par l'utilisateur (directive de sécurité n° 15).
+    std::optional<bool> enabled;
+    /// Risque demandé par outil (nom court, sans le préfixe `id__`). Il ne
+    /// peut que **relever** celui du manifeste : une baisse écrite ici est
+    /// ignorée (elle exige un accord enregistré, PROJECT.md § 2.6).
+    std::map<std::string, RiskLevel, std::less<>> risk;
 };
 
 struct AppConfig {
     LlmConfig llm;
     AgentConfig agent;
     PermissionPolicy permissions;
-    std::vector<McpServerConfig> mcp_servers;
+    /// Par identifiant de module.
+    std::map<std::string, ModuleSettings, std::less<>> modules;
 };
 
 /// Lit une configuration TOML. Les erreurs indiquent la clé fautive.

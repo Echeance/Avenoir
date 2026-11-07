@@ -32,7 +32,7 @@ TEST_CASE("valeurs par défaut et fournisseur claude_code", "[config]") {
     CHECK(llm->command == "claude");
     CHECK(llm->timeout_secs == 180);
     CHECK(config->agent.max_steps == 10);
-    CHECK(config->mcp_servers.empty());
+    CHECK(config->modules.empty());
 }
 
 TEST_CASE("fournisseur anthropic", "[config]") {
@@ -49,31 +49,32 @@ TEST_CASE("fournisseur anthropic", "[config]") {
     CHECK(llm->max_tokens == 2048);
 }
 
-TEST_CASE("un serveur MCP est sensible par défaut", "[config]") {
+TEST_CASE("réglages des modules", "[config]") {
     const auto config = parse_config(R"(
         [llm]
-        provider = "openai_compatible"
-        base_url = "http://localhost:11434/v1"
-        model = "m"
+        provider = "claude_code"
 
-        [[mcp_servers]]
-        name = "fs"
-        command = "fs-server"
-        args = ["--racine", "/tmp"]
-        env = { CLE = "valeur" }
+        [modules.meteo]
+        enabled = false
+
+        [modules.calendrier]
+        risk = { update_event = "sensitive", list_events = "reversible" }
     )");
     REQUIRE(config.has_value());
-    REQUIRE(config->mcp_servers.size() == 1);
-    const auto& server = config->mcp_servers.front();
-    CHECK(server.risk == RiskLevel::Sensitive);
-    CHECK(server.enabled);
-    CHECK(server.args.size() == 2);
-    CHECK(server.env.at("CLE") == "valeur");
+    REQUIRE(config->modules.size() == 2);
+    const auto& meteo = config->modules.at("meteo");
+    CHECK(meteo.enabled == false);
+    CHECK(meteo.risk.empty());
+    const auto& calendar = config->modules.at("calendrier");
+    CHECK_FALSE(calendar.enabled.has_value());
+    CHECK(calendar.risk.at("update_event") == RiskLevel::Sensitive);
+    CHECK(calendar.risk.at("list_events") == RiskLevel::Reversible);
 }
 
 TEST_CASE("les erreurs de configuration sont lisibles", "[config]") {
     const auto expect_error = [](const char* toml, const std::string& fragment) {
         const auto config = parse_config(toml);
+        INFO(toml);
         REQUIRE_FALSE(config.has_value());
         CHECK(config.error().code == ErrorCode::Config);
         CHECK(config.error().message.find(fragment) != std::string::npos);
@@ -88,4 +89,13 @@ TEST_CASE("les erreurs de configuration sont lisibles", "[config]") {
     expect_error("[llm]\nprovider = \"claude_code\"\n[permissions]\nsensitive = \"parfois\"",
                  "permissions.sensitive");
     expect_error("[llm\nprovider = 1", "TOML illisible");
+    constexpr const char* kLlm = "[llm]\nprovider = \"claude_code\"\n";
+    expect_error((std::string("modules = 3\n") + kLlm).c_str(), "modules");
+    expect_error((std::string(kLlm) + "[modules.meteo]\nactif = true").c_str(),
+                 "modules.meteo.actif");
+    expect_error((std::string(kLlm) + "[modules.meteo]\nrisk = { x = \"aucun\" }").c_str(),
+                 "modules.meteo.risk.x");
+    expect_error(
+        (std::string(kLlm) + "[modules.meteo]\nrisk = { \"a b\" = \"sensitive\" }").c_str(),
+        "nom d'outil invalide");
 }

@@ -1,4 +1,5 @@
 #include <memory>
+#include <stop_token>
 #include <string>
 #include <string_view>
 #include <thread>
@@ -56,7 +57,8 @@ class SystemInfoTool final : public core::Tool {
         };
     }
 
-    [[nodiscard]] core::ToolResult call(const nlohmann::json& /*arguments*/) const override {
+    [[nodiscard]] core::ToolResult call(const nlohmann::json& /*arguments*/,
+                                        const std::stop_token& /*stop*/) const override {
         const unsigned cpus = std::thread::hardware_concurrency();
         const detail::SystemFacts facts{
             .os = std::string(platform::os_name()),

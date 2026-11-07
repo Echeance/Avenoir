@@ -32,9 +32,11 @@ class FastRouter {
 
     /// Ajoute une règle (insensible à la casse, sur la phrase entière). Si
     /// `arg_name` n'est pas vide, le premier groupe capturant de `pattern`
-    /// remplit cet argument de l'outil. La première règle qui correspond gagne.
+    /// remplit cet argument de l'outil ; `fixed` (objet JSON) donne des
+    /// arguments constants. La première règle qui correspond gagne.
     [[nodiscard]] Result<void> add_rule(std::string_view pattern, std::string tool,
-                                        std::string arg_name = {});
+                                        std::string arg_name = {},
+                                        nlohmann::json fixed = nlohmann::json::object());
 
     [[nodiscard]] std::optional<FastRoute> route(std::string_view input) const;
 
@@ -43,6 +45,7 @@ class FastRouter {
         std::regex regex;
         std::string tool;
         std::string arg_name;
+        nlohmann::json fixed;
     };
 
     std::vector<Rule> rules_;

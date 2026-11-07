@@ -20,6 +20,9 @@ std::string describe(const Error& error) {
     case ErrorCode::Cancelled:
         prefix = "requête annulée";
         break;
+    case ErrorCode::Module:
+        prefix = "erreur de module";
+        break;
     }
     if (error.message.empty()) {
         return std::string(prefix);

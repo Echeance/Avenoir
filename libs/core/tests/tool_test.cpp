@@ -1,4 +1,5 @@
 #include <memory>
+#include <stop_token>
 #include <string>
 
 #include <catch2/catch_test_macros.hpp>
@@ -24,7 +25,8 @@ class NamedTool final : public Tool {
                         .input_schema = nlohmann::json::object(),
                         .risk = RiskLevel::ReadOnly};
     }
-    [[nodiscard]] ToolResult call(const nlohmann::json& /*arguments*/) const override {
+    [[nodiscard]] ToolResult call(const nlohmann::json& /*arguments*/,
+                                  const std::stop_token& /*stop*/) const override {
         return ToolOutput{.content = "ok"};
     }
 

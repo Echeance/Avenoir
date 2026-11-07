@@ -90,6 +90,13 @@ class Agent {
     [[nodiscard]] Result<std::string> handle(std::string_view input,
                                              const std::stop_token& stop = {});
 
+    /// Exécute directement un outil, sans LLM mais sous contrôle des
+    /// permissions et avec journal d'annulation, comme la voie rapide. Sert
+    /// aux commandes des modules (`/meteo Lyon`). `input` est la saisie de
+    /// l'utilisateur, conservée dans l'historique.
+    [[nodiscard]] Result<std::string> run_tool(std::string_view input, ToolCall call,
+                                               const std::stop_token& stop = {});
+
     [[nodiscard]] const ToolRegistry& tools() const noexcept { return tools_; }
     [[nodiscard]] std::span<const Message> history() const noexcept { return history_; }
     [[nodiscard]] std::string_view llm_name() const;
@@ -135,7 +142,13 @@ class Agent {
 
     /// Exécute un appel d'outil sous contrôle des permissions. Les échecs sont
     /// rendus sous forme de texte pour que le LLM puisse s'adapter.
-    [[nodiscard]] Execution execute(const ToolCall& call);
+    [[nodiscard]] Execution execute(const ToolCall& call, const std::stop_token& stop);
+
+    /// Ouvre le journal d'annulation d'une nouvelle requête.
+    void begin_journal(std::string_view input);
+    /// Exécute un appel sans LLM et le trace dans l'historique.
+    [[nodiscard]] std::string run_direct(std::string_view input, const ToolCall& call,
+                                         const std::stop_token& stop);
 
     /// Seules façons de modifier l'historique : elles notifient l'observateur.
     void append(Message message);

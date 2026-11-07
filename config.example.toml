@@ -49,17 +49,20 @@ reversible = "allow"
 sensitive = "confirm"
 
 # ─── Modules ───────────────────────────────────────────────────────────────
-# Les modules s'installent dans `<installation>/modules/<id>/` ou dans le
-# dossier utilisateur ; chacun se décrit dans son `module.toml`. Ici, seuls
-# VOS réglages par module (prise en charge à l'étape 1.6 de la roadmap).
+# Les modules fournis avec Avenoir sont dans `<installation>/modules/<id>/`,
+# ceux que vous installez dans le dossier de données d'Avenoir
+# (`~/.local/share/avenoir/modules/<id>/`, `%LOCALAPPDATA%\avenoir\modules\<id>\`).
+# Chacun se décrit dans son `module.toml` ; ici, seuls VOS réglages par module.
+# Un module fourni est activé par défaut ; un module que vous installez reste
+# DÉSACTIVÉ tant que vous ne l'activez pas ici. /modules liste leur état.
 #
 # [modules.meteo]
-# enabled = true
+# enabled = false             # désactiver un module fourni
 #
 # [modules.calendrier]
-# enabled = true
-# # Relever le risque d'un outil :
+# enabled = true              # activer un module installé par vous
+# # Relever le risque d'un outil (nom court, sans « calendrier__ ») :
 # risk = { update_event = "sensitive" }
-# # L'ABAISSER sous celui du manifeste se fait uniquement depuis l'application
-# # (avertissement + saisie de « Je sais ce que je fais ») : une baisse écrite
-# # ici à la main est ignorée.
+# # L'ABAISSER sous celui du manifeste se fait uniquement par la commande
+# # /risque (avertissement + saisie de « Je sais ce que je fais ») : une baisse
+# # écrite ici à la main est ignorée.

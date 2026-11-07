@@ -55,14 +55,18 @@ Result<FastRouter> FastRouter::with_defaults() {
     return router;
 }
 
-Result<void> FastRouter::add_rule(std::string_view pattern, std::string tool,
-                                  std::string arg_name) {
+Result<void> FastRouter::add_rule(std::string_view pattern, std::string tool, std::string arg_name,
+                                  nlohmann::json fixed) {
+    if (!fixed.is_object()) {
+        return make_error(ErrorCode::Config, "arguments fixes de la voie rapide : objet attendu");
+    }
     try {
         rules_.push_back(Rule{
             .regex = std::regex(pattern.begin(), pattern.end(),
                                 std::regex::ECMAScript | std::regex::icase),
             .tool = std::move(tool),
             .arg_name = std::move(arg_name),
+            .fixed = std::move(fixed),
         });
     } catch (const std::regex_error& e) {
         return make_error(ErrorCode::Config, "règle de voie rapide invalide « " +
@@ -81,7 +85,7 @@ std::optional<FastRoute> FastRouter::route(std::string_view input) const {
         if (!std::regex_match(text.begin(), text.end(), match, rule.regex)) {
             continue;
         }
-        FastRoute route{.tool = rule.tool};
+        FastRoute route{.tool = rule.tool, .arguments = rule.fixed};
         if (!rule.arg_name.empty()) {
             if (match.size() < 2 || !match[1].matched) {
                 continue;

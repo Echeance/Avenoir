@@ -7,6 +7,7 @@
 #include <map>
 #include <memory>
 #include <optional>
+#include <stop_token>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -82,7 +83,10 @@ class Tool {
 
     [[nodiscard]] virtual ToolSpec spec() const = 0;
     /// Les arguments viennent du LLM : ils doivent être **validés** ici.
-    [[nodiscard]] virtual ToolResult call(const nlohmann::json& arguments) const = 0;
+    /// `stop` est demandé par Ctrl+C : une action longue doit le vérifier et
+    /// s'interrompre (sans laisser d'état incohérent).
+    [[nodiscard]] virtual ToolResult call(const nlohmann::json& arguments,
+                                          const std::stop_token& stop) const = 0;
 };
 
 /// Désérialise les arguments JSON d'un outil vers une structure typée

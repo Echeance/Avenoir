@@ -47,3 +47,16 @@ TEST_CASE("une règle invalide est refusée", "[router]") {
     FastRouter router;
     CHECK_FALSE(router.add_rule("(non fermée", "x").has_value());
 }
+
+TEST_CASE("arguments fixes et capturés d'une règle", "[router]") {
+    FastRouter router;
+    REQUIRE(router
+                .add_rule(R"(^va-t-il pleuvoir demain(?: à (.+?))?\s*\??$)", "meteo__forecast",
+                          "city", {{"days", 2}})
+                .has_value());
+    CHECK(router.route("Va-t-il pleuvoir demain à Lyon ?") ==
+          FastRoute{.tool = "meteo__forecast", .arguments = {{"days", 2}, {"city", "Lyon"}}});
+    // Groupe facultatif absent : la règle ne s'applique pas sans l'argument.
+    CHECK_FALSE(router.route("va-t-il pleuvoir demain ?").has_value());
+    CHECK_FALSE(router.add_rule("x", "y", "", nlohmann::json::array()).has_value());
+}

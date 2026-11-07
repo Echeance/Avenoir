@@ -13,6 +13,7 @@ enum class ErrorCode : std::uint8_t {
     Llm,             ///< Échec du fournisseur LLM (réseau, réponse illisible…).
     MaxStepsReached, ///< Trop d'allers-retours LLM ↔ outils sans réponse finale.
     Cancelled,       ///< Requête annulée par l'utilisateur.
+    Module,          ///< Échec d'un module externe (lancement, délai, réponse invalide…).
 };
 
 /// Erreur renvoyée par les bibliothèques (jamais d'exception, voir PROJECT.md § 4.2).

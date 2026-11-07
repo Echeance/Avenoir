@@ -60,7 +60,7 @@ std::string_view Agent::llm_name() const {
     return llm_ != nullptr ? llm_->name() : std::string_view{"aucun"};
 }
 
-Result<std::string> Agent::handle(std::string_view input, const std::stop_token& stop) {
+void Agent::begin_journal(std::string_view input) {
     // Nouveau journal d'annulation pour cette requête. Celui de la requête
     // précédente est oublié s'il est vide ; on n'en garde qu'un nombre limité.
     if (!journals_.empty() && journals_.back().actions.empty()) {
@@ -70,6 +70,31 @@ Result<std::string> Agent::handle(std::string_view input, const std::stop_token&
     while (journals_.size() > kMaxUndoJournals) {
         journals_.pop_front();
     }
+}
+
+std::string Agent::run_direct(std::string_view input, const ToolCall& call,
+                              const std::stop_token& stop) {
+    Execution result = execute(call, stop);
+    // Trace dans l'historique pour que le LLM ait le contexte ensuite.
+    append(UserMessage{.content = std::string(input)});
+    append(AssistantMessage{.text = result.content, .tool_calls = {}});
+    return std::move(result.content);
+}
+
+Result<std::string> Agent::run_tool(std::string_view input, ToolCall call,
+                                    const std::stop_token& stop) {
+    if (tools_.find(call.name) == nullptr) {
+        return make_error(ErrorCode::Config, "outil inconnu : " + call.name);
+    }
+    begin_journal(input);
+    if (call.id.empty()) {
+        call.id = "command";
+    }
+    return run_direct(input, call, stop);
+}
+
+Result<std::string> Agent::handle(std::string_view input, const std::stop_token& stop) {
+    begin_journal(input);
 
     // 1. Voie rapide (sans LLM), si une règle correspond à un outil existant.
     if (options_.router) {
@@ -77,11 +102,7 @@ Result<std::string> Agent::handle(std::string_view input, const std::stop_token&
             spdlog::debug("voie rapide : {}", route->tool);
             const ToolCall call{
                 .id = "fast-path", .name = route->tool, .arguments = std::move(route->arguments)};
-            Execution result = execute(call);
-            // Trace dans l'historique pour que le LLM ait le contexte ensuite.
-            append(UserMessage{.content = std::string(input)});
-            append(AssistantMessage{.text = result.content, .tool_calls = {}});
-            return std::move(result.content);
+            return run_direct(input, call, stop);
         }
     }
 
@@ -133,7 +154,7 @@ Result<std::string> Agent::handle(std::string_view input, const std::stop_token&
             if (stop.stop_requested()) {
                 return std::unexpected(cancelled());
             }
-            Execution result = execute(call);
+            Execution result = execute(call, stop);
             append(ToolResultMessage{
                 .call_id = call.id,
                 .content = std::move(result.content),
@@ -145,7 +166,7 @@ Result<std::string> Agent::handle(std::string_view input, const std::stop_token&
     return make_error(ErrorCode::MaxStepsReached, std::to_string(options_.max_steps) + " étape(s)");
 }
 
-Agent::Execution Agent::execute(const ToolCall& call) {
+Agent::Execution Agent::execute(const ToolCall& call, const std::stop_token& stop) {
     const auto tool = tools_.find(call.name);
     if (tool == nullptr) {
         spdlog::warn("outil inconnu demandé par le LLM : {}", call.name);
@@ -168,7 +189,7 @@ Agent::Execution Agent::execute(const ToolCall& call) {
     }
 
     audit()->info("exécution : {} {}", call.name, call.arguments.dump());
-    auto output = tool->call(call.arguments);
+    auto output = tool->call(call.arguments, stop);
     if (!output) {
         std::string message = describe(output.error());
         audit()->warn("échec : {} : {}", call.name, message);

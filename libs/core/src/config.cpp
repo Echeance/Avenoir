@@ -4,7 +4,9 @@
 #include <cstdint>
 #include <filesystem>
 #include <fstream>
+#include <functional>
 #include <limits>
+#include <map>
 #include <optional>
 #include <sstream>
 #include <string>
@@ -204,83 +206,69 @@ Result<PermissionPolicy> parse_permissions(const toml::table& permissions) {
     return policy;
 }
 
-// ─── [[mcp_servers]] ────────────────────────────────────────────────────────
+// ─── [modules.<id>] ─────────────────────────────────────────────────────────
 
-Result<McpServerConfig> parse_mcp_server(const toml::table& server, std::size_t index) {
-    const std::string section = "mcp_servers[" + std::to_string(index) + "]";
-    McpServerConfig config;
-
-    auto name = required_value<std::string>(server, section, "name");
-    auto command = required_value<std::string>(server, section, "command");
-    auto risk = optional_value<std::string>(server, section, "risk");
-    auto enabled = optional_value<bool>(server, section, "enabled");
-    if (auto error = first_error(name, command, risk, enabled)) {
-        return std::unexpected(std::move(*error));
+Result<ModuleSettings> parse_module_settings(const toml::table& module,
+                                             const std::string& section) {
+    ModuleSettings settings;
+    for (const auto& [key, value] : module) {
+        if (key.str() != "enabled" && key.str() != "risk") {
+            return config_error(key_path(section, key.str()),
+                                "clé inconnue (enabled ou risk attendu)");
+        }
     }
-    config.name = std::move(*name);
-    config.command = std::move(*command);
-    config.enabled = enabled->value_or(true);
-    if (risk->has_value()) {
-        const auto parsed = risk_level_from_string(**risk);
+    auto enabled = optional_value<bool>(module, section, "enabled");
+    if (!enabled) {
+        return std::unexpected(std::move(enabled.error()));
+    }
+    settings.enabled = *enabled;
+
+    const toml::node* risk = module.get("risk");
+    if (risk == nullptr) {
+        return settings;
+    }
+    const auto* table = risk->as_table();
+    if (table == nullptr) {
+        return config_error(key_path(section, "risk"),
+                            "table attendue (risk = { outil = \"sensitive\" })");
+    }
+    for (const auto& [tool, level] : *table) {
+        const std::string where = key_path(key_path(section, "risk"), tool.str());
+        if (!is_valid_tool_name(tool.str())) {
+            return config_error(where, "nom d'outil invalide");
+        }
+        const auto text = level.value<std::string>();
+        const auto parsed = text ? risk_level_from_string(*text) : std::nullopt;
         if (!parsed) {
-            return config_error(key_path(section, "risk"),
-                                "« " + **risk + " » (read_only, reversible ou sensitive attendu)");
+            return config_error(where, "read_only, reversible ou sensitive attendu");
         }
-        config.risk = *parsed;
+        settings.risk.emplace(std::string(tool.str()), *parsed);
     }
-
-    if (const toml::node* args = server.get("args")) {
-        const auto* array = args->as_array();
-        if (array == nullptr) {
-            return config_error(key_path(section, "args"), "tableau de chaînes attendu");
-        }
-        for (const auto& item : *array) {
-            auto arg = item.value<std::string>();
-            if (!arg) {
-                return config_error(key_path(section, "args"), "tableau de chaînes attendu");
-            }
-            config.args.push_back(std::move(*arg));
-        }
-    }
-
-    if (const toml::node* env = server.get("env")) {
-        const auto* table = env->as_table();
-        if (table == nullptr) {
-            return config_error(key_path(section, "env"), "table de chaînes attendue");
-        }
-        for (const auto& [key, value] : *table) {
-            auto text = value.value<std::string>();
-            if (!text) {
-                return config_error(key_path(section, "env"), "table de chaînes attendue");
-            }
-            config.env.emplace(std::string(key.str()), std::move(*text));
-        }
-    }
-    return config;
+    return settings;
 }
 
-Result<std::vector<McpServerConfig>> parse_mcp_servers(const toml::table& root) {
-    std::vector<McpServerConfig> servers;
-    const toml::node* node = root.get("mcp_servers");
-    if (node == nullptr) {
-        return servers;
+Result<std::map<std::string, ModuleSettings, std::less<>>> parse_modules(const toml::table& root) {
+    std::map<std::string, ModuleSettings, std::less<>> modules;
+    auto table = optional_table(root, "modules");
+    if (!table) {
+        return std::unexpected(std::move(table.error()));
     }
-    const auto* array = node->as_array();
-    if (array == nullptr) {
-        return config_error("mcp_servers", "tableau de tables attendu ([[mcp_servers]])");
+    if (*table == nullptr) {
+        return modules;
     }
-    for (std::size_t i = 0; i < array->size(); ++i) {
-        const auto* table = array->get(i)->as_table();
-        if (table == nullptr) {
-            return config_error("mcp_servers", "tableau de tables attendu ([[mcp_servers]])");
+    for (const auto& [id, node] : **table) {
+        const std::string section = "modules." + std::string(id.str());
+        const auto* module = node.as_table();
+        if (module == nullptr) {
+            return config_error(section, "une table est attendue ([" + section + "])");
         }
-        auto server = parse_mcp_server(*table, i);
-        if (!server) {
-            return std::unexpected(std::move(server.error()));
+        auto settings = parse_module_settings(*module, section);
+        if (!settings) {
+            return std::unexpected(std::move(settings.error()));
         }
-        servers.push_back(std::move(*server));
+        modules.emplace(std::string(id.str()), std::move(*settings));
     }
-    return servers;
+    return modules;
 }
 
 } // namespace
@@ -310,7 +298,7 @@ Result<AppConfig> parse_config(std::string_view toml_text) {
     if (!llm) {
         return std::unexpected(std::move(llm.error()));
     }
-    AppConfig config{.llm = std::move(*llm), .agent = {}, .permissions = {}, .mcp_servers = {}};
+    AppConfig config{.llm = std::move(*llm), .agent = {}, .permissions = {}, .modules = {}};
 
     if (*agent_table != nullptr) {
         auto agent = parse_agent(**agent_table);
@@ -326,11 +314,11 @@ Result<AppConfig> parse_config(std::string_view toml_text) {
         }
         config.permissions = *permissions;
     }
-    auto servers = parse_mcp_servers(root);
-    if (!servers) {
-        return std::unexpected(std::move(servers.error()));
+    auto modules = parse_modules(root);
+    if (!modules) {
+        return std::unexpected(std::move(modules.error()));
     }
-    config.mcp_servers = std::move(*servers);
+    config.modules = std::move(*modules);
     return config;
 }
 

@@ -1,4 +1,5 @@
 #include <memory>
+#include <stop_token>
 #include <string>
 
 #include <nlohmann/json.hpp>
@@ -46,7 +47,8 @@ class LaunchAppTool final : public core::Tool {
         };
     }
 
-    [[nodiscard]] core::ToolResult call(const nlohmann::json& arguments) const override {
+    [[nodiscard]] core::ToolResult call(const nlohmann::json& arguments,
+                                        const std::stop_token& /*stop*/) const override {
         auto args = core::parse_args<LaunchArgs>(arguments);
         if (!args) {
             return std::unexpected(std::move(args.error()));
@@ -79,7 +81,8 @@ class OpenUrlTool final : public core::Tool {
         };
     }
 
-    [[nodiscard]] core::ToolResult call(const nlohmann::json& arguments) const override {
+    [[nodiscard]] core::ToolResult call(const nlohmann::json& arguments,
+                                        const std::stop_token& /*stop*/) const override {
         auto args = core::parse_args<OpenUrlArgs>(arguments);
         if (!args) {
             return std::unexpected(std::move(args.error()));
