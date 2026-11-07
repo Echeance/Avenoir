@@ -98,7 +98,8 @@ if $check; then
     sources | xargs clang-format --dry-run --Werror
 
     step "Analyse statique (clang-tidy)"
-    git ls-files '*.cpp' | xargs clang-tidy -p "$build_dir" --quiet
+    # Le code propre à Windows ne s'analyse pas ici (windows.h absent).
+    git ls-files '*.cpp' | grep -v '/platform/windows\.cpp$' | xargs clang-tidy -p "$build_dir" --quiet
 
     printf '\n\033[1;32mTout est bon : prêt à committer.\033[0m\n'
 fi

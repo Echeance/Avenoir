@@ -216,7 +216,7 @@ std::vector<std::string> wrap(std::string_view text, std::size_t width) {
     return lines;
 }
 
-std::string truncate(std::string_view text, std::size_t width) {
+std::string ellipsize(std::string_view text, std::size_t width) {
     if (display_width(text) <= width) {
         return std::string(text);
     }

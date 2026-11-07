@@ -127,7 +127,7 @@ void Conversations::list() {
             std::format("{} {}  {}  {}",
                         current ? terminal::paint("▶", {.color = Color::Green, .bold = true}) : " ",
                         terminal::paint(std::format("{:>4}", c.id), {.color = Color::Gray}),
-                        terminal::paint(terminal::truncate(c.title, 50), {.bold = current}),
+                        terminal::paint(terminal::ellipsize(c.title, 50), {.bold = current}),
                         terminal::paint(std::format("{} · {} message(s)",
                                                     c.updated_at.substr(0, 16), c.message_count),
                                         {.color = Color::Gray})));

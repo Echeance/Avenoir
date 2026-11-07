@@ -60,7 +60,7 @@ void set_enabled(bool enabled) noexcept;
 [[nodiscard]] std::vector<std::string> wrap(std::string_view text, std::size_t width);
 
 /// Raccourcit `text` à `width` colonnes au plus, avec « … » s'il est coupé.
-[[nodiscard]] std::string truncate(std::string_view text, std::size_t width);
+[[nodiscard]] std::string ellipsize(std::string_view text, std::size_t width);
 
 /// Largeur du terminal en colonnes (80 si inconnue).
 [[nodiscard]] std::size_t terminal_width();

@@ -53,7 +53,7 @@ void emit(std::string_view text) {
 
 /// Première ligne d'un texte, raccourcie.
 std::string first_line(std::string_view text, std::size_t width) {
-    return terminal::truncate(text.substr(0, text.find('\n')), width);
+    return terminal::ellipsize(text.substr(0, text.find('\n')), width);
 }
 
 } // namespace
@@ -277,10 +277,12 @@ void Display::fit_input(std::string_view prompt, std::string_view line) {
     std::string out = std::format("\x1b[{}S", grow);
     // Changer de zone de défilement ramène le curseur en haut : il est
     // mémorisé juste avant, puis restauré (plus rien ne défile entre-temps).
-    out += "\0337"; // ESC 7 : mémorise le curseur
+    out += "\x1b"
+           "7"; // ESC 7 : mémorise le curseur
     out += scroll_region(region_bottom()) + go_to(prompt_row() - 1) + "\x1b[2K" + bar_rule() +
            go_to(prompt_row()) + "\x1b[2K" + std::string(prompt);
-    out += "\0338"; // ESC 8 : le restaure
+    out += "\x1b"
+           "8"; // ESC 8 : le restaure
     out += std::format("\x1b[{}A", grow);
     emit(out);
 }
@@ -352,9 +354,9 @@ void Display::banner(std::string_view llm, std::size_t tools, std::string_view c
         const std::size_t text_width = inner > 18 ? inner - 18 : 0;
         const std::vector<std::string> text = {
             title,
-            paint(terminal::truncate(std::format("{} · {} outil(s)", llm, tools), text_width),
+            paint(terminal::ellipsize(std::format("{} · {} outil(s)", llm, tools), text_width),
                   kMuted),
-            paint(terminal::truncate(std::format("Conversation : {}", conversation), text_width),
+            paint(terminal::ellipsize(std::format("Conversation : {}", conversation), text_width),
                   kMuted),
         };
         const std::size_t first = (art.size() - text.size()) / 2;
@@ -369,9 +371,10 @@ void Display::banner(std::string_view llm, std::size_t tools, std::string_view c
         // Sans couleurs : le pingouin en ASCII.
         lines = {
             " (o<   " + title,
-            " //\\   " + terminal::truncate(std::format("{} · {} outil(s)", llm, tools), inner - 7),
+            " //\\   " +
+                terminal::ellipsize(std::format("{} · {} outil(s)", llm, tools), inner - 7),
             " V_/_  " +
-                terminal::truncate(std::format("Conversation : {}", conversation), inner - 7),
+                terminal::ellipsize(std::format("Conversation : {}", conversation), inner - 7),
         };
     }
     const std::scoped_lock lock(mutex_);
@@ -416,7 +419,7 @@ void Display::tool_result(const core::ToolResultMessage& result) {
     }
     std::string line = "  " + paint("⚙", {.color = Color::Yellow}) + " " + call->name;
     if (const auto arguments = summarize_arguments(call->arguments); !arguments.empty()) {
-        line += " " + paint(terminal::truncate(arguments, 40), kMuted);
+        line += " " + paint(terminal::ellipsize(arguments, 40), kMuted);
     }
     if (result.is_error) {
         line += "  " + paint("✗", {.color = Color::Red, .bold = true}) + " " +

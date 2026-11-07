@@ -113,7 +113,7 @@ void print_tools(const core::Agent& agent) {
                                     terminal::pad(paint(spec.name, {.bold = true}), 14),
                                     terminal::risk_badge(spec.risk)));
         display().plain("    " +
-                        paint(terminal::truncate(spec.description, 66), {.color = Color::Gray}));
+                        paint(terminal::ellipsize(spec.description, 66), {.color = Color::Gray}));
     }
 }
 

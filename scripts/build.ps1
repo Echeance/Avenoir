@@ -153,7 +153,9 @@ if ($Check) {
     Invoke-Native clang-format (@('--dry-run', '--Werror') + (Get-SourceFile '*.cpp', '*.hpp'))
 
     Write-Step 'Analyse statique (clang-tidy)'
-    Invoke-Native clang-tidy (@('-p', $BuildDir, '--quiet') + (Get-SourceFile '*.cpp'))
+    # Le code propre à Linux ne s'analyse pas ici (en-têtes POSIX absents).
+    $sources = @(Get-SourceFile '*.cpp' | Where-Object { $_ -notmatch '/platform/linux\.cpp$' })
+    Invoke-Native clang-tidy (@('-p', $BuildDir, '--quiet') + $sources)
 
     Write-Host ''
     Write-Host 'Tout est bon : prêt à committer.' -ForegroundColor Green

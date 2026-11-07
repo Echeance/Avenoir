@@ -59,9 +59,9 @@ TEST_CASE("retour à la ligne aux espaces, mots trop longs coupés", "[style]") 
 }
 
 TEST_CASE("raccourcir avec points de suspension", "[style]") {
-    CHECK(truncate("court", 10) == "court");
-    CHECK(truncate("une phrase trop longue", 10) == "une phras…");
-    CHECK(display_width(truncate("ééééééééééé", 5)) == 5);
+    CHECK(ellipsize("court", 10) == "court");
+    CHECK(ellipsize("une phrase trop longue", 10) == "une phras…");
+    CHECK(display_width(ellipsize("ééééééééééé", 5)) == 5);
 }
 
 TEST_CASE("pixel art : demi-blocs, une ligne pour deux rangées de pixels", "[style]") {
