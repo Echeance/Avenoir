@@ -27,6 +27,11 @@ struct HttpRequest {
 [[nodiscard]] core::Result<nlohmann::json> post_json(const HttpRequest& request,
                                                      const std::stop_token& stop);
 
+/// GET JSON, court délai (questions rapides à un serveur local, comme la
+/// liste des modèles chargés). Mêmes règles d'erreur que `post_json`.
+[[nodiscard]] core::Result<nlohmann::json> get_json(const std::string& url,
+                                                    std::chrono::milliseconds timeout);
+
 /// Tronque un texte pour l'inclure dans un message d'erreur.
 [[nodiscard]] std::string excerpt(std::string_view text, std::size_t max_bytes = 500);
 

@@ -61,6 +61,9 @@ struct AgentConfig {
     std::size_t max_steps = 10;
     std::optional<std::string> system_prompt; ///< Remplace le prompt par défaut.
     bool fast_path = true;
+    /// En changeant de modèle, décharger l'ancien s'il est local et servi
+    /// par le même serveur que le nouveau (libère sa mémoire vidéo).
+    bool unload_on_switch = true;
 };
 
 /// Réglages de l'utilisateur pour un module (`[modules.<id>]`). Le module

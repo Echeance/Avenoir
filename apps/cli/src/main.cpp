@@ -19,8 +19,11 @@
 #include <format>
 #include <functional>
 #include <iterator>
+#include <map>
 #include <memory>
+#include <mutex>
 #include <optional>
+#include <ranges>
 #include <span>
 #include <stop_token>
 #include <string>
@@ -85,19 +88,20 @@ void setup_logging() {
 /// Commandes d'Avenoir (sans « / »), alias compris : un module ne peut pas
 /// en déclarer une du même nom.
 std::vector<std::string> builtin_commands() {
-    return {"aide",       "annuler",   "charger", "conversations", "decharger", "help",
-            "historique", "recharger", "modules", "model",         "modele",    "nouvelle",
-            "ouvrir",     "outils",    "q",       "quit",          "quitter",   "raisonnement",
-            "renommer",   "reset",     "risque",  "supprimer",     "tools",     "transcription"};
+    return {"aide",  "annuler",    "charger",   "conversations", "decharger",
+            "help",  "historique", "recharger", "memoire",       "modules",
+            "model", "modele",     "nouvelle",  "ouvrir",        "outils",
+            "q",     "quit",       "quitter",   "raisonnement",  "renommer",
+            "reset", "risque",     "supprimer", "tools",         "transcription"};
 }
 
 /// Commandes proposées à la complétion (Tab).
 std::vector<std::string> command_names(const cli::ModulesUi& modules) {
-    std::vector<std::string> names{"/aide",      "/annuler",       "/charger",      "/decharger",
-                                   "/recharger", "/conversations", "/historique",   "/modele",
-                                   "/modules",   "/nouvelle",      "/ouvrir",       "/outils",
-                                   "/quitter",   "/raisonnement",  "/renommer",     "/reset",
-                                   "/risque",    "/supprimer",     "/transcription"};
+    std::vector<std::string> names{
+        "/aide",          "/annuler",    "/charger", "/decharger", "/recharger",
+        "/conversations", "/historique", "/modele",  "/modules",   "/nouvelle",
+        "/ouvrir",        "/outils",     "/memoire", "/quitter",   "/raisonnement",
+        "/renommer",      "/reset",      "/risque",  "/supprimer", "/transcription"};
     std::ranges::copy(modules.completion_names(), std::back_inserter(names));
     return names;
 }
@@ -115,6 +119,8 @@ void print_help(const cli::ModulesUi& modules) {
     out += command("/outils", "outils disponibles et leur niveau de risque") + "\n";
     out += command("/annuler", "annuler les actions de la dernière requête (répétable)") + "\n";
     out += command("/modele [nom]", "modèles disponibles, ou changer de modèle") + "\n";
+    out +=
+        command("/memoire [nom]", "modèles chargés en mémoire, et la mémoire vidéo occupée") + "\n";
     out += command("/raisonnement [niveau] [modèle]",
                    "aucun, faible, moyen, élevé ou défaut ; sans niveau : l'actuel") +
            "\n";
@@ -207,20 +213,32 @@ using Work = std::function<core::Result<std::string>(const std::stop_token&)>;
 
 /// Exécute une requête dans un thread de travail. Le thread principal anime
 /// la toupie et transforme un Ctrl+C en demande d'arrêt de la requête.
-void run_request(core::Agent& agent, cli::Prompt& prompt, const Work& work) {
+/// Libellé de la toupie pendant une requête, demandé toutes les 500 ms.
+using Activity = std::function<std::string()>;
+
+void run_request(core::Agent& agent, cli::Prompt& prompt, const Work& work,
+                 const Activity& activity = {}) {
     using namespace std::chrono_literals;
     (void)cli::take_interrupt(); // Oublie un Ctrl+C antérieur.
 
     std::optional<core::Result<std::string>> result;
     std::atomic<bool> done{false};
     display().start_thinking();
+    if (activity) {
+        display().set_activity(activity());
+    }
     {
         std::jthread worker([&work, &result, &done](const std::stop_token& stop) {
             result = work(stop);
             done = true;
         });
         bool stop_announced = false;
+        auto next_activity = std::chrono::steady_clock::now() + 500ms;
         while (!done) {
+            if (activity && std::chrono::steady_clock::now() >= next_activity) {
+                display().set_activity(activity());
+                next_activity = std::chrono::steady_clock::now() + 500ms;
+            }
             if (cli::take_interrupt() && !stop_announced) {
                 worker.request_stop();
                 display().warning("Arrêt demandé…");
@@ -250,6 +268,86 @@ void run_request(core::Agent& agent, cli::Prompt& prompt, const Work& work) {
     }
 }
 
+/// Repère les modèles chargés ou déchargés hors d'Avenoir (Ollama décharge un
+/// modèle après une inactivité) pour l'annoncer, même pendant la saisie.
+class LoadWatch {
+  public:
+    explicit LoadWatch(const llm::ModelSwitcher& switcher) : switcher_(&switcher) {}
+
+    /// Après chaque requête ou commande : l'état actuel devient la référence
+    /// (ce qu'Avenoir a chargé ou déchargé lui-même est déjà annoncé).
+    void refresh() {
+        auto now = snapshot();
+        const std::scoped_lock lock(mutex_);
+        known_ = std::move(now);
+    }
+
+    /// Changements depuis la dernière fois (appelée depuis un autre thread).
+    [[nodiscard]] std::vector<std::string> changes() {
+        auto now = snapshot();
+        const std::scoped_lock lock(mutex_);
+        std::vector<std::string> messages;
+        for (const auto& [name, loaded] : now) {
+            const auto before = known_.find(name);
+            if (before == known_.end() || before->second == loaded) {
+                continue;
+            }
+            messages.push_back(
+                loaded
+                    ? std::format("Modèle « {} » chargé en mémoire par un autre programme.", name)
+                    : std::format("Modèle « {} » déchargé par Ollama (inactivité ou autre "
+                                  "programme) : sa mémoire est libérée.",
+                                  name));
+        }
+        known_ = std::move(now);
+        return messages;
+    }
+
+  private:
+    /// Modèles locaux dont on connaît l'état (les autres sont ignorés).
+    [[nodiscard]] std::map<std::string, bool> snapshot() const {
+        std::map<std::string, bool> states;
+        for (const auto& model : switcher_->models()) {
+            if (const auto loaded = switcher_->is_loaded(model)) {
+                states.emplace(model.name, *loaded);
+            }
+        }
+        return states;
+    }
+
+    const llm::ModelSwitcher* switcher_;
+    std::mutex mutex_;
+    std::map<std::string, bool> known_;
+};
+
+/// Toupie d'une requête au modèle actif : « Chargement du modèle « x » »
+/// tant que son serveur le charge (après une inactivité, Ollama le décharge),
+/// puis « Réflexion », avec un message une fois le modèle chargé. Vide si le
+/// modèle est déjà chargé ou si on ne peut pas le savoir.
+Activity model_activity(const llm::ModelSwitcher& switcher) {
+    const auto* model = switcher.active();
+    if (model == nullptr || switcher.is_loaded(*model).value_or(true)) {
+        return {};
+    }
+    const std::string name = model->name;
+    const auto since = std::chrono::steady_clock::now();
+    const auto loaded = std::make_shared<bool>(false);
+    return [&switcher, name, since, loaded] -> std::string {
+        if (*loaded) {
+            return "Réflexion";
+        }
+        const auto* current = switcher.find(name);
+        if (current == nullptr || switcher.is_loaded(*current).value_or(true)) {
+            *loaded = true;
+            const auto seconds = std::chrono::duration_cast<std::chrono::seconds>(
+                std::chrono::steady_clock::now() - since);
+            display().info(std::format("Modèle « {} » chargé en {} s.", name, seconds.count()));
+            return "Réflexion";
+        }
+        return std::format("Chargement du modèle « {} »", name);
+    };
+}
+
 std::string_view trim(std::string_view text) {
     while (!text.empty() && (text.front() == ' ' || text.front() == '\t')) {
         text.remove_prefix(1);
@@ -268,10 +366,11 @@ constexpr std::string_view kReasoningKeyPrefix = "llm.reasoning.";
 
 /// Après chaque requête ou commande : déchargement différé du modèle actif
 /// (demandé pendant la requête, que sa réponse aurait rechargé).
-void finish_request(llm::ModelSwitcher& switcher) {
+void finish_request(llm::ModelSwitcher& switcher, LoadWatch& watch) {
     if (auto note = switcher.finish_request()) {
         display().info(*note);
     }
+    watch.refresh();
 }
 
 /// Modèle actif pour le cadre d'accueil.
@@ -379,9 +478,31 @@ bool run_command(core::Agent& agent, cli::Prompt& prompt, cli::Conversations& co
             }
             const core::ToolCall call{.id = {}, .name = tool, .arguments = std::move(arguments)};
             const std::string input(line);
-            run_request(agent, prompt, [&agent, &input, &call](const std::stop_token& stop) {
-                return agent.run_tool(input, call, stop);
-            });
+            std::string name = std::string(argument);
+            if (name.empty()) {
+                name = switcher.active() != nullptr ? switcher.active()->name : "?";
+            }
+            const char* verb = "Chargement";
+            if (unload) {
+                verb = "Déchargement";
+            } else if (command == "/recharger") {
+                verb = "Rechargement";
+            }
+            std::string label = std::format("{} du modèle « {} »", verb, name);
+            run_request(
+                agent, prompt,
+                [&agent, &input, &call](const std::stop_token& stop) {
+                    return agent.run_tool(input, call, stop);
+                },
+                [label = std::move(label)] { return label; });
+        }
+    } else if (command == "/memoire" || command == "/mémoire") {
+        if (const auto text = switcher.status(argument)) {
+            for (const auto& row : std::views::split(*text, '\n')) {
+                display().plain("  " + std::string(std::string_view(row)));
+            }
+        } else {
+            display().error(core::describe(text.error()));
         }
     } else if (command == "/raisonnement") {
         if (argument.empty()) {
@@ -514,6 +635,9 @@ int run(int argc, char** argv) {
     std::ranges::move(host.take_warnings(), std::back_inserter(startup_warnings));
 
     cli::Prompt prompt(command_names(modules_ui), history_file);
+    // Surveillance des modèles pendant la saisie, branchée une fois le
+    // sélecteur de modèles créé.
+    std::function<std::vector<std::string>()> poll_models;
     // Chaque saisie (requête, confirmation) passe par la barre de saisie.
     prompt.set_hooks(cli::Prompt::Hooks{
         .before = [] { display().prepare_input(); },
@@ -529,12 +653,16 @@ int run(int argc, char** argv) {
                 display().redraw_for_resize(marker, before_cursor);
             },
         .border = [] { return cli::Display::bar_rule(); },
+        .poll = [&poll_models] { return poll_models ? poll_models() : std::vector<std::string>{}; },
+        .notify = [](const std::string& message) { display().notify(message); },
     });
 
     // Modèles entre lesquels basculer (/modele, outil switch_llm, voie
     // rapide) ; passer à un modèle distant se confirme (directive n° 17).
     CliConfirmation switch_confirmer(prompt);
     llm::ModelSwitcher switcher(llm::models_from(*config), &switch_confirmer);
+    switcher.set_unload_on_switch(config->agent.unload_on_switch);
+    LoadWatch load_watch(switcher);
     // Modèle de départ : le dernier utilisé (retenu dans la base), sinon le
     // premier de la configuration ; aucun modèle : seule la voie rapide répond.
     std::optional<std::string> remembered;
@@ -562,6 +690,10 @@ int run(int argc, char** argv) {
     }
     // Charger / décharger : seulement s'il y a un modèle local.
     if (std::ranges::any_of(switcher.models(), &llm::ModelChoice::local)) {
+        if (auto added = tools.add(llm::make_status_tool(switcher)); !added) {
+            display().error(core::describe(added.error()));
+            return EXIT_FAILURE;
+        }
         for (auto& tool : llm::make_residency_tools(switcher)) {
             if (auto added = tools.add(std::move(tool)); !added) {
                 display().error(core::describe(added.error()));
@@ -569,6 +701,10 @@ int run(int argc, char** argv) {
             }
         }
         if (options.router) {
+            if (auto rules = llm::register_status_rules(*options.router); !rules) {
+                display().error(core::describe(rules.error()));
+                return EXIT_FAILURE;
+            }
             if (auto rules = llm::register_residency_rules(*options.router); !rules) {
                 display().error(core::describe(rules.error()));
                 return EXIT_FAILURE;
@@ -656,6 +792,10 @@ int run(int argc, char** argv) {
         display().warning(warning);
     }
     conversations.show_recent();
+    // Surveillance des modèles : état de départ, puis changements montrés
+    // pendant la saisie.
+    load_watch.refresh();
+    poll_models = [&load_watch] { return load_watch.changes(); };
 
     while (true) {
         const auto input = prompt.read(cli::Display::prompt_marker(), /*remember=*/true);
@@ -674,14 +814,15 @@ int run(int argc, char** argv) {
             if (!run_command(agent, prompt, conversations, modules_ui, switcher, line)) {
                 break;
             }
-            finish_request(switcher);
+            finish_request(switcher, load_watch);
             continue;
         }
         const std::string request(line);
-        run_request(agent, prompt, [&agent, &request](const std::stop_token& stop) {
-            return agent.handle(request, stop);
-        });
-        finish_request(switcher);
+        run_request(
+            agent, prompt,
+            [&agent, &request](const std::stop_token& stop) { return agent.handle(request, stop); },
+            model_activity(switcher));
+        finish_request(switcher, load_watch);
     }
     display().farewell(conversations.describe_current());
     return EXIT_SUCCESS;

@@ -2,6 +2,7 @@
 
 #include <filesystem>
 #include <functional>
+#include <mutex>
 #include <optional>
 #include <stop_token>
 #include <string>
@@ -45,6 +46,12 @@ class Prompt {
         /// texte avant le curseur.
         std::function<void(const std::string& prompt, std::size_t before_cursor)> resized;
         std::function<std::string()> border; ///< bordure du bas pendant la frappe
+        /// Pendant la saisie, appelée toutes les 3 s depuis un autre thread :
+        /// messages à montrer (ex. modèle déchargé par Ollama), ou aucun.
+        std::function<std::vector<std::string>()> poll;
+        /// Montre un message de `poll` ; appelée dans le thread de replxx,
+        /// jamais en même temps que l'affichage de la saisie.
+        std::function<void(const std::string& message)> notify;
     };
     void set_hooks(Hooks hooks);
 
@@ -58,6 +65,8 @@ class Prompt {
     void retype(const std::string& text, int cursor);
     /// Thread de surveillance : simule une touche quand la taille change.
     void watch_size(const std::stop_token& stop);
+    /// Thread qui appelle `hooks_.poll` et fait montrer ses messages.
+    void watch_events(const std::stop_token& stop);
 
     replxx::Replxx replxx_;
     std::vector<std::string> commands_;
@@ -68,6 +77,8 @@ class Prompt {
     int pending_cursor_ = -1;
     bool restoring_ = false; ///< Rétablissement du texte pas encore traité.
     bool restart_ = false;   ///< Saisie à relancer après un redimensionnement (Windows).
+    std::mutex notes_mutex_;
+    std::vector<std::string> notes_; ///< Messages de `poll` pas encore montrés.
 };
 
 } // namespace avenoir::cli

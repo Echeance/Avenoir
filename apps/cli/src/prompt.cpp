@@ -7,6 +7,7 @@
 #include <condition_variable>
 #include <cstdio>
 #include <filesystem>
+#include <iterator>
 #include <mutex>
 #include <optional>
 #include <stop_token>
@@ -26,6 +27,7 @@ namespace {
 
 /// Touches simulées au redimensionnement : U+10FFFE et U+10FFFF,
 /// non-caractères Unicode, jamais produits par le clavier.
+constexpr char32_t kNotifyKey = 0x10FFFD; ///< Messages de `poll` à montrer.
 constexpr char32_t kResizeKey = 0x10FFFE;
 constexpr char32_t kRestoreKey = 0x10FFFF;
 
@@ -168,6 +170,21 @@ Prompt::Prompt(std::vector<std::string> commands, std::optional<std::filesystem:
         return replxx::Replxx::ACTION_RESULT::CONTINUE; // replxx redessine ensuite
 #endif
     });
+    // Messages de surveillance : montrés dans le thread de replxx, entre deux
+    // affichages de la saisie, pour ne jamais croiser sa frappe.
+    replxx_.bind_key(kNotifyKey, [this](char32_t /*code*/) {
+        std::vector<std::string> notes;
+        {
+            const std::scoped_lock lock(notes_mutex_);
+            notes.swap(notes_);
+        }
+        if (hooks_.notify) {
+            for (const auto& note : notes) {
+                hooks_.notify(note);
+            }
+        }
+        return replxx::Replxx::ACTION_RESULT::CONTINUE;
+    });
     replxx_.bind_key(kRestoreKey, [this](char32_t /*code*/) {
         replxx_.set_state(replxx::Replxx::State(pending_text_.c_str(), pending_cursor_));
         restoring_ = false;
@@ -193,6 +210,10 @@ Prompt::Input Prompt::read(const std::string& prompt, bool remember) {
         std::jthread watcher;
         if (hooks_.resized) {
             watcher = std::jthread([this](const std::stop_token& stop) { watch_size(stop); });
+        }
+        std::jthread events;
+        if (hooks_.poll && hooks_.notify) {
+            events = std::jthread([this](const std::stop_token& stop) { watch_events(stop); });
         }
         input = read_line(prompt, remember);
     } // arrêt et attente du thread de surveillance
@@ -227,6 +248,28 @@ void Prompt::watch_size(const std::stop_token& stop) {
             pending = false;
             replxx_.emulate_key_press(kResizeKey); // sûr depuis un autre thread
         }
+    }
+}
+
+void Prompt::watch_events(const std::stop_token& stop) {
+    using namespace std::chrono_literals;
+    std::mutex mutex;
+    std::condition_variable_any wake;
+    std::unique_lock lock(mutex);
+    while (!stop.stop_requested()) {
+        // Réveil immédiat à l'arrêt (fin de la saisie), sinon toutes les 3 s.
+        if (wake.wait_for(lock, stop, 3s, [] { return false; }) || stop.stop_requested()) {
+            break;
+        }
+        auto messages = hooks_.poll();
+        if (messages.empty()) {
+            continue;
+        }
+        {
+            const std::scoped_lock notes_lock(notes_mutex_);
+            std::ranges::move(messages, std::back_inserter(notes_));
+        }
+        replxx_.emulate_key_press(kNotifyKey); // sûr depuis un autre thread
     }
 }
 

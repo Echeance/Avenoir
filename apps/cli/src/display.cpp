@@ -479,6 +479,27 @@ void Display::info(std::string_view text) {
     write(paint(text, kMuted) + "\n");
 }
 
+void Display::notify(std::string_view text) {
+    const std::scoped_lock lock(mutex_);
+    const std::string line = paint(text, kMuted) + "\n";
+    if (!pinned_ || !reading_) {
+        write(line);
+        return;
+    }
+    // Barre fixe pendant la saisie : écrit en bas de l'historique (sa dernière
+    // ligne est toujours vide), puis rend le curseur exactement où il était
+    // (ESC 7 / ESC 8), là où replxx l'attend.
+    transcript_.emplace_back(line);
+    while (transcript_.size() > kTranscriptChunks) {
+        transcript_.pop_front();
+    }
+    emit("\x1b"
+         "7" +
+         go_to(region_bottom()) + line +
+         "\x1b"
+         "8");
+}
+
 void Display::success(std::string_view text) {
     const std::scoped_lock lock(mutex_);
     write(paint("✓", {.color = Color::Green, .bold = true}) + " " + std::string(text) + "\n");
@@ -521,8 +542,14 @@ void Display::start_thinking() {
     const std::scoped_lock lock(mutex_);
     thinking_ = terminal::enabled(); // Pas d'animation hors d'un terminal.
     suspended_ = false;
+    activity_ = "Réflexion";
     since_ = std::chrono::steady_clock::now();
     last_frame_ = {};
+}
+
+void Display::set_activity(std::string_view activity) {
+    const std::scoped_lock lock(mutex_);
+    activity_ = std::string(activity);
 }
 
 void Display::stop_thinking() {
@@ -548,9 +575,9 @@ void Display::tick() {
     last_frame_ = now;
     frame_ = (frame_ + 1) % kSpinner.size();
     const auto seconds = std::chrono::duration_cast<std::chrono::seconds>(now - since_).count();
-    const std::string spinner =
-        std::format("  {} {}", paint(kSpinner.at(frame_), {.color = Color::White}),
-                    paint(std::format("Réflexion… {} s · Ctrl+C pour arrêter", seconds), kMuted));
+    const std::string spinner = std::format(
+        "  {} {}", paint(kSpinner.at(frame_), {.color = Color::White}),
+        paint(std::format("{}… {} s · Ctrl+C pour arrêter", activity_, seconds), kMuted));
     // Barre fixe : la toupie s'affiche avec les réponses, sur la dernière
     // ligne de l'historique ; le curseur revient ensuite dans la barre.
     if (pinned_) {

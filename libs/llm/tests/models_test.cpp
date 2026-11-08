@@ -448,3 +448,129 @@ TEST_CASE("outil et voie rapide du raisonnement", "[models]") {
     CHECK(args("active le raisonnement") == nlohmann::json{{"level", "moyen"}});
     CHECK(args("mets le son à fond").is_null());
 }
+
+TEST_CASE("changer de modèle décharge l'ancien s'il partage le serveur", "[models]") {
+    auto models = sample_models();
+    models.push_back({.name = "autre",
+                      .config = ollama("qwen3.8:27b", "http://192.168.1.20:11434/v1"),
+                      .local = true});
+    models.push_back({.name = "jumeau",
+                      .config = ollama("gemma4:26b-a4b", "http://LOCALHOST:11434/v1/"),
+                      .local = true});
+    auto agent = make_agent();
+    std::vector<Sent> sent;
+    CountingConfirmer confirmer(core::Decision::Approved);
+    llm::ModelSwitcher switcher(models, &confirmer, fake_factory(), recording_poster(sent));
+    switcher.attach(agent);
+    REQUIRE(switcher.start("gemma").has_value());
+
+    // Même serveur, autre modèle : l'ancien est déchargé après la requête.
+    const auto to_light = switcher.switch_to("leger");
+    REQUIRE(to_light.has_value());
+    CHECK(to_light->contains("L'ancien modèle « gemma » sera déchargé."));
+    CHECK(sent.empty());
+    CHECK(switcher.finish_request().value_or("").contains("« gemma » déchargé"));
+    REQUIRE(sent.size() == 1);
+    CHECK(sent[0].body == nlohmann::json{{"model", "gemma4:26b-a4b"}, {"keep_alive", 0}});
+
+    // Retour avant la fin de la requête : il sert de nouveau, rien n'est déchargé.
+    REQUIRE(switcher.switch_to("gemma").has_value());
+    REQUIRE(switcher.switch_to("leger").has_value());
+    CHECK(switcher.finish_request().value_or("").contains("« gemma » déchargé"));
+    REQUIRE(switcher.switch_to("gemma").has_value()); // leger en attente…
+    REQUIRE(switcher.switch_to("leger").has_value()); // … puis de nouveau actif
+    const auto pending = switcher.finish_request().value_or("");
+    CHECK_FALSE(pending.contains("« leger »"));
+
+    // Autre serveur : le décharger ne libérerait rien pour le nouveau.
+    sent.clear();
+    const auto remote_server = switcher.switch_to("autre");
+    REQUIRE(remote_server.has_value());
+    CHECK_FALSE(remote_server->contains("déchargé"));
+    CHECK_FALSE(switcher.finish_request().has_value());
+
+    // Même serveur (adresse écrite autrement) et même modèle : rien à décharger.
+    REQUIRE(switcher.switch_to("gemma").has_value());
+    (void)switcher.finish_request();
+    sent.clear();
+    CHECK_FALSE(switcher.switch_to("jumeau")->contains("déchargé"));
+
+    // Vers un modèle distant : l'ancien n'est pas sur le même serveur.
+    CHECK_FALSE(switcher.switch_to("claude")->contains("déchargé"));
+    CHECK_FALSE(switcher.finish_request().has_value());
+    CHECK(sent.empty());
+
+    // Réglage désactivé : l'ancien reste chargé.
+    switcher.set_unload_on_switch(false);
+    REQUIRE(switcher.switch_to("gemma").has_value());
+    CHECK_FALSE(switcher.switch_to("leger")->contains("déchargé"));
+    CHECK_FALSE(switcher.finish_request().has_value());
+}
+
+TEST_CASE("savoir si un modèle est chargé (Ollama /api/ps)", "[models]") {
+    nlohmann::json listed{{"models", nlohmann::json::array({{{"name", "gemma4:26b-a4b"}}})}};
+    std::string asked;
+    const llm::JsonGetter getter =
+        [&listed, &asked](const std::string& url) -> core::Result<nlohmann::json> {
+        asked = url;
+        if (listed.is_null()) {
+            return core::make_error(core::ErrorCode::Llm, "injoignable");
+        }
+        return listed;
+    };
+    auto models = sample_models();
+    models.push_back({.name = "sans-tag", .config = ollama("llama3"), .local = true});
+    const llm::ModelSwitcher switcher(models, nullptr, fake_factory(), {}, getter);
+
+    CHECK(switcher.is_loaded(*switcher.find("gemma")) == true);
+    CHECK(asked == "http://localhost:11434/api/ps");
+    CHECK(switcher.is_loaded(*switcher.find("leger")) == false);
+    CHECK_FALSE(switcher.is_loaded(*switcher.find("claude")).has_value()); // distant
+
+    listed["models"].push_back({{"model", "llama3:latest"}});
+    CHECK(switcher.is_loaded(*switcher.find("sans-tag")) == true);
+
+    listed = nlohmann::json{{"autre", 1}}; // pas Ollama : on ne sait pas
+    CHECK_FALSE(switcher.is_loaded(*switcher.find("gemma")).has_value());
+    listed = nullptr; // injoignable
+    CHECK_FALSE(switcher.is_loaded(*switcher.find("gemma")).has_value());
+}
+
+TEST_CASE("état de chargement lisible, outil et voie rapide", "[models]") {
+    nlohmann::json listed{{"models", nlohmann::json::array({{{"name", "gemma4:26b-a4b"},
+                                                             {"size_vram", 19700000000ULL}}})}};
+    const llm::JsonGetter getter =
+        [&listed](const std::string& /*url*/) -> core::Result<nlohmann::json> { return listed; };
+    llm::ModelSwitcher switcher(sample_models(), nullptr, fake_factory(), {}, getter);
+    REQUIRE(switcher.start("gemma").has_value());
+
+    const auto all = switcher.status("");
+    REQUIRE(all.has_value());
+    CHECK(*all == "gemma : chargé (19,7 Go de mémoire vidéo), actif.\n"
+                  "leger : pas chargé.\n"
+                  "claude : distant (rien à charger sur cette machine).");
+    CHECK(switcher.status("Léger").value_or("") == "leger : pas chargé.");
+    CHECK_FALSE(switcher.status("gpt").has_value());
+
+    const auto tool = llm::make_status_tool(switcher);
+    CHECK(tool->spec().risk == core::RiskLevel::ReadOnly);
+    const auto one = tool->call({{"name", "gemma"}}, {});
+    REQUIRE(one.has_value());
+    CHECK(one->content.starts_with("gemma : chargé"));
+
+    listed = nlohmann::json{{"pas", "ollama"}};
+    CHECK(switcher.status("gemma").value_or("").contains("état inconnu"));
+
+    core::FastRouter router;
+    REQUIRE(llm::register_status_rules(router).has_value());
+    const auto args = [&router](std::string_view input) {
+        const auto route = router.route(input);
+        return route && route->tool == "llm_status" ? route->arguments : nlohmann::json{};
+    };
+    CHECK(args("quels modèles sont chargés ?") == nlohmann::json::object());
+    CHECK(args("Quel modèle est chargé") == nlohmann::json::object());
+    CHECK(args("état des modèles") == nlohmann::json::object());
+    CHECK(args("le modèle gemma est-il chargé ?") == nlohmann::json{{"name", "gemma"}});
+    CHECK(args("est-ce que le modèle qwen est chargé") == nlohmann::json{{"name", "qwen"}});
+    CHECK(args("quels fichiers sont chargés").is_null());
+}

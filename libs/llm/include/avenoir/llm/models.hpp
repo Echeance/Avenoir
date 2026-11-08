@@ -51,6 +51,15 @@ enum class Residency : std::uint8_t { Load, Unload, Reload };
 using JsonPoster = std::function<core::Result<nlohmann::json>(
     const std::string& url, const nlohmann::json& body, const std::stop_token& stop)>;
 
+/// Présence d'un modèle dans la mémoire de son serveur.
+struct LoadState {
+    bool loaded = false;
+    std::optional<std::uint64_t> vram_bytes; ///< Mémoire vidéo occupée, si connue.
+};
+
+/// Requête GET JSON vers le serveur d'un modèle (remplaçable dans les tests).
+using JsonGetter = std::function<core::Result<nlohmann::json>(const std::string& url)>;
+
 using ProviderFactory =
     std::function<core::Result<std::unique_ptr<core::LlmProvider>>(const core::LlmConfig&)>;
 
@@ -62,7 +71,7 @@ class ModelSwitcher {
     /// `models` peut être vide (pas de LLM : seule la voie rapide répond).
     /// `confirmer` : nul = tout passage à un modèle distant est refusé.
     ModelSwitcher(std::vector<ModelChoice> models, core::ConfirmationHandler* confirmer,
-                  ProviderFactory factory = {}, JsonPoster poster = {});
+                  ProviderFactory factory = {}, JsonPoster poster = {}, JsonGetter getter = {});
 
     /// Modèle de départ : `preferred` (le dernier utilisé) s'il existe encore,
     /// sinon le premier. Pas de confirmation : c'est un modèle de la
@@ -73,6 +82,12 @@ class ModelSwitcher {
 
     /// L'agent dont changer le modèle (à appeler une fois l'agent créé).
     void attach(core::Agent& agent) noexcept { agent_ = &agent; }
+
+    /// En changeant de modèle, décharger l'ancien s'il est local, servi par
+    /// le **même serveur** que le nouveau et différent de lui (vrai par
+    /// défaut) : déchargé à la fin de la requête, comme `/decharger`. Sur un
+    /// autre serveur, le décharger ne libérerait rien pour le nouveau.
+    void set_unload_on_switch(bool enabled) noexcept { unload_on_switch_ = enabled; }
 
     /// Appelée après chaque changement réussi (pour retenir le modèle).
     void on_switch(std::function<void(const ModelChoice&)> callback) {
@@ -125,8 +140,20 @@ class ModelSwitcher {
         on_reasoning_ = std::move(callback);
     }
 
-    /// À appeler après chaque requête ou commande : exécute le déchargement
-    /// différé, s'il y en a un. Renvoie la phrase à afficher, ou rien.
+    /// Le modèle est-il chargé en mémoire par son serveur (Ollama, `/api/ps`) ?
+    /// Vide si on ne peut pas le savoir (modèle distant, autre serveur, serveur
+    /// injoignable) : dans le doute, rien n'est annoncé.
+    [[nodiscard]] std::optional<bool> is_loaded(const ModelChoice& model) const;
+    /// Comme `is_loaded`, avec la mémoire vidéo occupée.
+    [[nodiscard]] std::optional<LoadState> load_state(const ModelChoice& model) const;
+
+    /// État de chargement lisible du modèle `name`, ou de tous (vide) :
+    /// « gemma : chargé (19,7 Go de mémoire vidéo) », « qwen : pas chargé »…
+    [[nodiscard]] core::Result<std::string> status(std::string_view name) const;
+
+    /// À appeler après chaque requête ou commande : exécute les déchargements
+    /// différés (sauf celui du modèle redevenu actif). Renvoie la phrase à
+    /// afficher, ou rien.
     [[nodiscard]] std::optional<std::string> finish_request();
 
   private:
@@ -137,7 +164,13 @@ class ModelSwitcher {
     core::Agent* agent_ = nullptr;
     std::function<void(const ModelChoice&)> on_switch_;
     JsonPoster poster_;
-    std::optional<std::size_t> pending_unload_; ///< Modèle à décharger après la requête.
+    JsonGetter getter_;
+    std::vector<std::size_t> pending_unload_; ///< Modèles à décharger après la requête.
+    bool unload_on_switch_ = true;
+
+    /// Met un modèle en attente de déchargement (une seule fois).
+    void defer_unload(std::size_t index);
+    void cancel_unload(std::size_t index);
     std::function<void(const ModelChoice&)> on_reasoning_;
 
     /// Requête `keep_alive` au serveur Ollama du modèle.
@@ -157,6 +190,13 @@ make_residency_tools(ModelSwitcher& switcher);
 /// Règles de voie rapide : « décharge le modèle », « libère la carte
 /// graphique », « charge le modèle gemma », « recharge le modèle »…
 [[nodiscard]] core::Result<void> register_residency_rules(core::FastRouter& router);
+
+/// Outil `llm_status` (lecture seule) : quels modèles sont chargés en mémoire.
+[[nodiscard]] std::shared_ptr<core::Tool> make_status_tool(const ModelSwitcher& switcher);
+
+/// Règles de voie rapide : « quels modèles sont chargés », « le modèle gemma
+/// est-il chargé »…
+[[nodiscard]] core::Result<void> register_status_rules(core::FastRouter& router);
 
 /// Outil `set_reasoning` (réversible, annulable : retour à l'effort précédent).
 [[nodiscard]] std::shared_ptr<core::Tool> make_reasoning_tool(ModelSwitcher& switcher);

@@ -19,7 +19,13 @@ TEST_CASE("config.example.toml se charge", "[config]") {
     CHECK(llm->temperature == 0.2);
     CHECK(config->agent.max_steps == 10);
     CHECK(config->agent.fast_path);
+    CHECK(config->agent.unload_on_switch);
     CHECK(config->permissions.sensitive == Policy::Confirm);
+
+    const auto keep = parse_config("[agent]\nunload_on_switch = false\n");
+    REQUIRE(keep.has_value());
+    CHECK_FALSE(keep->agent.unload_on_switch);
+    CHECK_FALSE(parse_config("[agent]\nunload_on_switch = \"non\"\n").has_value());
 }
 
 TEST_CASE("valeurs par défaut et fournisseur claude_code", "[config]") {

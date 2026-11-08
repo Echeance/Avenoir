@@ -192,6 +192,8 @@ Mesures du 8 novembre 2026 sous Linux, prompt v4 (RX 7900 XTX, Ollama ROCm, Q4, 
 
 **Changer de modèle à tout moment** : un modèle par section `[models.<nom>]` ; le premier sert au premier lancement, puis Avenoir reprend le dernier modèle utilisé (table `app_state` de la base) ; sans modèle, seule la voie rapide répond. Commande `/modele [nom]` dans la CLI (sélecteur dans l'application, plus tard), outil `switch_llm` (réversible, annulable) que le modèle actif peut appeler, et règles de voie rapide (« passe sur le modèle léger », « utilise le modèle claude » : le mot « modèle » est exigé). La conversation continue avec le nouveau modèle (même historique). Passer à un modèle distant demande toujours confirmation (directive n° 17) ; est local un serveur à l'adresse de la machine, ou déclaré `local = true` (réseau local). Code : `llm::ModelSwitcher` (`libs/llm/src/models.cpp`).
 
+En changeant de modèle, l'ancien est déchargé après la requête s'il est local et **servi par le même serveur** que le nouveau (ailleurs, sa mémoire ne servirait pas au nouveau) ; réglage `[agent] unload_on_switch` (vrai par défaut). Quand le modèle actif doit être chargé (Ollama le décharge après une inactivité), la CLI affiche « Chargement du modèle… » au lieu de « Réflexion… », puis le temps de chargement (`ModelSwitcher::is_loaded`, `/api/ps`). Pendant la saisie, un fil interroge Ollama toutes les 3 s et annonce les modèles chargés ou déchargés hors d'Avenoir, sans toucher à la saisie. `/memoire` et l'outil `llm_status` donnent l'état de chaque modèle et sa mémoire vidéo.
+
 **Raisonnement à chaud** : `/raisonnement [niveau] [modèle]`, outil `set_reasoning`, voie rapide (« mets le raisonnement à élevé », « désactive le raisonnement »). Le modèle actif l'applique dès sa réponse suivante sans être rechargé : `reasoning_effort` est un paramètre de chaque requête, seul le fournisseur est recréé. Retenu par modèle (`llm.reasoning.<nom>` dans la base).
 
 **Charger et décharger un modèle local** : `/charger`, `/decharger`, `/recharger` (le modèle actif par défaut), outils `load_llm` et `unload_llm`, voie rapide (« décharge le modèle », « libère la carte graphique », « allume le modèle gemma »). Avec Ollama (`keep_alive`) seulement. Décharger le modèle actif pendant une requête attend la fin de la réponse, qui sinon le rechargerait. C'est la version manuelle de la « mémoire vidéo partagée avec les jeux » du jalon 3.
@@ -467,7 +469,7 @@ Fichier `config.toml` (voir `config.example.toml`) :
 | Section | Rôle |
 |---|---|
 | `[models.<nom>]` | Un modèle par section, dans l'ordre voulu (le premier sert par défaut) : fournisseur (`openai_compatible`, `anthropic` ou `claude_code`), modèle, URL, **nom** de la variable d'environnement de la clé, `local` |
-| `[agent]` | `max_steps`, `fast_path`, `system_prompt` |
+| `[agent]` | `max_steps`, `fast_path`, `system_prompt`, `unload_on_switch` |
 | `[permissions]` | Politique par niveau de risque |
 | `[modules.<id>]` | Réglages de l'utilisateur par module : activation, risque relevé par outil |
 

@@ -77,7 +77,10 @@ class Display {
     /// « » outil arguments  ✓ » (ou ✗ et l'erreur).
     void tool_result(const core::ToolResultMessage& result);
 
-    void info(std::string_view text);    ///< Message système, discret.
+    void info(std::string_view text);
+    /// Comme `info`, mais pendant la saisie aussi : le message rejoint
+    /// l'historique sans déplacer le curseur de la saisie en cours.
+    void notify(std::string_view text);  ///< Message système, discret.
     void success(std::string_view text); ///< ✓ vert.
     void warning(std::string_view text); ///< ▲ jaune.
     void error(std::string_view text);   ///< ✗ rouge, sur stderr.
@@ -89,6 +92,9 @@ class Display {
     /// Toupie « Réflexion… » : `tick` est appelé régulièrement par le thread
     /// principal ; `suspend`/`resume` l'effacent pendant une saisie.
     void start_thinking();
+    /// Libellé de la toupie (« Réflexion » par défaut, remis à chaque
+    /// `start_thinking`), par exemple « Chargement du modèle « gemma » ».
+    void set_activity(std::string_view activity);
     void stop_thinking();
     void tick();
     void suspend_thinking();
@@ -110,6 +116,7 @@ class Display {
 
     std::mutex mutex_;
     bool thinking_ = false;
+    std::string activity_ = "Réflexion";
     bool shown_ = false;
     bool suspended_ = false;
     std::size_t frame_ = 0;

@@ -49,6 +49,27 @@ std::string url_host(std::string_view url) {
     return host;
 }
 
+/// Racine du serveur d'un modèle : « http://localhost:11434 » pour
+/// « http://LocalHost:11434/v1/ » (sans « /v1 », hôte en minuscules).
+std::string server_root(const core::OpenAiCompatibleConfig& config) {
+    std::string root = config.base_url;
+    while (root.ends_with('/')) {
+        root.pop_back();
+    }
+    if (root.ends_with("/v1")) {
+        root.resize(root.size() - 3);
+    }
+    const auto scheme = root.find("://");
+    const std::size_t host_start = scheme == std::string::npos ? 0 : scheme + 3;
+    const std::size_t host_end = std::min(root.find('/', host_start), root.size());
+    for (std::size_t i = host_start; i < host_end; ++i) {
+        if (root[i] >= 'A' && root[i] <= 'Z') {
+            root[i] = static_cast<char>(root[i] - 'A' + 'a');
+        }
+    }
+    return root;
+}
+
 bool is_loopback(std::string_view host) {
     return host == "localhost" || host == "::1" || host.starts_with("127.");
 }
@@ -237,9 +258,15 @@ std::vector<ModelChoice> models_from(const core::AppConfig& config) {
 }
 
 ModelSwitcher::ModelSwitcher(std::vector<ModelChoice> models, core::ConfirmationHandler* confirmer,
-                             ProviderFactory factory, JsonPoster poster)
+                             ProviderFactory factory, JsonPoster poster, JsonGetter getter)
     : models_(std::move(models)), confirmer_(confirmer), factory_(std::move(factory)),
-      poster_(std::move(poster)) {
+      poster_(std::move(poster)), getter_(std::move(getter)) {
+    if (!getter_) {
+        getter_ = [](const std::string& url) {
+            // Question rapide à un serveur local : ne jamais faire attendre.
+            return detail::get_json(url, std::chrono::milliseconds{500});
+        };
+    }
     if (!factory_) {
         factory_ = [](const core::LlmConfig& config) { return make_provider(config); };
     }
@@ -267,13 +294,7 @@ core::Result<void> ModelSwitcher::send_residency(const ModelChoice& model, bool 
     }
     // API d'Ollama, à côté de son API compatible OpenAI (…/v1) : une requête
     // sans prompt charge le modèle ; keep_alive = 0 le décharge.
-    std::string root = openai->base_url;
-    while (root.ends_with('/')) {
-        root.pop_back();
-    }
-    if (root.ends_with("/v1")) {
-        root.resize(root.size() - 3);
-    }
+    const std::string root = server_root(*openai);
     nlohmann::json body{{"model", openai->model}};
     if (!load) {
         body["keep_alive"] = 0;
@@ -312,7 +333,7 @@ core::Result<std::string> ModelSwitcher::set_residency(std::string_view name, Re
                                                 "sur cette machine",
                                                 target->name));
         }
-        pending_unload_ = index;
+        defer_unload(index);
         return std::format("Le modèle « {} » sera déchargé à la fin de cette réponse ; il se "
                            "rechargera à la prochaine requête.",
                            target->name);
@@ -321,17 +342,13 @@ core::Result<std::string> ModelSwitcher::set_residency(std::string_view name, Re
         if (auto unloaded = send_residency(*target, false, stop); !unloaded) {
             return std::unexpected(std::move(unloaded.error()));
         }
-        if (pending_unload_ == index) {
-            pending_unload_.reset();
-        }
+        cancel_unload(index);
     }
     if (residency != Residency::Unload) {
         if (auto loaded = send_residency(*target, true, stop); !loaded) {
             return std::unexpected(std::move(loaded.error()));
         }
-        if (pending_unload_ == index) {
-            pending_unload_.reset(); // chargé à nouveau : plus rien à décharger
-        }
+        cancel_unload(index); // chargé à nouveau : plus rien à décharger
     }
     switch (residency) {
     case Residency::Load:
@@ -446,17 +463,119 @@ core::Result<std::string> ModelSwitcher::set_reasoning(std::string_view name,
                        reasoning_label(*effort));
 }
 
-std::optional<std::string> ModelSwitcher::finish_request() {
-    if (!pending_unload_ || *pending_unload_ >= models_.size()) {
+std::optional<LoadState> ModelSwitcher::load_state(const ModelChoice& model) const {
+    const auto* openai = std::get_if<core::OpenAiCompatibleConfig>(&model.config);
+    if (openai == nullptr || !model.local) {
         return std::nullopt;
     }
-    const ModelChoice& model = models_[*pending_unload_];
-    pending_unload_.reset();
-    if (auto unloaded = send_residency(model, false, {}); !unloaded) {
-        return std::format("Déchargement de « {} » impossible : {}", model.name,
-                           unloaded.error().message);
+    auto listed = getter_(server_root(*openai) + "/api/ps");
+    if (!listed || !listed->is_object() || !listed->contains("models") ||
+        !(*listed)["models"].is_array()) {
+        return std::nullopt; // pas Ollama, ou injoignable : on ne sait pas
     }
-    return std::format("Modèle « {} » déchargé : sa mémoire est libérée.", model.name);
+    // Ollama nomme « modèle:latest » un modèle donné sans étiquette.
+    const std::string wanted = openai->model;
+    const std::string tagged = wanted.contains(':') ? wanted : wanted + ":latest";
+    for (const auto& entry : (*listed)["models"]) {
+        for (const char* key : {"name", "model"}) {
+            if (!entry.contains(key) || !entry[key].is_string()) {
+                continue;
+            }
+            const auto name = entry[key].get<std::string>();
+            if (name != wanted && name != tagged) {
+                continue;
+            }
+            LoadState state{.loaded = true, .vram_bytes = std::nullopt};
+            if (entry.contains("size_vram") && entry["size_vram"].is_number_unsigned()) {
+                state.vram_bytes = entry["size_vram"].get<std::uint64_t>();
+            }
+            return state;
+        }
+    }
+    return LoadState{.loaded = false, .vram_bytes = std::nullopt};
+}
+
+std::optional<bool> ModelSwitcher::is_loaded(const ModelChoice& model) const {
+    const auto state = load_state(model);
+    return state ? std::optional<bool>(state->loaded) : std::nullopt;
+}
+
+core::Result<std::string> ModelSwitcher::status(std::string_view name) const {
+    std::vector<const ModelChoice*> wanted;
+    if (name.empty()) {
+        for (const auto& model : models_) {
+            wanted.push_back(&model);
+        }
+    } else if (const auto* model = find(name)) {
+        wanted.push_back(model);
+    } else {
+        return core::make_error(core::ErrorCode::Config,
+                                std::format("modèle inconnu « {} » (modèles : {})", name, names()));
+    }
+    if (wanted.empty()) {
+        return std::string("Aucun modèle configuré.");
+    }
+    std::string out;
+    for (const auto* model : wanted) {
+        std::string line = model->name + " : ";
+        if (!model->local) {
+            line += "distant (rien à charger sur cette machine)";
+        } else if (const auto state = load_state(*model); !state) {
+            line += "état inconnu (serveur injoignable, ou autre qu'Ollama)";
+        } else if (!state->loaded) {
+            line += "pas chargé";
+        } else if (state->vram_bytes) {
+            line += std::format("chargé ({:.1f} Go de mémoire vidéo)",
+                                static_cast<double>(*state->vram_bytes) / 1e9);
+        } else {
+            line += "chargé";
+        }
+        if (model == active()) {
+            line += ", actif";
+        }
+        out += (out.empty() ? "" : "\n") + line + ".";
+    }
+    // Virgule décimale, à la française.
+    for (std::size_t dot = out.find(" Go"); dot != std::string::npos;
+         dot = out.find(" Go", dot + 3)) {
+        const auto point = out.rfind('.', dot);
+        if (point != std::string::npos && dot - point == 2) {
+            out[point] = ',';
+        }
+    }
+    return out;
+}
+
+void ModelSwitcher::defer_unload(std::size_t index) {
+    if (!std::ranges::contains(pending_unload_, index)) {
+        pending_unload_.push_back(index);
+    }
+}
+
+void ModelSwitcher::cancel_unload(std::size_t index) {
+    std::erase(pending_unload_, index);
+}
+
+std::optional<std::string> ModelSwitcher::finish_request() {
+    std::string notes;
+    for (const std::size_t index : std::exchange(pending_unload_, {})) {
+        if (index >= models_.size()) {
+            continue;
+        }
+        const ModelChoice& model = models_[index];
+        std::string note;
+        if (auto unloaded = send_residency(model, false, {}); !unloaded) {
+            note = std::format("Déchargement de « {} » impossible : {}", model.name,
+                               unloaded.error().message);
+        } else {
+            note = std::format("Modèle « {} » déchargé : sa mémoire est libérée.", model.name);
+        }
+        notes += (notes.empty() ? "" : " ") + note;
+    }
+    if (notes.empty()) {
+        return std::nullopt;
+    }
+    return notes;
 }
 
 core::Result<std::unique_ptr<core::LlmProvider>>
@@ -517,11 +636,27 @@ core::Result<std::string> ModelSwitcher::switch_to(std::string_view name) {
         return std::unexpected(std::move(provider.error()));
     }
     agent_->set_llm(std::move(*provider));
+    const std::size_t previous = active_;
     active_ = static_cast<std::size_t>(target - models_.data());
+    cancel_unload(active_); // il sert de nouveau : surtout ne pas le décharger
     if (on_switch_) {
         on_switch_(*target);
     }
-    return std::format("Modèle actif : {}.", describe(*target));
+    std::string message = std::format("Modèle actif : {}.", describe(*target));
+    // L'ancien modèle n'est déchargé que s'il partage le serveur du nouveau :
+    // c'est là seulement que sa mémoire servira au nouveau.
+    if (unload_on_switch_ && previous < models_.size() && previous != active_) {
+        const ModelChoice& old = models_[previous];
+        const auto* old_server = std::get_if<core::OpenAiCompatibleConfig>(&old.config);
+        const auto* new_server = std::get_if<core::OpenAiCompatibleConfig>(&target->config);
+        if (old.local && old_server != nullptr && new_server != nullptr &&
+            server_root(*old_server) == server_root(*new_server) &&
+            old_server->model != new_server->model) {
+            defer_unload(previous);
+            message += std::format(" L'ancien modèle « {} » sera déchargé.", old.name);
+        }
+    }
+    return message;
 }
 
 std::string ModelSwitcher::names() const {
@@ -708,6 +843,71 @@ class ReasoningTool final : public core::Tool {
 };
 
 } // namespace
+
+namespace {
+
+struct StatusArgs {
+    std::string name;
+};
+NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_WITH_DEFAULT(StatusArgs, name)
+
+class StatusTool final : public core::Tool {
+  public:
+    explicit StatusTool(const ModelSwitcher& switcher) : switcher_(&switcher) {}
+
+    [[nodiscard]] core::ToolSpec spec() const override {
+        return core::ToolSpec{
+            .name = "llm_status",
+            .description = "Indique si les modèles (LLM) sont chargés en mémoire, et la mémoire "
+                           "vidéo qu'ils occupent, ainsi que le modèle actif.",
+            .input_schema = {{"type", "object"},
+                             {"properties",
+                              {{"name",
+                                {{"type", "string"},
+                                 {"description", "Nom du modèle (" + switcher_->names() +
+                                                     ") ; absent : tous"}}}}}},
+            .risk = core::RiskLevel::ReadOnly,
+        };
+    }
+
+    [[nodiscard]] core::ToolResult call(const nlohmann::json& arguments,
+                                        const std::stop_token& /*stop*/) const override {
+        auto args = core::parse_args<StatusArgs>(arguments);
+        if (!args) {
+            return std::unexpected(std::move(args.error()));
+        }
+        auto text = switcher_->status(args->name);
+        if (!text) {
+            return std::unexpected(core::ToolError{.kind = core::ToolErrorKind::Execution,
+                                                   .message = text.error().message});
+        }
+        return core::ToolOutput{.content = std::move(*text)};
+    }
+
+  private:
+    const ModelSwitcher* switcher_;
+};
+
+} // namespace
+
+std::shared_ptr<core::Tool> make_status_tool(const ModelSwitcher& switcher) {
+    return std::make_shared<StatusTool>(switcher);
+}
+
+core::Result<void> register_status_rules(core::FastRouter& router) {
+    const nlohmann::json none = nlohmann::json::object();
+    for (
+        const auto& [pattern, arg] : std::to_array<std::pair<std::string, std::string>>({
+            {R"(^(?:quels?\s+(?:sont\s+les\s+)?modèles?\s+(?:sont|est)\s+(?:chargés?|en\s+mémoire)|état\s+des\s+modèles)\s*\??$)",
+             ""},
+            {R"(^(?:est-ce\s+que\s+)?le\s+modèle\s+(\S+)\s+est(?:-il)?\s+chargé\s*\??$)", "name"},
+        })) {
+        if (auto added = router.add_rule(pattern, "llm_status", arg, none); !added) {
+            return added;
+        }
+    }
+    return {};
+}
 
 std::shared_ptr<core::Tool> make_reasoning_tool(ModelSwitcher& switcher) {
     return std::make_shared<ReasoningTool>(switcher);

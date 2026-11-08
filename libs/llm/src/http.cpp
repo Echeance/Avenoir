@@ -1,5 +1,6 @@
 #include "http.hpp"
 
+#include <chrono>
 #include <cstddef>
 #include <stop_token>
 #include <string>
@@ -59,6 +60,25 @@ core::Result<nlohmann::json> post_json(const HttpRequest& request, const std::st
         return core::make_error(core::ErrorCode::Llm,
                                 "HTTP " + std::to_string(response.status_code) + " : " + message);
     }
+    if (body.is_discarded()) {
+        return core::make_error(core::ErrorCode::Llm,
+                                "réponse illisible (JSON attendu) : " + excerpt(response.text));
+    }
+    return body;
+}
+
+core::Result<nlohmann::json> get_json(const std::string& url, std::chrono::milliseconds timeout) {
+    const cpr::Response response = cpr::Get(cpr::Url{url}, cpr::Timeout{timeout});
+    if (response.error.code != cpr::ErrorCode::OK) {
+        return core::make_error(core::ErrorCode::Llm,
+                                "connexion à " + url + " impossible : " + response.error.message);
+    }
+    if (response.status_code < 200 || response.status_code >= 300) {
+        return core::make_error(core::ErrorCode::Llm, "HTTP " +
+                                                          std::to_string(response.status_code) +
+                                                          " : " + excerpt(response.text));
+    }
+    nlohmann::json body = nlohmann::json::parse(response.text, nullptr, /*allow_exceptions=*/false);
     if (body.is_discarded()) {
         return core::make_error(core::ErrorCode::Llm,
                                 "réponse illisible (JSON attendu) : " + excerpt(response.text));

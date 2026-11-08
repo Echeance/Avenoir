@@ -197,6 +197,8 @@ L'ordre suit un principe : **chaque jalon produit un assistant utilisable**, plu
 - ✅ Outil `switch_llm` (reversible) et règles de voie rapide (« passe sur le modèle léger », « utilise le modèle claude ») ; annulable (retour au modèle précédent) ; nom reconnu sans casse ni accents
 - ✅ Passer à un modèle distant demande confirmation (directive de sécurité n° 17) ; local = adresse de la machine ou `local = true` déclaré
 - ✅ Modèle actif affiché dans le cadre d'accueil ; changement journalisé (journal d'audit de l'outil)
+- ✅ Ancien modèle déchargé en changeant de modèle, s'il est sur le même serveur (réglable : `unload_on_switch`) ; « Chargement du modèle… » quand le modèle actif doit être chargé, puis le temps de chargement
+- ✅ Modèles chargés ou déchargés hors d'Avenoir annoncés pendant la saisie ; état des modèles : `/memoire`, outil `llm_status`, voie rapide
 - ✅ Changer le raisonnement à chaud, sans recharger le modèle : `/raisonnement`, outil `set_reasoning`, voie rapide ; retenu par modèle
 - ✅ Charger, décharger, recharger un modèle local (Ollama) : `/charger`, `/decharger`, `/recharger`, outils `load_llm` / `unload_llm`, voie rapide (« décharge le modèle », « libère la carte graphique », « allume le modèle gemma ») ; déchargement du modèle actif différé à la fin de la réponse
 - ⬜ Interdit en mode « local uniquement » (quand ce mode existera, jalon 3)

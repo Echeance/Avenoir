@@ -42,7 +42,11 @@ Plateformes : **Linux** et **Windows** (sauf mention contraire).
   - voie rapide : « passe / bascule / change sur (le) modèle X », « utilise le modèle X » (le mot « modèle » ou « llm » est exigé) ;
   - nom reconnu sans casse ni accents (« Léger » → `leger`), ou par identifiant du modèle (« ministral-3:8b ») ;
   - **passer à un modèle distant demande toujours confirmation** (la conversation sortirait de la machine) ; local = adresse de la machine (`localhost`, `127.x`, `::1`) ou `local = true` déclaré pour un serveur du réseau local ;
-  - modèle actif affiché dans le cadre d'accueil.
+  - modèle actif affiché dans le cadre d'accueil ;
+  - **l'ancien modèle est déchargé** après la requête quand il est local, servi par le **même serveur** que le nouveau et différent de lui (sur un autre serveur, le décharger ne libérerait rien pour le nouveau) ; annoncé (« L'ancien modèle « gemma » sera déchargé », puis « déchargé : sa mémoire est libérée ») ; annulé si l'on revient sur lui avant la fin de la requête ; désactivable (`[agent] unload_on_switch = false`).
+- **Chargement visible** : quand le modèle actif n'est pas en mémoire (Ollama le décharge après une inactivité), la toupie affiche « Chargement du modèle « gemma »… » au lieu de « Réflexion… », puis « Modèle « gemma » chargé en 12 s. » ; savoir s'il est chargé passe par `/api/ps` d'Ollama (délai court, rien n'est annoncé dans le doute). `/charger`, `/decharger` et `/recharger` affichent aussi « Chargement / Déchargement / Rechargement du modèle… ».
+- **Surveillance des modèles** : pendant la saisie, Ollama est interrogé toutes les 3 s ; un modèle local chargé ou déchargé **hors d'Avenoir** (déchargement d'Ollama après inactivité, autre programme) est annoncé dans l'historique sans toucher à la saisie en cours (le message passe par la boucle de replxx, curseur gardé avec ESC 7 / ESC 8) ; ce qu'Avenoir charge ou décharge lui-même n'est pas annoncé deux fois.
+- **État des modèles** : `/memoire [nom]`, outil `llm_status` (lecture seule), voie rapide (« quels modèles sont chargés ? », « état des modèles », « le modèle gemma est-il chargé ? ») : chargé avec la mémoire vidéo occupée, pas chargé, distant, ou état inconnu ; modèle actif signalé.
 - **Raisonnement à chaud** (`openai_compatible`) : `/raisonnement [niveau] [modèle]` (sans niveau : l'actuel), outil `set_reasoning` (annulable) que le modèle peut appeler, voie rapide (« mets / passe / règle le raisonnement à X », « raisonnement X », « active / désactive le raisonnement ») ; niveaux `aucun`, `faible`, `moyen`, `élevé`, `défaut` (valeurs de l'API acceptées) :
   - appliqué dès la réponse suivante, **sans recharger le modèle** (`reasoning_effort` est un paramètre de chaque requête) ; la conversation continue ;
   - réglable aussi pour un modèle qui n'est pas actif ; retenu par modèle d'un lancement à l'autre ; affiché par `/modele`.
@@ -134,7 +138,7 @@ Plateformes : **Linux** et **Windows** (sauf mention contraire).
 ## 9. Interface en ligne de commande
 
 - Exécutable `avenoir [chemin/config.toml]`.
-- **Commandes** : `/aide`, `/outils`, `/annuler`, `/modules`, `/risque [outil niveau]`, `/modele [nom]`, `/raisonnement`, `/charger`, `/decharger`, `/recharger`, `/nouvelle`, `/reset`, `/conversations`, `/ouvrir`, `/renommer`, `/supprimer`, `/historique`, `/transcription`, `/quitter` (`/q`), et celles des modules.
+- **Commandes** : `/aide`, `/outils`, `/annuler`, `/modules`, `/risque [outil niveau]`, `/modele [nom]`, `/memoire`, `/raisonnement`, `/charger`, `/decharger`, `/recharger`, `/nouvelle`, `/reset`, `/conversations`, `/ouvrir`, `/renommer`, `/supprimer`, `/historique`, `/transcription`, `/quitter` (`/q`), et celles des modules.
 - **Saisie** (replxx) : édition de ligne, historique des saisies conservé entre deux lancements, complétion des commandes (Tab), Ctrl+D pour quitter.
 - **Apparence** :
   - barre de saisie fixe en bas du terminal (grandit avec la saisie, suit les redimensionnements, sous Windows aussi) ;
@@ -148,7 +152,7 @@ Plateformes : **Linux** et **Windows** (sauf mention contraire).
 ## 10. Configuration
 
 - Fichier `config.toml` (exemple commenté : `config.example.toml`) ; une clé inconnue ou de mauvais type est une erreur qui cite la clé.
-- Sections : `[models.<nom>]` (un par modèle, dans l'ordre voulu : fournisseur, modèle, adresse, nom de la variable de la clé, `temperature`, `reasoning_effort`, `max_tokens`, commande et délai de Claude Code, `local`) ; l'ancienne section `[llm]` est refusée avec un message qui indique la nouvelle forme ; `[agent]` (`max_steps`, `fast_path`, `system_prompt`), `[permissions]` (politique par niveau), `[modules.<id>]` (`enabled`, `risk` par outil).
+- Sections : `[models.<nom>]` (un par modèle, dans l'ordre voulu : fournisseur, modèle, adresse, nom de la variable de la clé, `temperature`, `reasoning_effort`, `max_tokens`, commande et délai de Claude Code, `local`) ; l'ancienne section `[llm]` est refusée avec un message qui indique la nouvelle forme ; `[agent]` (`max_steps`, `fast_path`, `system_prompt`, `unload_on_switch`), `[permissions]` (politique par niveau), `[modules.<id>]` (`enabled`, `risk` par outil).
 - Dossier de données : `~/.local/share/avenoir` (ou `$XDG_DATA_HOME`), `%LOCALAPPDATA%\avenoir` sous Windows.
 
 ## 11. Journaux

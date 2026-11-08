@@ -58,6 +58,9 @@ reasoning_effort = "none"
 [agent]
 max_steps = 10        # allers-retours LLM ↔ outils maximum par requête
 fast_path = true      # commandes simples traitées sans LLM
+unload_on_switch = true # en changeant de modèle, décharger l'ancien s'il est sur le
+                        # même serveur (libère sa mémoire vidéo) ; false : le garder
+                        # chargé pour alterner vite entre deux petits modèles
 # system_prompt = "…" # remplace le prompt par défaut
 
 # ─── Permissions par niveau de risque : "allow" | "confirm" | "deny" ───────
