@@ -72,11 +72,17 @@ void Agent::begin_journal(std::string_view input) {
     }
 }
 
-std::string Agent::run_direct(std::string_view input, const ToolCall& call,
-                              const std::stop_token& stop) {
+Result<std::string> Agent::run_direct(std::string_view input, const ToolCall& call,
+                                      const std::stop_token& stop) {
     Execution result = execute(call, stop);
     // Trace dans l'historique pour que le LLM ait le contexte ensuite.
     append(UserMessage{.content = std::string(input)});
+    // Interrompue (Ctrl+C) : l'échec rendu par l'outil n'est que la conséquence
+    // de l'arrêt ; l'action a pu avoir lieu en partie (journal conservé).
+    if (stop.stop_requested()) {
+        append(AssistantMessage{.text = "Action interrompue par l'utilisateur.", .tool_calls = {}});
+        return std::unexpected(cancelled());
+    }
     append(AssistantMessage{.text = result.content, .tool_calls = {}});
     return std::move(result.content);
 }

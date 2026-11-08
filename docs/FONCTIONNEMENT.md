@@ -110,7 +110,7 @@ Un module est un **programme séparé** décrit par un `module.toml` (PROJECT.md
 
 ## 7. Annulation et Ctrl+C
 
-- Le gestionnaire de signal (`console.cpp`) ne fait que lever un indicateur. Le thread principal le lit dans `run_request` et demande l'arrêt au thread de travail (`std::stop_token`). Ce jeton est vérifié entre deux étapes de l'agent et passé au fournisseur LLM et aux outils.
+- Le gestionnaire de signal (`console.cpp`) ne fait que lever un indicateur. Le thread principal le lit dans `run_request` et demande l'arrêt au thread de travail (`std::stop_token`). Ce jeton est vérifié entre deux étapes de l'agent et passé au fournisseur LLM et aux outils. Sur la voie rapide et pour les commandes (`Agent::run_direct`), il est relu après l'outil : interrompue, l'exécution renvoie `ErrorCode::Cancelled` plutôt que l'échec rendu par l'outil.
 - Chaque requête a un **journal d'annulation** (`RequestJournal`) qui liste les actions à effet de bord et leur `UndoAction` éventuelle. Après une interruption, ou avec `/annuler`, la CLI propose de défaire les actions en ordre inverse (`Agent::undo_last`). Chaque annulation vérifie que l'état n'a pas changé depuis.
 
 ## 8. Conversations (`libs/storage`)

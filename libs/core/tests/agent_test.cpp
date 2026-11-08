@@ -536,3 +536,39 @@ TEST_CASE("une commande exécute un outil sans LLM, sous contrôle des permissio
     CHECK(*g.tool_calls == 0);
     CHECK(refused->contains("refusé"));
 }
+
+TEST_CASE("une commande interrompue est signalée comme telle, pas comme un échec", "[agent]") {
+    // Comme un module dont l'appel est annulé par Ctrl+C : l'outil demande
+    // l'arrêt et renvoie un échec sans message.
+    std::stop_source source; // NOLINT(misc-const-correctness) : request_stop() est non const
+    struct CancelledTool final : public Tool {
+        explicit CancelledTool(std::stop_source* s) : source(s) {}
+        std::stop_source* source;
+        [[nodiscard]] ToolSpec spec() const override {
+            return ToolSpec{.name = "slow",
+                            .description = "test",
+                            .input_schema = nlohmann::json::object(),
+                            .risk = RiskLevel::ReadOnly};
+        }
+        [[nodiscard]] ToolResult call(const nlohmann::json& /*arguments*/,
+                                      const std::stop_token& /*stop*/) const override {
+            source->request_stop();
+            return std::unexpected(ToolError{.kind = ToolErrorKind::Execution, .message = {}});
+        }
+    };
+    ToolRegistry tools;
+    REQUIRE(tools.add(std::make_shared<CancelledTool>(&source)).has_value());
+    const auto llm_calls = std::make_shared<int>(0);
+    Agent agent(std::make_unique<ScriptedLlm>(std::deque<Result<LlmResponse>>{}, llm_calls),
+                std::move(tools), std::make_unique<AutoReject>());
+
+    const auto reply = agent.run_tool(
+        "/slow", ToolCall{.id = {}, .name = "slow", .arguments = nlohmann::json::object()},
+        source.get_token());
+    REQUIRE_FALSE(reply.has_value());
+    CHECK(reply.error().code == ErrorCode::Cancelled);
+    REQUIRE(agent.history().size() == 2);
+    const auto& note = std::get<AssistantMessage>(agent.history().back());
+    CHECK(note.text.contains("interrompue"));
+    CHECK_FALSE(note.text.contains("échec"));
+}

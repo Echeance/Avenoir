@@ -73,6 +73,7 @@ Plateformes : **Linux** et **Windows** (sauf mention contraire).
 ## 5. Interruption et annulation
 
 - **Ctrl+C n'arrête jamais l'application** : il interrompt l'action en cours (appel au LLM, outil, module) et rend la main tout de suite ; sans action en cours, il efface la saisie.
+- Une commande ou une voie rapide interrompue s'affiche « Requête interrompue », jamais comme un échec, et l'historique garde « Action interrompue par l'utilisateur. ».
 - Après une interruption : liste des actions effectuées (↺ annulables, ✗ non annulables) et proposition d'annuler celles qui peuvent l'être.
 - **`/annuler`** : même proposition pour la dernière requête ; répétée, elle remonte aux requêtes précédentes (20 au plus).
 - Annulations en ordre inverse, avec vérification que l'état n'a pas changé depuis (sinon refus, sans rien écraser) ; échecs signalés sans bloquer les suivantes ; chaque annulation est journalisée.

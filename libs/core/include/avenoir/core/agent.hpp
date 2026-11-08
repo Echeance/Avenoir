@@ -158,9 +158,10 @@ class Agent {
 
     /// Ouvre le journal d'annulation d'une nouvelle requête.
     void begin_journal(std::string_view input);
-    /// Exécute un appel sans LLM et le trace dans l'historique.
-    [[nodiscard]] std::string run_direct(std::string_view input, const ToolCall& call,
-                                         const std::stop_token& stop);
+    /// Exécute un appel sans LLM et le trace dans l'historique. Renvoie
+    /// `ErrorCode::Cancelled` si `stop` a été demandé pendant l'exécution.
+    [[nodiscard]] Result<std::string> run_direct(std::string_view input, const ToolCall& call,
+                                                 const std::stop_token& stop);
 
     /// Seules façons de modifier l'historique : elles notifient l'observateur.
     void append(Message message);
