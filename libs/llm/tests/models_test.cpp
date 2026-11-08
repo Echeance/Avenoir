@@ -594,7 +594,7 @@ TEST_CASE("mode local uniquement : aucun modèle distant", "[models][securite]")
     CHECK(switcher.switch_to("leger").has_value()); // local : permis
 
     // Aucun modèle local : pas de fournisseur, seule la voie rapide répond.
-    std::vector<llm::ModelChoice> remote_only{sample_models()[2]};
+    const std::vector<llm::ModelChoice> remote_only{sample_models()[2]};
     llm::ModelSwitcher none(remote_only, &confirmer, fake_factory());
     none.set_local_only(true);
     const auto provider = none.start(std::nullopt);
