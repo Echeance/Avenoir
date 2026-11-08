@@ -85,18 +85,19 @@ void setup_logging() {
 /// Commandes d'Avenoir (sans « / »), alias compris : un module ne peut pas
 /// en déclarer une du même nom.
 std::vector<std::string> builtin_commands() {
-    return {"aide",       "annuler",   "charger",   "conversations", "decharger",    "help",
-            "historique", "recharger", "modules",   "model",         "modele",       "nouvelle",
-            "ouvrir",     "outils",    "q",         "quit",          "quitter",      "renommer",
-            "reset",      "risque",    "supprimer", "tools",         "transcription"};
+    return {"aide",       "annuler",   "charger", "conversations", "decharger", "help",
+            "historique", "recharger", "modules", "model",         "modele",    "nouvelle",
+            "ouvrir",     "outils",    "q",       "quit",          "quitter",   "raisonnement",
+            "renommer",   "reset",     "risque",  "supprimer",     "tools",     "transcription"};
 }
 
 /// Commandes proposées à la complétion (Tab).
 std::vector<std::string> command_names(const cli::ModulesUi& modules) {
-    std::vector<std::string> names{
-        "/aide",       "/annuler",  "/charger", "/decharger", "/recharger", "/conversations",
-        "/historique", "/modele",   "/modules", "/nouvelle",  "/ouvrir",    "/outils",
-        "/quitter",    "/renommer", "/reset",   "/risque",    "/supprimer", "/transcription"};
+    std::vector<std::string> names{"/aide",      "/annuler",       "/charger",      "/decharger",
+                                   "/recharger", "/conversations", "/historique",   "/modele",
+                                   "/modules",   "/nouvelle",      "/ouvrir",       "/outils",
+                                   "/quitter",   "/raisonnement",  "/renommer",     "/reset",
+                                   "/risque",    "/supprimer",     "/transcription"};
     std::ranges::copy(modules.completion_names(), std::back_inserter(names));
     return names;
 }
@@ -114,6 +115,9 @@ void print_help(const cli::ModulesUi& modules) {
     out += command("/outils", "outils disponibles et leur niveau de risque") + "\n";
     out += command("/annuler", "annuler les actions de la dernière requête (répétable)") + "\n";
     out += command("/modele [nom]", "modèles disponibles, ou changer de modèle") + "\n";
+    out += command("/raisonnement [niveau] [modèle]",
+                   "aucun, faible, moyen, élevé ou défaut ; sans niveau : l'actuel") +
+           "\n";
     out +=
         command("/charger [nom]", "charger un modèle local en mémoire (actif par défaut)") + "\n";
     out += command("/decharger [nom]", "le décharger : libère la mémoire vidéo") + "\n";
@@ -259,6 +263,8 @@ std::string_view trim(std::string_view text) {
 /// Traite une commande (ligne commençant par « / »). Renvoie faux pour quitter.
 /// Clé de la base où est retenu le dernier modèle utilisé.
 constexpr std::string_view kActiveModelKey = "llm.active";
+/// Préfixe des clés où est retenu le raisonnement de chaque modèle.
+constexpr std::string_view kReasoningKeyPrefix = "llm.reasoning.";
 
 /// Après chaque requête ou commande : déchargement différé du modèle actif
 /// (demandé pendant la requête, que sa réponse aurait rechargé).
@@ -283,9 +289,13 @@ void print_models(const llm::ModelSwitcher& switcher) {
     }
     for (const auto& model : switcher.models()) {
         const bool active = &model == switcher.active();
+        std::string line = llm::describe(model);
+        if (std::holds_alternative<core::OpenAiCompatibleConfig>(model.config)) {
+            line += ", raisonnement " + llm::reasoning_label(llm::ModelSwitcher::reasoning(model));
+        }
         display().plain(
             std::format("  {} {}", active ? paint("●", {.color = Color::Green, .bold = true}) : " ",
-                        paint(llm::describe(model), {.bold = active})));
+                        paint(line, {.bold = active})));
     }
     if (switcher.models().size() < 2) {
         display().info("Un seul modèle : ajoutez-en d'autres dans config.toml ([models.<nom>], "
@@ -368,6 +378,31 @@ bool run_command(core::Agent& agent, cli::Prompt& prompt, cli::Conversations& co
                 arguments["reload"] = true;
             }
             const core::ToolCall call{.id = {}, .name = tool, .arguments = std::move(arguments)};
+            const std::string input(line);
+            run_request(agent, prompt, [&agent, &input, &call](const std::stop_token& stop) {
+                return agent.run_tool(input, call, stop);
+            });
+        }
+    } else if (command == "/raisonnement") {
+        if (argument.empty()) {
+            if (const auto* active = switcher.active()) {
+                display().info(
+                    std::format("Raisonnement de « {} » : {}.", active->name,
+                                llm::reasoning_label(llm::ModelSwitcher::reasoning(*active))));
+            } else {
+                display().info("Aucun modèle.");
+            }
+        } else if (agent.tools().find("set_reasoning") == nullptr) {
+            display().info("Aucun modèle dont le raisonnement se règle (openai_compatible).");
+        } else {
+            // « /raisonnement élevé » ou « /raisonnement élevé leger ».
+            const auto separator = argument.find(' ');
+            nlohmann::json arguments{{"level", std::string(argument.substr(0, separator))}};
+            if (separator != std::string_view::npos) {
+                arguments["name"] = std::string(trim(argument.substr(separator + 1)));
+            }
+            const core::ToolCall call{
+                .id = {}, .name = "set_reasoning", .arguments = std::move(arguments)};
             const std::string input(line);
             run_request(agent, prompt, [&agent, &input, &call](const std::stop_token& stop) {
                 return agent.run_tool(input, call, stop);
@@ -510,6 +545,15 @@ int run(int argc, char** argv) {
             startup_warnings.push_back(core::describe(state.error()));
         }
     }
+    // Raisonnement réglé par modèle, retenu lui aussi.
+    if (store) {
+        for (const auto& model : switcher.models()) {
+            if (auto state = store->state(std::string(kReasoningKeyPrefix) + model.name);
+                state && state->has_value()) {
+                switcher.restore_reasoning(model.name, **state);
+            }
+        }
+    }
     auto llm =
         switcher.start(remembered ? std::optional<std::string_view>(*remembered) : std::nullopt);
     if (!llm) {
@@ -526,6 +570,20 @@ int run(int argc, char** argv) {
         }
         if (options.router) {
             if (auto rules = llm::register_residency_rules(*options.router); !rules) {
+                display().error(core::describe(rules.error()));
+                return EXIT_FAILURE;
+            }
+        }
+    }
+    if (std::ranges::any_of(switcher.models(), [](const llm::ModelChoice& model) {
+            return std::holds_alternative<core::OpenAiCompatibleConfig>(model.config);
+        })) {
+        if (auto added = tools.add(llm::make_reasoning_tool(switcher)); !added) {
+            display().error(core::describe(added.error()));
+            return EXIT_FAILURE;
+        }
+        if (options.router) {
+            if (auto rules = llm::register_reasoning_rules(*options.router); !rules) {
                 display().error(core::describe(rules.error()));
                 return EXIT_FAILURE;
             }
@@ -549,6 +607,15 @@ int run(int argc, char** argv) {
     switcher.attach(agent);
 
     cli::Conversations conversations(std::move(store), agent, prompt);
+    switcher.on_reasoning([&conversations](const llm::ModelChoice& model) {
+        if (auto* base = conversations.store()) {
+            const auto effort = llm::ModelSwitcher::reasoning(model).value_or("");
+            if (auto saved = base->set_state(std::string(kReasoningKeyPrefix) + model.name, effort);
+                !saved) {
+                spdlog::warn("raisonnement non retenu : {}", core::describe(saved.error()));
+            }
+        }
+    });
     // Le modèle choisi est retenu pour le prochain lancement.
     switcher.on_switch([&conversations](const llm::ModelChoice& model) {
         if (auto* base = conversations.store()) {

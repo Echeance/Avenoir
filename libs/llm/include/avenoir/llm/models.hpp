@@ -104,6 +104,27 @@ class ModelSwitcher {
     [[nodiscard]] core::Result<std::string>
     set_residency(std::string_view name, Residency residency, const std::stop_token& stop);
 
+    /// Change l'effort de raisonnement du modèle `name` (vide : l'actif) :
+    /// « aucun », « faible », « moyen », « élevé », ou « défaut » (choix du
+    /// serveur) ; les valeurs de l'API (`none`, `low`…) sont acceptées. Le
+    /// modèle actif l'applique dès sa prochaine réponse, sans être rechargé
+    /// (`reasoning_effort` est un paramètre de chaque requête).
+    /// `openai_compatible` seulement. Renvoie la phrase à afficher.
+    [[nodiscard]] core::Result<std::string> set_reasoning(std::string_view name,
+                                                          std::string_view level);
+
+    /// Effort de raisonnement réglé pour un modèle (vide : choix du serveur).
+    [[nodiscard]] static std::optional<std::string> reasoning(const ModelChoice& model);
+
+    /// Rétablit un effort retenu au lancement précédent, sans prévenir ni
+    /// créer de fournisseur (à appeler avant `start`). Ignoré s'il est invalide.
+    void restore_reasoning(std::string_view name, std::string_view level);
+
+    /// Appelée après chaque changement d'effort réussi (pour le retenir).
+    void on_reasoning(std::function<void(const ModelChoice&)> callback) {
+        on_reasoning_ = std::move(callback);
+    }
+
     /// À appeler après chaque requête ou commande : exécute le déchargement
     /// différé, s'il y en a un. Renvoie la phrase à afficher, ou rien.
     [[nodiscard]] std::optional<std::string> finish_request();
@@ -117,6 +138,7 @@ class ModelSwitcher {
     std::function<void(const ModelChoice&)> on_switch_;
     JsonPoster poster_;
     std::optional<std::size_t> pending_unload_; ///< Modèle à décharger après la requête.
+    std::function<void(const ModelChoice&)> on_reasoning_;
 
     /// Requête `keep_alive` au serveur Ollama du modèle.
     [[nodiscard]] core::Result<void> send_residency(const ModelChoice& model, bool load,
@@ -135,6 +157,16 @@ make_residency_tools(ModelSwitcher& switcher);
 /// Règles de voie rapide : « décharge le modèle », « libère la carte
 /// graphique », « charge le modèle gemma », « recharge le modèle »…
 [[nodiscard]] core::Result<void> register_residency_rules(core::FastRouter& router);
+
+/// Outil `set_reasoning` (réversible, annulable : retour à l'effort précédent).
+[[nodiscard]] std::shared_ptr<core::Tool> make_reasoning_tool(ModelSwitcher& switcher);
+
+/// Règles de voie rapide : « mets le raisonnement à élevé », « désactive le
+/// raisonnement », « active le raisonnement »…
+[[nodiscard]] core::Result<void> register_reasoning_rules(core::FastRouter& router);
+
+/// « aucun » pour `none`, « faible », « moyen », « élevé », « par défaut ».
+[[nodiscard]] std::string reasoning_label(const std::optional<std::string>& effort);
 
 /// Règles de voie rapide : « passe sur le modèle léger », « utilise le modèle
 /// claude »… (le mot « modèle » ou « llm » est exigé : règles strictes).

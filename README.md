@@ -156,11 +156,12 @@ Avenoir est développé et utilisé au quotidien sur cette machine :
 - **Carte graphique** : AMD Radeon RX 7900 XTX (24 Go)
 - **Moteur** : Ollama avec ROCm (`sudo pacman -S ollama-rocm`)
 
-Deux modèles locaux, selon ce que fait la carte graphique :
+Trois modèles locaux, selon ce que fait la carte graphique :
 
 | Modèle | Quand | VRAM | Réponse |
 |---|---|---|---|
 | **`gemma4:26b-a4b`** | au quotidien, quand la carte est libre : le plus fiable et le plus rapide du banc d'essai | ~21 Go | ~0,8 s |
+| **`qwen3.8:27b`** | quand Gemma se trompe ou pour un deuxième avis : aussi fiable, deux fois plus lent | ~20 Go | ~1,6 s |
 | **`ministral-3:8b`** | quand la carte sert à autre chose (jeu, rendu…) : moitié moins de mémoire, aucune injection suivie sur le banc d'essai | ~11 Go | ~0,8 s |
 
 ```toml
@@ -168,6 +169,13 @@ Deux modèles locaux, selon ce que fait la carte graphique :
 provider = "openai_compatible"
 base_url = "http://localhost:11434/v1"
 model = "gemma4:26b-a4b"
+temperature = 0.2
+reasoning_effort = "none"
+
+[models.qwen]                   # deuxième avis : « passe sur le modèle qwen »
+provider = "openai_compatible"
+base_url = "http://localhost:11434/v1"
+model = "qwen3.8:27b"
 temperature = 0.2
 reasoning_effort = "none"
 
@@ -201,6 +209,7 @@ avenoir chemin/config.toml
 | `/outils` | outils disponibles et leur niveau de risque |
 | `/annuler` | annuler les actions de la dernière requête (répétable) |
 | `/modele [nom]` | modèles configurés, ou passer à un autre (aussi : *« passe sur le modèle leger »*) ; un modèle distant demande confirmation |
+| `/raisonnement [niveau] [modèle]` | effort de réflexion du modèle : `aucun` (le plus rapide), `faible`, `moyen`, `élevé`, `défaut` ; appliqué tout de suite, sans recharger le modèle, et retenu (aussi : *« mets le raisonnement à élevé »*, *« désactive le raisonnement »*) |
 | `/charger [nom]` · `/decharger [nom]` · `/recharger [nom]` | charger un modèle local en mémoire, le décharger (libère la mémoire vidéo, par exemple avant un jeu) ou le recharger ; le modèle actif par défaut (aussi : *« décharge le modèle »*, *« libère la carte graphique »*, *« allume le modèle gemma »*) |
 | `/nouvelle [titre]` | nouvelle conversation (l'ancienne reste dans `/conversations`) |
 | `/reset` | efface la conversation en cours (messages et écran) après confirmation, en proposant d'en garder une transcription Markdown (`/supprimer` la propose aussi) |

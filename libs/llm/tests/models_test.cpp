@@ -349,3 +349,102 @@ TEST_CASE("outils et voie rapide pour charger et décharger", "[models]") {
     CHECK(route("arrête la musique").tool.empty());
     CHECK(route("charge mon téléphone").tool.empty());
 }
+
+namespace {
+
+/// Fournisseur qui retient l'effort de raisonnement de sa configuration.
+class EffortLlm final : public core::LlmProvider {
+  public:
+    explicit EffortLlm(std::optional<std::string> effort) : effort_(std::move(effort)) {}
+    [[nodiscard]] std::string_view name() const override { return "effort"; }
+    [[nodiscard]] core::Result<core::LlmResponse>
+    complete(const core::LlmRequest& /*request*/) override {
+        return core::LlmResponse{.text = "effort " + effort_.value_or("défaut"), .tool_calls = {}};
+    }
+
+  private:
+    std::optional<std::string> effort_;
+};
+
+llm::ProviderFactory effort_factory(int& created) {
+    return [&created](
+               const core::LlmConfig& config) -> core::Result<std::unique_ptr<core::LlmProvider>> {
+        ++created;
+        const auto* openai = std::get_if<core::OpenAiCompatibleConfig>(&config);
+        return std::make_unique<EffortLlm>(openai != nullptr ? openai->reasoning_effort
+                                                             : std::nullopt);
+    };
+}
+
+} // namespace
+
+TEST_CASE("changer le raisonnement sans recharger le modèle", "[models]") {
+    auto agent = make_agent();
+    int created = 0;
+    llm::ModelSwitcher switcher(sample_models(), nullptr, effort_factory(created));
+    switcher.restore_reasoning("gemma", "none");           // retenu au lancement précédent
+    switcher.restore_reasoning("gemma", "n'importe quoi"); // ignoré
+    auto provider = switcher.start("gemma");
+    REQUIRE(provider.has_value());
+    agent.set_llm(std::move(*provider));
+    switcher.attach(agent);
+    std::vector<std::string> remembered;
+    switcher.on_reasoning([&remembered](const llm::ModelChoice& model) {
+        remembered.push_back(model.name + "=" + llm::ModelSwitcher::reasoning(model).value_or(""));
+    });
+    CHECK(agent.handle("a").value_or("") == "effort none");
+
+    const auto high = switcher.set_reasoning("", "Élevé");
+    REQUIRE(high.has_value());
+    CHECK(*high == "Raisonnement de « gemma » : élevé.");
+    CHECK(agent.handle("b").value_or("") == "effort high"); // dès la réponse suivante
+    CHECK(agent.history().size() == 4);                     // conversation gardée
+
+    // Un autre modèle que l'actif : réglage gardé pour quand il servira.
+    const int before = created;
+    REQUIRE(switcher.set_reasoning("leger", "low").has_value());
+    CHECK(created == before);
+    CHECK(llm::ModelSwitcher::reasoning(*switcher.find("leger")) == "low");
+
+    REQUIRE(switcher.set_reasoning("gemma", "défaut").has_value());
+    CHECK(agent.handle("c").value_or("") == "effort défaut");
+    CHECK(remembered == std::vector<std::string>{"gemma=high", "leger=low", "gemma="});
+
+    CHECK_FALSE(switcher.set_reasoning("", "maximum").has_value());
+    CHECK_FALSE(switcher.set_reasoning("claude", "high").has_value()); // claude_code
+    CHECK_FALSE(switcher.set_reasoning("gpt", "high").has_value());
+}
+
+TEST_CASE("outil et voie rapide du raisonnement", "[models]") {
+    auto agent = make_agent();
+    int created = 0;
+    llm::ModelSwitcher switcher(sample_models(), nullptr, effort_factory(created));
+    REQUIRE(switcher.start("gemma").has_value());
+    switcher.attach(agent);
+    const auto tool = llm::make_reasoning_tool(switcher);
+    CHECK(tool->spec().name == "set_reasoning");
+
+    const auto set = tool->call({{"level", "élevé"}}, {});
+    REQUIRE(set.has_value());
+    if (const auto& undo = set->undo) {
+        CHECK(undo->description == "remettre le raisonnement de « gemma » à par défaut (choix du "
+                                   "serveur)");
+        REQUIRE(undo->run().has_value());
+        CHECK_FALSE(llm::ModelSwitcher::reasoning(*switcher.find("gemma")).has_value());
+    } else {
+        FAIL("annulation absente");
+    }
+    CHECK_FALSE(tool->call({{"level", "énorme"}}, {}).has_value());
+
+    core::FastRouter router;
+    REQUIRE(llm::register_reasoning_rules(router).has_value());
+    const auto args = [&router](std::string_view input) {
+        const auto route = router.route(input);
+        return route && route->tool == "set_reasoning" ? route->arguments : nlohmann::json{};
+    };
+    CHECK(args("mets le raisonnement à élevé") == nlohmann::json{{"level", "élevé"}});
+    CHECK(args("raisonnement faible") == nlohmann::json{{"level", "faible"}});
+    CHECK(args("désactive le raisonnement") == nlohmann::json{{"level", "aucun"}});
+    CHECK(args("active le raisonnement") == nlohmann::json{{"level", "moyen"}});
+    CHECK(args("mets le son à fond").is_null());
+}

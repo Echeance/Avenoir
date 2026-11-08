@@ -344,6 +344,108 @@ core::Result<std::string> ModelSwitcher::set_residency(std::string_view name, Re
     return std::format("Modèle « {} » rechargé.", target->name);
 }
 
+namespace {
+
+/// Niveau dit ou tapé → valeur de l'API ; « défaut » → nullopt ; inconnu → erreur.
+core::Result<std::optional<std::string>> parse_reasoning(std::string_view level) {
+    const std::string folded = fold(level);
+    for (const auto& [words, value] :
+         std::to_array<std::pair<std::array<std::string_view, 4>, std::string_view>>({
+             {{"none", "aucun", "desactive", "off"}, "none"},
+             {{"low", "faible", "bas", "leger"}, "low"},
+             {{"medium", "moyen", "normal", "active"}, "medium"},
+             {{"high", "eleve", "haut", "fort"}, "high"},
+         })) {
+        if (std::ranges::contains(words, folded)) {
+            return std::optional<std::string>(value);
+        }
+    }
+    if (folded == "defaut" || folded == "default" || folded == "par-defaut") {
+        return std::optional<std::string>{};
+    }
+    return core::make_error(core::ErrorCode::Config,
+                            std::format("niveau de raisonnement inconnu « {} » (aucun, faible, "
+                                        "moyen, élevé ou défaut)",
+                                        level));
+}
+
+} // namespace
+
+std::string reasoning_label(const std::optional<std::string>& effort) {
+    if (!effort) {
+        return "par défaut (choix du serveur)";
+    }
+    if (*effort == "none") {
+        return "aucun";
+    }
+    if (*effort == "low") {
+        return "faible";
+    }
+    if (*effort == "medium") {
+        return "moyen";
+    }
+    if (*effort == "high") {
+        return "élevé";
+    }
+    return *effort;
+}
+
+std::optional<std::string> ModelSwitcher::reasoning(const ModelChoice& model) {
+    const auto* openai = std::get_if<core::OpenAiCompatibleConfig>(&model.config);
+    return openai != nullptr ? openai->reasoning_effort : std::nullopt;
+}
+
+void ModelSwitcher::restore_reasoning(std::string_view name, std::string_view level) {
+    const auto* found = find(name);
+    auto effort = parse_reasoning(level.empty() ? "défaut" : level);
+    if (found == nullptr || !effort) {
+        return;
+    }
+    auto& model = models_[static_cast<std::size_t>(found - models_.data())];
+    if (auto* openai = std::get_if<core::OpenAiCompatibleConfig>(&model.config)) {
+        openai->reasoning_effort = *effort;
+    }
+}
+
+core::Result<std::string> ModelSwitcher::set_reasoning(std::string_view name,
+                                                       std::string_view level) {
+    const ModelChoice* target = name.empty() ? active() : find(name);
+    if (target == nullptr) {
+        return core::make_error(
+            core::ErrorCode::Config,
+            name.empty() ? std::string("aucun modèle actif")
+                         : std::format("modèle inconnu « {} » (modèles : {})", name, names()));
+    }
+    auto effort = parse_reasoning(level);
+    if (!effort) {
+        return std::unexpected(std::move(effort.error()));
+    }
+    const auto index = static_cast<std::size_t>(target - models_.data());
+    auto updated = models_[index].config;
+    auto* openai = std::get_if<core::OpenAiCompatibleConfig>(&updated);
+    if (openai == nullptr) {
+        return core::make_error(
+            core::ErrorCode::Config,
+            std::format("le raisonnement de « {} » ne se règle pas (openai_compatible seulement)",
+                        target->name));
+    }
+    openai->reasoning_effort = *effort;
+    if (index == active_ && agent_ != nullptr) {
+        // Nouveau fournisseur, même modèle : le serveur le garde en mémoire.
+        auto provider = factory_(updated);
+        if (!provider) {
+            return std::unexpected(std::move(provider.error()));
+        }
+        agent_->set_llm(std::move(*provider));
+    }
+    models_[index].config = std::move(updated);
+    if (on_reasoning_) {
+        on_reasoning_(models_[index]);
+    }
+    return std::format("Raisonnement de « {} » : {}.", models_[index].name,
+                       reasoning_label(*effort));
+}
+
 std::optional<std::string> ModelSwitcher::finish_request() {
     if (!pending_unload_ || *pending_unload_ >= models_.size()) {
         return std::nullopt;
@@ -520,6 +622,111 @@ core::Result<void> register_residency_rules(core::FastRouter& router) {
              {std::string(kReload) + "$", "load_llm", "", reload},
          })) {
         if (auto added = router.add_rule(pattern, tool, arg, fixed); !added) {
+            return added;
+        }
+    }
+    return {};
+}
+
+namespace {
+
+struct ReasoningArgs {
+    std::string level;
+    std::string name;
+};
+NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_WITH_DEFAULT(ReasoningArgs, level, name)
+
+class ReasoningTool final : public core::Tool {
+  public:
+    explicit ReasoningTool(ModelSwitcher& switcher) : switcher_(&switcher) {}
+
+    [[nodiscard]] core::ToolSpec spec() const override {
+        return core::ToolSpec{
+            .name = "set_reasoning",
+            .description = "Règle l'effort de raisonnement (réflexion avant de répondre) d'un "
+                           "modèle, sans le recharger : « aucun » est le plus rapide, « élevé » le "
+                           "plus réfléchi mais plus lent. Modèles openai_compatible seulement.",
+            .input_schema = {{"type", "object"},
+                             {"properties",
+                              {{"level",
+                                {{"type", "string"},
+                                 {"enum", {"aucun", "faible", "moyen", "élevé", "défaut"}},
+                                 {"description", "Niveau de raisonnement"}}},
+                               {"name",
+                                {{"type", "string"},
+                                 {"description", "Nom du modèle (" + switcher_->names() +
+                                                     ") ; absent : le modèle actif"}}}}},
+                             {"required", nlohmann::json::array({"level"})}},
+            .risk = core::RiskLevel::Reversible,
+        };
+    }
+
+    [[nodiscard]] core::ToolResult call(const nlohmann::json& arguments,
+                                        const std::stop_token& /*stop*/) const override {
+        auto args = core::parse_args<ReasoningArgs>(arguments);
+        if (!args) {
+            return std::unexpected(std::move(args.error()));
+        }
+        const ModelChoice* target =
+            args->name.empty() ? switcher_->active() : switcher_->find(args->name);
+        const std::string model = target != nullptr ? target->name : args->name;
+        const auto previous = target != nullptr ? ModelSwitcher::reasoning(*target) : std::nullopt;
+        auto done = switcher_->set_reasoning(args->name, args->level);
+        if (!done) {
+            return std::unexpected(core::ToolError{.kind = core::ToolErrorKind::Execution,
+                                                   .message = done.error().message});
+        }
+        const auto now = ModelSwitcher::reasoning(*switcher_->find(model));
+        ModelSwitcher* switcher = switcher_;
+        return core::ToolOutput{
+            .content = std::move(*done),
+            .undo =
+                core::UndoAction{
+                    .description = std::format("remettre le raisonnement de « {} » à {}", model,
+                                               reasoning_label(previous)),
+                    .run = [switcher, model, previous, now] -> core::ToolResult {
+                        const auto* current = switcher->find(model);
+                        if (current == nullptr || ModelSwitcher::reasoning(*current) != now) {
+                            return std::unexpected(
+                                core::ToolError{.kind = core::ToolErrorKind::Execution,
+                                                .message = "le raisonnement a changé depuis"});
+                        }
+                        auto back = switcher->set_reasoning(model, previous.value_or("défaut"));
+                        if (!back) {
+                            return std::unexpected(
+                                core::ToolError{.kind = core::ToolErrorKind::Execution,
+                                                .message = back.error().message});
+                        }
+                        return core::ToolOutput{.content = std::move(*back)};
+                    },
+                },
+        };
+    }
+
+  private:
+    ModelSwitcher* switcher_;
+};
+
+} // namespace
+
+std::shared_ptr<core::Tool> make_reasoning_tool(ModelSwitcher& switcher) {
+    return std::make_shared<ReasoningTool>(switcher);
+}
+
+core::Result<void> register_reasoning_rules(core::FastRouter& router) {
+    // Le mot « raisonnement » est exigé.
+    const nlohmann::json none = nlohmann::json::object();
+    for (const auto& [pattern, arg, fixed] :
+         std::to_array<std::tuple<std::string, std::string, nlohmann::json>>({
+             {R"(^(?:mets|passe|règle)\s+(?:le\s+)?raisonnement\s+(?:à|sur|en)\s+(\S+)$)", "level",
+              none},
+             {R"(^raisonnement\s+(\S+)$)", "level", none},
+             {R"(^(?:désactive|coupe|arrête)\s+(?:le\s+)?raisonnement$)", "",
+              nlohmann::json{{"level", "aucun"}}},
+             {R"(^(?:active|allume)\s+(?:le\s+)?raisonnement$)", "",
+              nlohmann::json{{"level", "moyen"}}},
+         })) {
+        if (auto added = router.add_rule(pattern, "set_reasoning", arg, fixed); !added) {
             return added;
         }
     }
