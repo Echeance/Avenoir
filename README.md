@@ -111,7 +111,7 @@ Choisissez ensuite votre fournisseur LLM dans la section `[llm]` :
 
 | Fournisseur | `provider` | Pour qui | Mise en place |
 |---|---|---|---|
-| **Local** | `openai_compatible` | Ollama, llama.cpp, LM Studio, vLLM… | `ollama pull qwen3:8b` (tout modèle gérant le *tool calling*) |
+| **Local** | `openai_compatible` | Ollama, llama.cpp, LM Studio, vLLM… | `ollama pull gemma4:26b-a4b` (tout modèle gérant le *tool calling*) |
 | **API distante** | `openai_compatible` ou `anthropic` | OpenAI, Mistral, OpenRouter, Anthropic… | exporter la variable indiquée par `api_key_env` |
 | **Abonnement Claude** | `claude_code` | Claude Pro / Max, **sans clé d'API** | installer Claude Code, puis `claude` → `/login` |
 
@@ -121,10 +121,48 @@ provider = "claude_code"
 model = "sonnet"
 ```
 
+**Quel modèle ?** Mesuré sur nos requêtes de référence (24 requêtes, simples à piégées), sous Linux avec une RX 7900 XTX :
+
+| Usage | Modèle conseillé | Réussite | Temps de réponse |
+|---|---|---|---|
+| Local, carte de 24 Go | `gemma4:26b-a4b` | 100 % | ~0,8 s |
+| Local léger (~10 Go) | `ministral-3:8b` | 96 % | ~0,8 s |
+| Distant | Claude (`claude_code`, `anthropic`) | 100 % | ~6 s via Claude Code |
+
+En local, gardez `reasoning_effort = "none"` : sans lui, les modèles qui « réfléchissent » avant de répondre prennent plusieurs secondes de plus. Le détail, et les modèles à éviter : [`evals/resultats/COMPARAISON.md`](evals/resultats/COMPARAISON.md).
+
 Les autres sections règlent l'agent (`[agent]`), les permissions par niveau de risque (`[permissions]`) et les modules (`[modules.<id>]` : activation, risque relevé). Tout est commenté dans [`config.example.toml`](config.example.toml).
 
 > [!IMPORTANT]
 > À partir du jalon 3, les réglages ne se modifieront **que depuis Avenoir** : le fichier sera scellé et toute modification faite en dehors sera refusée ([PROJECT.md § 5.1](PROJECT.md#51-réglages-modifiables-uniquement-par-avenoir)).
+
+### 🧑‍💻 Le setup de l'auteur
+
+Avenoir est développé et utilisé au quotidien sur cette machine :
+
+- **Système** : CachyOS (Linux)
+- **Processeur et mémoire** : AMD Ryzen 7 5800X, 32 Go de RAM
+- **Carte graphique** : AMD Radeon RX 7900 XTX (24 Go)
+- **Moteur** : Ollama avec ROCm (`sudo pacman -S ollama-rocm`)
+
+Deux modèles locaux, selon ce que fait la carte graphique :
+
+| Modèle | Quand | VRAM | Réponse |
+|---|---|---|---|
+| **`gemma4:26b-a4b`** | au quotidien, quand la carte est libre : le plus fiable et le plus rapide du banc d'essai | ~21 Go | ~0,8 s |
+| **`ministral-3:8b`** | quand la carte sert à autre chose (jeu, rendu…) : moitié moins de mémoire, aucune injection suivie sur le banc d'essai | ~11 Go | ~0,8 s |
+
+```toml
+[llm]
+provider = "openai_compatible"
+base_url = "http://localhost:11434/v1"
+model = "gemma4:26b-a4b"        # ou "ministral-3:8b"
+temperature = 0.2
+reasoning_effort = "none"
+```
+
+> [!TIP]
+> Un modèle chargé garde sa mémoire vidéo même sans rien faire. Le calcul, lui, est quasi nul au repos. Ollama le décharge **5 minutes** après la dernière requête (`OLLAMA_KEEP_ALIVE`). Pour libérer la carte tout de suite, avant de jouer : `ollama stop gemma4:26b-a4b`. La requête suivante le recharge, ce qui prend environ 6 s pour Ministral et 19 s pour Gemma.
 
 ---
 
@@ -203,8 +241,9 @@ Le cœur est écrit en **C++23**, découpé en bibliothèques indépendantes :
 | `avenoir::terminal` | rendu dans le terminal : couleurs, cadres, Markdown, pixel art |
 | `apps/cli` | l'interface en ligne de commande |
 | `modules/meteo` | module météo fourni (programme séparé) |
+| `evals` | banc d'essai avec de vrais modèles (`avenoir-evals`) |
 
-Vision, décisions et directives : **[PROJECT.md](PROJECT.md)**.
+Vision, décisions et directives : **[PROJECT.md](PROJECT.md)**. Comment le code s'articule (démarrage, trajet d'une requête, rôle de chaque bibliothèque) : **[docs/FONCTIONNEMENT.md](docs/FONCTIONNEMENT.md)**.
 
 ---
 
@@ -220,7 +259,14 @@ scripts/build.sh -h                   # toutes les options
 
 Sous Windows, `scripts\build.ps1` offre les mêmes options et charge tout seul l'environnement Visual Studio. Avec CMake directement : `cmake --preset debug`, `cmake --build --preset debug`, `ctest --preset debug`.
 
-**Qualité** : avertissements traités comme des erreurs, `clang-format`, `clang-tidy`, AddressSanitizer + UndefinedBehaviorSanitizer, et plus de 90 tests — dont un test de bout en bout de la CLI. La [CI](https://github.com/echeance/Avenoir/actions) vérifie chaque modification sous Linux (GCC, Clang, sanitizers) et Windows (MSVC).
+**Qualité** : avertissements traités comme des erreurs, `clang-format`, `clang-tidy`, AddressSanitizer + UndefinedBehaviorSanitizer, et plus de 130 tests — dont un test de bout en bout de la CLI. La [CI](https://github.com/echeance/Avenoir/actions) vérifie chaque modification sous Linux (GCC, Clang, sanitizers) et Windows (MSVC).
+
+**Essais avec de vrais modèles** : `avenoir-evals` passe les requêtes de référence ([`evals/requetes.toml`](evals/requetes.toml)) sur le modèle de votre configuration, avec de fausses versions des outils (rien n'est lancé), et écrit un rapport dans [`evals/resultats/`](evals/resultats/) :
+
+```sh
+./build/debug/evals/avenoir-evals --model haiku --repeat 2         # config.toml du dossier courant
+./build/debug/evals/avenoir-evals --config ollama.toml --prompt essai.txt --only injection-meteo
+```
 
 Les images de ce README sont générées par les scripts de [`docs/readme/`](docs/readme/) : `penguin.py` (pingouin) et `capture.sh` (enregistre une vraie session de la CLI et la dessine en PNG).
 

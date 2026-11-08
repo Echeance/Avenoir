@@ -98,6 +98,8 @@ avenoir/
 ├── config.example.toml     Configuration commentée
 ├── PROJECT.md              Ce document
 ├── modules/                Modules fournis avec Avenoir (programmes séparés) : meteo/
+├── evals/                  Banc d'essai avec de vrais modèles : requêtes de référence, rapports
+├── docs/                   ROADMAP.md, FONCTIONNEMENT.md (comment le code s'articule), images du README
 ├── libs/
 │   ├── core/               Cœur, sans dépendance à l'OS, au LLM ou à la voix
 │   │   ├── include/avenoir/core/
@@ -170,6 +172,18 @@ Chaque dossier de `libs/` est une bibliothèque CMake (`avenoir::core`, `avenoir
 | `openai_compatible` | HTTP `/chat/completions` (Ollama, llama.cpp server, LM Studio, vLLM, OpenAI, Mistral, OpenRouter…), appels d'outils natifs | gratuit en local, sinon au token |
 | `anthropic` | HTTP API Messages, appels d'outils natifs | au token (clé d'API) |
 | `claude_code` | Lance la CLI officielle `claude -p` connectée à l'abonnement de l'utilisateur. Ses outils, plugins, hooks et réglages sont désactivés (`--tools ""`, `--strict-mcp-config`, `--setting-sources ""`) ; les outils d'Avenoir sont décrits dans le prompt et la réponse est imposée par `--json-schema` | inclus dans l'abonnement Pro / Max |
+
+Pour les modèles qui « réfléchissent » avant de répondre (Qwen…), `reasoning_effort = "none"` (`openai_compatible`) coupe cette réflexion : la latence passe de plusieurs secondes à environ une seconde, sans perte mesurable sur les requêtes de référence.
+
+**Modèles recommandés**, d'après le banc d'essai (`evals/`, 24 requêtes de référence : simples, multi-outils, ambiguës, injections, refus). Les chiffres, la méthode et l'historique du prompt sont dans [`evals/resultats/COMPARAISON.md`](evals/resultats/COMPARAISON.md).
+
+| Usage | Modèle | Réussite | Latence | Mémoire |
+|---|---|---|---|---|
+| Local, carte de 24 Go | **Gemma 4 26B-A4B** (Ollama `gemma4:26b-a4b`) ; Qwen3.8 27B équivalent, deux fois plus lent | 72/72 | ~0,8 s | ~20 Go de VRAM |
+| Local léger | **Ministral 3 8B** (`ministral-3:8b`) : aucune injection suivie sur le banc ; Gemma 4 12B réussit un cas de plus mais en a suivi une | 69/72 | ~0,8 s | ~10 Go de VRAM |
+| Distant | **Claude** (`claude_code` ou `anthropic`) ; haiku suffit | 48/48 | ~6 s (Claude Code) | — |
+
+Mesures du 8 novembre 2026 sous Linux (RX 7900 XTX, Ollama ROCm, Q4, sans réflexion). À éviter : Qwen3.5 4B (suit les injections), Gemma 4 E4B (se trompe d'outil), Qwen3.5 9B (invente des informations, comme la date). Un nouveau modèle se juge en repassant le banc, pas sur ses scores annoncés.
 
 ### 2.6 Modules
 
@@ -446,7 +460,7 @@ Emplacement cible (phase 3) : `%APPDATA%\avenoir\config.toml` sous Windows, `$XD
 - [x] Module météo fourni (Open-Meteo)
 - [x] CLI : confirmations, Ctrl+C, annulation, apparence soignée, barre de saisie fixe
 - [x] Conversations persistantes (SQLite)
-- [ ] Tester avec plusieurs LLM réels (local et distant), ajuster le prompt système
+- [ ] Tester avec plusieurs LLM réels (local et distant), ajuster le prompt système — fait sous Linux (banc d'essai `evals/`, 12 modèles, prompt v3, modèles recommandés) ; reste l'essai sous Windows
 
 ### Phase 2 : contrôle système
 - [ ] Volume, luminosité, mode sombre, verrouillage, veille (`sensitive` : extinction, redémarrage)
@@ -522,6 +536,9 @@ Emplacement cible (phase 3) : `%APPDATA%\avenoir\config.toml` sous Windows, `$XD
 | 31 | **Choix de risque des outils de modules** (`/risque`) enregistrés dans la base SQLite d'Avenoir, appliqués à chaud ; `config.toml` ne peut que relever (plancher) | Hors du fichier édité à la main ; une baisse n'existe qu'avec l'accord saisi. Le sceau des réglages (jalon 3) protégera aussi ces choix |
 | 32 | **`Tool::call` reçoit un `std::stop_token`** : un appel de module interrompu par Ctrl+C rend la main tout de suite et le module reçoit `notifications/cancelled` | Ctrl+C doit toujours reprendre la main, même face à un module lent ou bloqué |
 | 33 | **Module météo fourni**, en C++, données **Open-Meteo** (sans clé, CC BY 4.0, gratuit pour un usage non commercial) ; ville par défaut réglée par l'utilisateur, pas de géolocalisation | Premier vrai module, qui sert aussi d'exemple ; aucune donnée envoyée hormis la ville demandée et ses coordonnées ; pas de service tiers de géolocalisation par IP |
+| 34 | **Banc d'essai avec de vrais modèles** (`evals/`, `avenoir-evals`) : requêtes de référence en TOML, vrai agent et vrai fournisseur, mais **doublures d'outils** (mêmes nom, description, schéma et risque, résultats préparés) ; rapport Markdown versionné ; jamais lancé par ctest ni la CI | Mesurer plutôt que deviner (choix des modèles, effet d'une phrase du prompt) ; reproductible et sans effet sur la machine ; les doublures permettent de tester les injections dans les résultats d'outils |
+| 35 | **`reasoning_effort`** facultatif pour `openai_compatible` (« none » recommandé en local) | Les modèles qui réfléchissent avant de répondre ajoutent des secondes de latence et des centaines de tokens, inacceptables pour un assistant système ; « none » ne dégrade pas les résultats du banc |
+| 36 | **Prompt système v3** et **modèles recommandés** (Gemma 4 26B-A4B en local 24 Go, Ministral 3 8B en léger, Claude en distant), choisis sur le banc d'essai ; la consigne de protocole de `claude_code` dit que les outils listés sont disponibles et se demandent dans `tool_calls` | Chaque règle du prompt répond à un échec mesuré ; une règle qui dit seulement quand demander rend un petit modèle hésitant (v2). En léger, la sécurité départage : on préfère le modèle qui n'a suivi aucune injection |
 
 ---
 

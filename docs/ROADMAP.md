@@ -73,7 +73,7 @@ L'ordre suit un principe : **chaque jalon produit un assistant utilisable**, plu
 
 ### 1.4 Fournisseurs LLM (`avenoir::llm`) — P1 ✅
 - ✅ `openai_compatible` (cpr + JSON) : arguments d'outils en chaîne ou en objet, arguments illisibles transmis à l'outil (qui les refuse)
-- ⬜ `openai_compatible` testé avec un vrai serveur (Ollama non lancé lors de l'étape) — à faire en 1.8
+- ✅ `openai_compatible` testé avec un vrai serveur (Ollama ROCm, 10 modèles, en 1.8)
 - ✅ `anthropic` (fusion des messages consécutifs de même rôle)
 - ✅ `claude_code` : `claude -p` via `reproc` (boucle `poll` non bloquante : entrée de toute taille, annulation, délai), outils de Claude Code désactivés, clés d'API neutralisées dans l'environnement, prompt sur stdin, `--json-schema` (`text` et `tool_calls` obligatoires), dossier de travail temporaire — testé en réel
 - ✅ Fabrique `make_provider` : clé lue dans la variable nommée par la config, jamais citée dans les erreurs
@@ -126,11 +126,13 @@ L'ordre suit un principe : **chaque jalon produit un assistant utilisable**, plu
 - ⬜ P3 : `/config`
 
 ### 1.8 Essais avec de vrais modèles — P1
-- ⬜ Jeu de ~20 requêtes de référence (simples, multi-outils, ambiguës, tentatives d'injection) dans `evals/`
-- ⬜ Les passer sur : Ollama (qwen3 8B), `claude_code` (haiku, sonnet), une API distante
-- ⬜ Ajuster le prompt système et les descriptions d'outils selon les échecs constatés
-- ⬜ Noter dans PROJECT.md les modèles recommandés (local / distant)
-- ⬜ Rédiger `docs/FONCTIONNEMENT.md` : comment le code s'articule (démarrage, trajet d'une requête, rôle de chaque bibliothèque)
+- ✅ Banc d'essai `evals/` (`avenoir-evals`) : 24 requêtes de référence en TOML (simples, multi-outils, suite de conversation, ambiguës, hors de portée, erreur d'outil, injections dans les résultats d'outils et dans un message, arguments piégés, refus et accord), vrai agent et vrai fournisseur, **doublures d'outils**, voie rapide coupée ; répétitions (`--repeat`), prompt à essayer (`--prompt`), rapport Markdown par passage dans `evals/resultats/` ; logique testée sans LLM (6 tests)
+- ✅ Passé sous Linux sur 12 modèles : `claude_code` (haiku, sonnet, utilisés comme API distante) et 10 modèles locaux via Ollama ROCm (RX 7900 XTX), du très léger (Qwen3.5 4B, Gemma 4 E4B, Ministral 3 3B) au lourd (Qwen3.8 27B, Gemma 4 26B-A4B, Qwen3.6 35B-A3B, GLM-4.7-Flash) ; tableaux dans `evals/resultats/COMPARAISON.md`
+- ✅ `reasoning_effort` pour `openai_compatible` (et `--reasoning` dans le banc) : sans lui, les modèles qui réfléchissent ajoutent des centaines de tokens par réponse
+- ✅ Ajustements : consigne de protocole de `claude_code` (haiku croyait ses outils indisponibles : 20/24 → 24/24), description de `open_url` (`http(s)` seulement), prompt système v3 (v2 abandonnée : trop hésitante) ; tous les finalistes progressent (Gemma 4 12B 92 % → 97 %, Ministral 3 8B 92 % → 96 %)
+- ✅ Modèles recommandés notés dans PROJECT.md § 2.5 : Gemma 4 26B-A4B (local 24 Go), Ministral 3 8B (léger), Claude (distant)
+- ✅ `docs/FONCTIONNEMENT.md` : démarrage, trajet d'une requête, rôle de chaque bibliothèque, hôte de modules, annulation, banc d'essai
+- ⬜ Essai sous Windows : passe du banc, outils natifs (1.5), Ctrl+C (1.7), module météo
 
 **Fini quand :** les requêtes de référence passent avec au moins un modèle local et un modèle distant, sur Linux et Windows.
 
@@ -293,4 +295,4 @@ Par ordre conseillé :
 5. ~~Outils natifs (1.5) ; confirmations, Ctrl+C, annulation et `/annuler` dans la CLI (1.7)~~ ✅
 6. ~~Conversations persistantes (1.9)~~ ✅
 7. ~~Hôte de modules v1 et module météo (1.6)~~ ✅
-8. Essais avec de vrais modèles et `docs/FONCTIONNEMENT.md` (1.8)
+8. Essais avec de vrais modèles et `docs/FONCTIONNEMENT.md` (1.8) — fait sous Linux ; reste l'essai sous Windows

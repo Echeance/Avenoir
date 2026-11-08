@@ -61,8 +61,9 @@ AVENOIR_LOG=debug ./build/debug/apps/cli/avenoir
 - `ui/` : interface web en TypeScript strict ; ne parle qu'à l'hôte C++ des fenêtres.
 
 - `modules/` : modules fournis avec Avenoir, programmes séparés (`modules/meteo/`) ; compilés dans `modules/` à côté de l'exécutable et livrés dans les archives de release.
+- `evals/` : banc d'essai avec de vrais modèles (`avenoir-evals`) : requêtes de référence (`requetes.toml`), doublures d'outils, rapports et comparaison dans `resultats/`. Jamais lancé par ctest ni la CI (il appelle un vrai LLM). **Modifier le prompt système ou la description d'un outil → repasser le banc** sur les modèles recommandés et noter le résultat dans `resultats/COMPARAISON.md`.
 
-Ces dossiers sont créés à leur étape de la roadmap. Existent aujourd'hui : `libs/core`, `libs/llm`, `libs/tools`, `libs/modules`, `libs/storage`, `libs/terminal`, `apps/cli` (avec un test de bout en bout dans `apps/cli/tests/`) et `modules/meteo`.
+Ces dossiers sont créés à leur étape de la roadmap. Existent aujourd'hui : `libs/core`, `libs/llm`, `libs/tools`, `libs/modules`, `libs/storage`, `libs/terminal`, `apps/cli` (avec un test de bout en bout dans `apps/cli/tests/`), `modules/meteo` et `evals`. Comment le code s'articule : `docs/FONCTIONNEMENT.md` (à tenir à jour avec le code).
 
 En-têtes publics dans `libs/<nom>/include/avenoir/<nom>/`, tests Catch2 dans `libs/<nom>/tests/`.
 
