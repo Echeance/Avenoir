@@ -19,7 +19,7 @@ namespace {
 
 /// Version du schéma (PRAGMA user_version). À incrémenter avec chaque
 /// migration ajoutée dans `migrate`.
-constexpr int kSchemaVersion = 2;
+constexpr int kSchemaVersion = 3;
 
 struct DatabaseDeleter {
     void operator()(sqlite3* db) const noexcept { sqlite3_close_v2(db); }
@@ -179,6 +179,23 @@ core::Result<void> migrate(sqlite3* db) {
                 chosen_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M:%f', 'now'))
             );
             PRAGMA user_version = 2;
+            COMMIT;
+        )");
+            !created) {
+            return created;
+        }
+    }
+    if (version < 3) {
+        // État de l'application gardé d'un lancement à l'autre (dernier
+        // modèle utilisé…) : pas des réglages, qui restent dans config.toml.
+        if (auto created = execute(db, R"(
+            BEGIN;
+            CREATE TABLE app_state (
+                key        TEXT PRIMARY KEY,
+                value      TEXT NOT NULL,
+                updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M:%f', 'now'))
+            );
+            PRAGMA user_version = 3;
             COMMIT;
         )");
             !created) {
@@ -458,6 +475,34 @@ core::Result<void> Store::set_risk_choice(std::string_view tool, core::RiskLevel
         .bind(2, core::to_string(risk))
         .bind(3, std::int64_t{agreed ? 1 : 0})
         .run();
+}
+
+core::Result<std::optional<std::string>> Store::state(std::string_view key) const {
+    auto statement =
+        Statement::prepare(impl_->db.get(), "SELECT value FROM app_state WHERE key = ?1");
+    if (!statement) {
+        return std::unexpected(std::move(statement.error()));
+    }
+    statement->bind(1, key);
+    auto row = statement->step();
+    if (!row) {
+        return std::unexpected(std::move(row.error()));
+    }
+    if (!*row) {
+        return std::optional<std::string>{};
+    }
+    return std::optional<std::string>{statement->text(0)};
+}
+
+core::Result<void> Store::set_state(std::string_view key, std::string_view value) {
+    auto statement = Statement::prepare(impl_->db.get(),
+                                        "INSERT INTO app_state (key, value) VALUES (?1, ?2) "
+                                        "ON CONFLICT(key) DO UPDATE SET value = excluded.value, "
+                                        "updated_at = strftime('%Y-%m-%d %H:%M:%f', 'now')");
+    if (!statement) {
+        return std::unexpected(std::move(statement.error()));
+    }
+    return statement->bind(1, key).bind(2, value).run();
 }
 
 core::Result<void> Store::remove_risk_choice(std::string_view tool) {

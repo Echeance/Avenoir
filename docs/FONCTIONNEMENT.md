@@ -24,7 +24,7 @@ Aujourd'hui, Avenoir est **une CLI** (`apps/cli`, exécutable `avenoir`) qui con
 | Bibliothèque | Rôle | Fichiers clés |
 |---|---|---|
 | `libs/core` | Le cœur, sans OS ni réseau : types des messages, interface `Tool`, `ToolRegistry`, permissions, voie rapide, **boucle agent**, lecture de `config.toml`, erreurs. Ne dépend d'aucune autre bibliothèque interne. | `agent.cpp`, `permission.cpp`, `router.cpp`, `config.cpp` |
-| `libs/llm` | Les fournisseurs LLM : traduisent l'historique d'Avenoir vers chaque API, et la réponse en retour. | `openai_compatible.cpp`, `anthropic.cpp`, `claude_code.cpp`, `factory.cpp` |
+| `libs/llm` | Les fournisseurs LLM : traduisent l'historique d'Avenoir vers chaque API, et la réponse en retour. Le changement de modèle à chaud (`ModelSwitcher`, outil `switch_llm`). | `openai_compatible.cpp`, `anthropic.cpp`, `claude_code.cpp`, `factory.cpp`, `models.cpp` |
 | `libs/tools` | Les outils natifs (`current_time`, `system_info`, `launch_app`, `open_url`) ; le code propre à chaque OS est dans `src/platform/`. | `register.cpp`, `apps.cpp`, `validation.cpp` |
 | `libs/modules` | L'hôte de modules : découverte, validation des manifestes, lancement des processus, JSON-RPC, MCP, risque des outils. | `discovery.cpp`, `manifest.cpp`, `host.cpp`, `rpc_client.cpp`, `module.cpp` |
 | `libs/storage` | Conversations en SQLite (`avenoir.db`), choix de risque des outils de modules, dossier de données. | `store.cpp`, `message_json.cpp`, `paths.cpp` |
@@ -42,7 +42,7 @@ Tout se passe dans `run()` (`apps/cli/src/main.cpp`), dans cet ordre :
 1. **Logs** : loggers `avenoir` et `audit` sur stderr, niveau `warn` (ou `AVENOIR_LOG`). L'audit est coupé par défaut.
 2. **Console** : UTF-8 et séquences VT sous Windows, gestionnaire de Ctrl+C (`console.cpp`), couleurs selon le terminal et `NO_COLOR`.
 3. **Configuration** : `core::load_config` lit `config.toml`. Une clé inconnue ou de mauvais type est une erreur qui cite la clé.
-4. **Fournisseur LLM** : `llm::make_provider` construit le fournisseur choisi. Une clé d'API est lue dans la variable d'environnement dont la config donne le *nom*.
+4. **Fournisseur LLM** : `llm::ModelSwitcher::start` choisit le modèle de départ (le dernier utilisé, retenu dans la base sous `llm.active`, sinon le premier `[models.<nom>]`) et `llm::make_provider` construit son fournisseur. Une clé d'API est lue dans la variable d'environnement dont la config donne le *nom*. Sans modèle, l'agent n'a pas de fournisseur : seule la voie rapide répond.
 5. **Options de l'agent** : politique de permissions, prompt système (`kDefaultSystemPrompt` sauf remplacement), nombre d'étapes, voie rapide (`FastRouter::with_defaults`).
 6. **Outils natifs** : `tools::register_native_tools` ajoute ceux que l'OS permet.
 7. **Données** : dossier de données (`~/.local/share/avenoir`, ou `%LOCALAPPDATA%\avenoir`), base `avenoir.db`, historique des saisies. Une base illisible n'empêche pas de démarrer : les conversations ne sont alors pas conservées.
@@ -93,6 +93,8 @@ Les **messages** (`core::Message`) sont indépendants du fournisseur : `UserMess
 
 Les trois respectent le `stop_token` (requête HTTP interrompue, processus arrêté) et remontent la consommation (`Usage`).
 
+**Changement de modèle** (`models.cpp`) : `models_from` lit les `[models.<nom>]` (dans l'ordre du fichier : toml++ les range par ordre alphabétique, la ligne de chaque section rétablit l'ordre) ; `ModelSwitcher` crée le fournisseur choisi (`make_provider`) et le donne à l'agent (`Agent::set_llm`), qui garde l'historique. Un modèle est local si son adresse est celle de la machine (ou `local = true`) ; sinon le passage se confirme par le `ConfirmationHandler` de la CLI, avec le risque `sensitive`. L'outil `switch_llm` et ses règles de voie rapide ne sont enregistrés que s'il y a au moins deux modèles ; son annulation revient au modèle précédent si le modèle actif n'a pas changé entre-temps. Chaque changement réussi est retenu dans la base (`Store::set_state`), pour le lancement suivant.
+
 ## 5. Outils natifs (`libs/tools`)
 
 Chaque outil implémente `core::Tool` : `spec()` (nom, description pour le LLM, JSON Schema, risque) et `call(arguments, stop)`. Les arguments viennent du LLM : ils sont lus dans une structure typée puis **validés** (`validation.cpp` : noms d'applications sans métacaractère, URL `http(s)` seulement). Le code propre à l'OS est derrière `src/platform.hpp`, avec une implémentation Linux, une Windows et un repli « non supporté ». Un outil non pris en charge n'est pas enregistré.
@@ -115,7 +117,7 @@ Un module est un **programme séparé** décrit par un `module.toml` (PROJECT.md
 
 ## 8. Conversations (`libs/storage`)
 
-`storage::Store` ouvre `avenoir.db` (SQLite, WAL, schéma versionné). L'observateur de l'historique de l'agent écrit **chaque message dès qu'il est ajouté** (`Conversations::record`), avec ses appels d'outils et sa consommation, en JSON (`message_json.cpp`). Au lancement, la dernière conversation est rechargée dans l'agent (`Agent::load_history`). La même base garde les choix de risque faits avec `/risque` (table `tool_risks`).
+`storage::Store` ouvre `avenoir.db` (SQLite, WAL, schéma versionné). L'observateur de l'historique de l'agent écrit **chaque message dès qu'il est ajouté** (`Conversations::record`), avec ses appels d'outils et sa consommation, en JSON (`message_json.cpp`). Au lancement, la dernière conversation est rechargée dans l'agent (`Agent::load_history`). La même base garde les choix de risque faits avec `/risque` (table `tool_risks`) et l'état repris d'un lancement à l'autre, comme le dernier modèle utilisé (table `app_state`).
 
 ## 9. Tests et banc d'essai
 
@@ -123,7 +125,7 @@ Un module est un **programme séparé** décrit par un `module.toml` (PROJECT.md
 - **Banc d'essai** (`evals/`, exécutable `avenoir-evals`) : passe les requêtes de référence (`evals/requetes.toml`) sur un **vrai modèle**, avec le vrai agent mais des **doublures** d'outils. Les doublures ont les mêmes nom, description, schéma et risque que les vrais outils, mais rien n'est lancé et elles renvoient des résultats préparés (dont des injections). La voie rapide est coupée. Le rapport Markdown va dans `evals/resultats/`, et la synthèse des comparaisons dans `evals/resultats/COMPARAISON.md`. Le banc d'essai n'est lancé ni par ctest ni par la CI, mais sa logique est testée (`evals/tests`).
 
 ```sh
-./build/release/evals/avenoir-evals --model haiku --repeat 2      # config.toml du dossier courant
+./build/release/evals/avenoir-evals --llm claude --repeat 2       # un modèle de config.toml (le premier par défaut)
 ./build/release/evals/avenoir-evals --config ollama.toml --only heure,injection-meteo
 ./build/release/evals/avenoir-evals --prompt essai-prompt.txt     # essayer un autre prompt système
 ```

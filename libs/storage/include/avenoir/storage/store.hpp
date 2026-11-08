@@ -77,6 +77,11 @@ class Store {
                                                      bool agreed);
     [[nodiscard]] core::Result<void> remove_risk_choice(std::string_view tool);
 
+    /// État gardé d'un lancement à l'autre (ex. `llm.active` : dernier modèle
+    /// utilisé). Absent : `std::nullopt`.
+    [[nodiscard]] core::Result<std::optional<std::string>> state(std::string_view key) const;
+    [[nodiscard]] core::Result<void> set_state(std::string_view key, std::string_view value);
+
   private:
     struct Impl;
     explicit Store(std::unique_ptr<Impl> impl);

@@ -36,6 +36,13 @@ Plateformes : **Linux** et **Windows** (sauf mention contraire).
 - Consommation remontée par les trois fournisseurs (tokens en entrée et en sortie, coût indicatif) et conservée avec chaque réponse.
 - Annulation d'une requête en cours chez tous les fournisseurs (requête HTTP interrompue, processus `claude` arrêté).
 - Modèles recommandés et mesurés : Gemma 4 26B-A4B (local, 24 Go), Ministral 3 8B (local léger), Claude (distant) — PROJECT.md § 2.5.
+- **Modèles** : un par section `[models.<nom>]` ; le premier sert au premier lancement, puis Avenoir reprend le **dernier modèle utilisé** (retenu dans sa base) ; sans aucun modèle, seule la voie rapide répond (une requête qui demande le LLM reçoit un message clair). **Changement à tout moment**, la conversation continuant avec le nouveau modèle :
+  - commande `/modele` (liste, modèle actif marqué) et `/modele <nom>` ;
+  - outil `switch_llm` (réversible, annulable : `/annuler` revient au modèle précédent, sauf si le modèle a changé entre-temps), que le modèle actif peut appeler ;
+  - voie rapide : « passe / bascule / change sur (le) modèle X », « utilise le modèle X » (le mot « modèle » ou « llm » est exigé) ;
+  - nom reconnu sans casse ni accents (« Léger » → `leger`), ou par identifiant du modèle (« ministral-3:8b ») ;
+  - **passer à un modèle distant demande toujours confirmation** (la conversation sortirait de la machine) ; local = adresse de la machine (`localhost`, `127.x`, `::1`) ou `local = true` déclaré pour un serveur du réseau local ;
+  - modèle actif affiché dans le cadre d'accueil.
 
 ## 2. Voie rapide
 
@@ -120,7 +127,7 @@ Plateformes : **Linux** et **Windows** (sauf mention contraire).
 ## 9. Interface en ligne de commande
 
 - Exécutable `avenoir [chemin/config.toml]`.
-- **Commandes** : `/aide`, `/outils`, `/annuler`, `/modules`, `/risque [outil niveau]`, `/nouvelle`, `/reset`, `/conversations`, `/ouvrir`, `/renommer`, `/supprimer`, `/historique`, `/transcription`, `/quitter` (`/q`), et celles des modules.
+- **Commandes** : `/aide`, `/outils`, `/annuler`, `/modules`, `/risque [outil niveau]`, `/modele [nom]`, `/nouvelle`, `/reset`, `/conversations`, `/ouvrir`, `/renommer`, `/supprimer`, `/historique`, `/transcription`, `/quitter` (`/q`), et celles des modules.
 - **Saisie** (replxx) : édition de ligne, historique des saisies conservé entre deux lancements, complétion des commandes (Tab), Ctrl+D pour quitter.
 - **Apparence** :
   - barre de saisie fixe en bas du terminal (grandit avec la saisie, suit les redimensionnements, sous Windows aussi) ;
@@ -134,7 +141,7 @@ Plateformes : **Linux** et **Windows** (sauf mention contraire).
 ## 10. Configuration
 
 - Fichier `config.toml` (exemple commenté : `config.example.toml`) ; une clé inconnue ou de mauvais type est une erreur qui cite la clé.
-- Sections : `[llm]` (fournisseur, modèle, adresse, nom de la variable de la clé, `temperature`, `reasoning_effort`, `max_tokens`, commande et délai de Claude Code), `[agent]` (`max_steps`, `fast_path`, `system_prompt`), `[permissions]` (politique par niveau), `[modules.<id>]` (`enabled`, `risk` par outil).
+- Sections : `[models.<nom>]` (un par modèle, dans l'ordre voulu : fournisseur, modèle, adresse, nom de la variable de la clé, `temperature`, `reasoning_effort`, `max_tokens`, commande et délai de Claude Code, `local`) ; l'ancienne section `[llm]` est refusée avec un message qui indique la nouvelle forme ; `[agent]` (`max_steps`, `fast_path`, `system_prompt`), `[permissions]` (politique par niveau), `[modules.<id>]` (`enabled`, `risk` par outil).
 - Dossier de données : `~/.local/share/avenoir` (ou `$XDG_DATA_HOME`), `%LOCALAPPDATA%\avenoir` sous Windows.
 
 ## 11. Journaux
@@ -145,7 +152,7 @@ Plateformes : **Linux** et **Windows** (sauf mention contraire).
 
 ## 12. Banc d'essai avec de vrais modèles
 
-- `avenoir-evals` : passe les **requêtes de référence** (`evals/requetes.toml`, 26 cas : simples, multi-outils, suite de conversation, ambiguës, hors de portée, erreur d'outil, injections, arguments piégés, refus et accord, données inventées) sur un vrai modèle.
+- `avenoir-evals` (`--llm nom` : modèle de la configuration, le premier par défaut) : passe les **requêtes de référence** (`evals/requetes.toml`, 26 cas : simples, multi-outils, suite de conversation, ambiguës, hors de portée, erreur d'outil, injections, arguments piégés, refus et accord, données inventées) sur un vrai modèle.
 - Vrai agent et vrai fournisseur, mais **doublures d'outils** (mêmes nom, description, schéma et risque ; résultats ou erreurs préparés) : rien n'est lancé ni modifié ; voie rapide coupée.
 - Vérifications par cas : appels attendus (arguments partiels, sans casse), outils interdits, textes interdits dans les arguments, nombre d'appels maximal, mots attendus ou interdits dans la réponse, données interdites dans le texte écrit avec un appel d'outil (avant son résultat), politique et réponse aux confirmations propres au cas.
 - Options : `--config`, `--model`, `--reasoning`, `--cases`, `--only`, `--repeat`, `--prompt`, `--report`, `--modules`.

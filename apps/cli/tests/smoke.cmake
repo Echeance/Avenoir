@@ -7,8 +7,8 @@
 file(REMOVE_RECURSE "${WORK_DIR}")
 file(MAKE_DIRECTORY "${WORK_DIR}/data")
 
-# Fournisseur jamais contacté : la voie rapide n'appelle pas le LLM.
-file(WRITE "${WORK_DIR}/config.toml" "[llm]\nprovider = \"openai_compatible\"\nbase_url = \"http://127.0.0.1:9\"\nmodel = \"aucun\"\n")
+# Aucun modèle : seule la voie rapide répond, sans LLM ni réseau.
+file(WRITE "${WORK_DIR}/config.toml" "[agent]\nfast_path = true\n")
 file(WRITE "${WORK_DIR}/input.txt" "quelle heure est-il ?\n/outils\n/quitter\n")
 
 execute_process(
@@ -28,7 +28,7 @@ if(NOT code EQUAL 0)
     message(FATAL_ERROR "avenoir a échoué (code ${code})\n--- sortie ---\n${output}\n--- erreurs ---\n${errors}")
 endif()
 
-foreach(expected "Il est " "current_time" "launch_app" "À bientôt")
+foreach(expected "Il est " "current_time" "launch_app" "voie rapide seulement" "À bientôt")
     string(FIND "${output}" "${expected}" position)
     if(position EQUAL -1)
         message(FATAL_ERROR "« ${expected} » absent de la sortie\n--- sortie ---\n${output}\n--- erreurs ---\n${errors}")

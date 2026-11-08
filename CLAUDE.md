@@ -51,7 +51,7 @@ AVENOIR_LOG=debug ./build/debug/apps/cli/avenoir
 ## Structure
 
 - `libs/core` (`avenoir::core`) : agent, outils, permissions, voie rapide, config. **Ne dépend d'aucune autre bibliothèque interne.**
-- `libs/llm` : fournisseurs LLM (OpenAI-compatible, Anthropic, Claude Code).
+- `libs/llm` : fournisseurs LLM (OpenAI-compatible, Anthropic, Claude Code) et changement de modèle à chaud (`ModelSwitcher`, outil `switch_llm`).
 - `libs/tools` : outils natifs ; code spécifique à l'OS dans `src/platform/`.
 - `libs/modules` : hôte de modules (manifestes `module.toml`, processus JSON-RPC, compatibilité MCP).
 - `libs/storage` : conversations et journal (SQLite) ; chaque message est écrit immédiatement.

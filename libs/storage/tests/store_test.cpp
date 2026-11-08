@@ -188,3 +188,18 @@ TEST_CASE("choix de risque des outils de modules", "[store]") {
     REQUIRE(choices.has_value());
     CHECK(choices->size() == 1);
 }
+
+TEST_CASE("état gardé d'un lancement à l'autre", "[store]") {
+    auto store = memory_store();
+    const auto missing = store.state("llm.active");
+    REQUIRE(missing.has_value());
+    CHECK_FALSE(missing->has_value());
+
+    REQUIRE(store.set_state("llm.active", "leger").has_value());
+    REQUIRE(store.set_state("llm.active", "claude").has_value()); // remplacé
+    REQUIRE(store.set_state("autre", "x'); DROP TABLE app_state; --").has_value());
+    const auto active = store.state("llm.active");
+    REQUIRE(active.has_value());
+    CHECK(active->value_or("") == "claude");
+    CHECK(store.state("autre")->value_or("") == "x'); DROP TABLE app_state; --");
+}

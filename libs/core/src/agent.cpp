@@ -60,6 +60,12 @@ std::string_view Agent::llm_name() const {
     return llm_ != nullptr ? llm_->name() : std::string_view{"aucun"};
 }
 
+void Agent::set_llm(std::unique_ptr<LlmProvider> llm) {
+    if (llm != nullptr) {
+        llm_ = std::move(llm);
+    }
+}
+
 void Agent::begin_journal(std::string_view input) {
     // Nouveau journal d'annulation pour cette requête. Celui de la requête
     // précédente est oublié s'il est vide ; on n'en garde qu'un nombre limité.
@@ -112,8 +118,13 @@ Result<std::string> Agent::handle(std::string_view input, const std::stop_token&
         }
     }
 
-    if (llm_ == nullptr || confirmer_ == nullptr) {
-        return make_error(ErrorCode::Config, "agent sans fournisseur LLM ou sans confirmation");
+    if (llm_ == nullptr) {
+        return make_error(ErrorCode::Config,
+                          "aucun modèle : seule la voie rapide répond (ajoutez une section "
+                          "[models.<nom>] à config.toml)");
+    }
+    if (confirmer_ == nullptr) {
+        return make_error(ErrorCode::Config, "agent sans confirmation");
     }
 
     // 2. Boucle agent.

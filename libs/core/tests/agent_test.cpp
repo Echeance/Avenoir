@@ -572,3 +572,22 @@ TEST_CASE("une commande interrompue est signalée comme telle, pas comme un éch
     CHECK(note.text.contains("interrompue"));
     CHECK_FALSE(note.text.contains("échec"));
 }
+
+TEST_CASE("changer de LLM garde la conversation", "[agent]") {
+    const Fixture f;
+    auto agent =
+        f.make_agent({answer("premier")}, RiskLevel::ReadOnly, std::make_unique<AutoReject>());
+    REQUIRE(agent.handle("bonjour").has_value());
+
+    const auto second_calls = std::make_shared<int>(0);
+    agent.set_llm(std::make_unique<ScriptedLlm>(std::deque<Result<LlmResponse>>{answer("second")},
+                                                second_calls));
+    const auto reply = agent.handle("et maintenant ?");
+    REQUIRE(reply.has_value());
+    CHECK(*reply == "second");
+    CHECK(*second_calls == 1);
+    CHECK(agent.history().size() == 4); // les deux échanges
+
+    agent.set_llm(nullptr); // ignoré : le fournisseur reste valide
+    CHECK_FALSE(agent.llm_name().empty());
+}

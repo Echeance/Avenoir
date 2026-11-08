@@ -6,6 +6,7 @@ avenoir_add_library(llm
         src/claude_code.cpp
         src/factory.cpp
         src/http.cpp
+        src/models.cpp
         src/openai_compatible.cpp
     DEPS
         avenoir::core)
@@ -22,4 +23,5 @@ avenoir_add_tests(llm
         tests/claude_code_test.cpp
         tests/factory_test.cpp
         tests/integration_test.cpp
+        tests/models_test.cpp
         tests/openai_compatible_test.cpp)

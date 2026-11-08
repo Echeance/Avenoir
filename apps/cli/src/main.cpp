@@ -39,6 +39,7 @@
 #include "avenoir/core/permission.hpp"
 #include "avenoir/core/router.hpp"
 #include "avenoir/llm/factory.hpp"
+#include "avenoir/llm/models.hpp"
 #include "avenoir/modules/discovery.hpp"
 #include "avenoir/modules/host.hpp"
 #include "avenoir/storage/store.hpp"
@@ -83,17 +84,18 @@ void setup_logging() {
 /// Commandes d'Avenoir (sans « / »), alias compris : un module ne peut pas
 /// en déclarer une du même nom.
 std::vector<std::string> builtin_commands() {
-    return {"aide",     "annuler", "conversations", "help",      "historique", "modules",
-            "nouvelle", "ouvrir",  "outils",        "q",         "quit",       "quitter",
-            "renommer", "reset",   "risque",        "supprimer", "tools",      "transcription"};
+    return {"aide",    "annuler", "conversations", "help",     "historique",
+            "modules", "model",   "modele",        "nouvelle", "ouvrir",
+            "outils",  "q",       "quit",          "quitter",  "renommer",
+            "reset",   "risque",  "supprimer",     "tools",    "transcription"};
 }
 
 /// Commandes proposées à la complétion (Tab).
 std::vector<std::string> command_names(const cli::ModulesUi& modules) {
-    std::vector<std::string> names{"/aide",      "/annuler",      "/conversations", "/historique",
-                                   "/modules",   "/nouvelle",     "/ouvrir",        "/outils",
-                                   "/quitter",   "/renommer",     "/reset",         "/risque",
-                                   "/supprimer", "/transcription"};
+    std::vector<std::string> names{"/aide",   "/annuler",   "/conversations", "/historique",
+                                   "/modele", "/modules",   "/nouvelle",      "/ouvrir",
+                                   "/outils", "/quitter",   "/renommer",      "/reset",
+                                   "/risque", "/supprimer", "/transcription"};
     std::ranges::copy(modules.completion_names(), std::back_inserter(names));
     return names;
 }
@@ -110,6 +112,7 @@ void print_help(const cli::ModulesUi& modules) {
     out += command("/aide", "cette aide") + "\n";
     out += command("/outils", "outils disponibles et leur niveau de risque") + "\n";
     out += command("/annuler", "annuler les actions de la dernière requête (répétable)") + "\n";
+    out += command("/modele [nom]", "modèles disponibles, ou changer de modèle") + "\n";
     out += command("/quitter", "quitter (ou Ctrl+D)") + "\n";
     out += title("Modules") + "\n";
     out += command("/modules", "modules installés, permissions et outils") + "\n";
@@ -249,8 +252,37 @@ std::string_view trim(std::string_view text) {
 }
 
 /// Traite une commande (ligne commençant par « / »). Renvoie faux pour quitter.
+/// Clé de la base où est retenu le dernier modèle utilisé.
+constexpr std::string_view kActiveModelKey = "llm.active";
+
+/// Modèle actif pour le cadre d'accueil.
+std::string model_label(const llm::ModelSwitcher& switcher) {
+    const auto* active = switcher.active();
+    return active != nullptr ? llm::describe(*active) : "aucun modèle : voie rapide seulement";
+}
+
+/// `/modele` sans argument : les modèles de la configuration, l'actif marqué.
+void print_models(const llm::ModelSwitcher& switcher) {
+    if (switcher.models().empty()) {
+        display().info("Aucun modèle : seule la voie rapide répond. Ajoutez une section "
+                       "[models.<nom>] à config.toml (voir config.example.toml).");
+        return;
+    }
+    for (const auto& model : switcher.models()) {
+        const bool active = &model == switcher.active();
+        display().plain(
+            std::format("  {} {}", active ? paint("●", {.color = Color::Green, .bold = true}) : " ",
+                        paint(llm::describe(model), {.bold = active})));
+    }
+    if (switcher.models().size() < 2) {
+        display().info("Un seul modèle : ajoutez-en d'autres dans config.toml ([models.<nom>], "
+                       "voir config.example.toml).");
+    }
+}
+
 bool run_command(core::Agent& agent, cli::Prompt& prompt, cli::Conversations& conversations,
-                 cli::ModulesUi& modules, std::string_view line) {
+                 cli::ModulesUi& modules, const llm::ModelSwitcher& switcher,
+                 std::string_view line) {
     // « /commande argument libre »
     const auto space = line.find(' ');
     const std::string_view command = line.substr(0, space);
@@ -267,7 +299,7 @@ bool run_command(core::Agent& agent, cli::Prompt& prompt, cli::Conversations& co
     } else if (command == "/reset") {
         if (const auto cleared = conversations.clear()) {
             display().clear();
-            display().banner(agent.llm_name(), agent.tools().size(),
+            display().banner(model_label(switcher), agent.tools().size(),
                              conversations.describe_current());
             display().success("Conversation effacée.");
             if (cleared->transcript) {
@@ -293,6 +325,21 @@ bool run_command(core::Agent& agent, cli::Prompt& prompt, cli::Conversations& co
             offer_undo(agent, prompt, *journal);
         } else {
             display().info("Rien à annuler.");
+        }
+    } else if (command == "/modele" || command == "/model") {
+        if (argument.empty()) {
+            print_models(switcher);
+        } else if (agent.tools().find("switch_llm") == nullptr) {
+            display().info("Un seul modèle configuré : rien à changer.");
+        } else {
+            // Comme un appel de la voie rapide : permissions, journal (/annuler
+            // revient au modèle précédent) et confirmation pour un modèle distant.
+            const core::ToolCall call{
+                .id = {}, .name = "switch_llm", .arguments = {{"name", std::string(argument)}}};
+            const std::string input(line);
+            run_request(agent, prompt, [&agent, &input, &call](const std::stop_token& stop) {
+                return agent.run_tool(input, call, stop);
+            });
         }
     } else if (command == "/modules") {
         modules.print_status();
@@ -323,12 +370,6 @@ int run(int argc, char** argv) {
     if (!config) {
         display().error(core::describe(config.error()) + " (fichier : " + path +
                         ", partir de config.example.toml)");
-        return EXIT_FAILURE;
-    }
-
-    auto llm = llm::make_provider(config->llm);
-    if (!llm) {
-        display().error(core::describe(llm.error()));
         return EXIT_FAILURE;
     }
 
@@ -423,10 +464,52 @@ int run(int argc, char** argv) {
         .border = [] { return cli::Display::bar_rule(); },
     });
 
+    // Modèles entre lesquels basculer (/modele, outil switch_llm, voie
+    // rapide) ; passer à un modèle distant se confirme (directive n° 17).
+    CliConfirmation switch_confirmer(prompt);
+    llm::ModelSwitcher switcher(llm::models_from(*config), &switch_confirmer);
+    // Modèle de départ : le dernier utilisé (retenu dans la base), sinon le
+    // premier de la configuration ; aucun modèle : seule la voie rapide répond.
+    std::optional<std::string> remembered;
+    if (store) {
+        if (auto state = store->state(kActiveModelKey)) {
+            remembered = std::move(*state);
+        } else {
+            startup_warnings.push_back(core::describe(state.error()));
+        }
+    }
+    auto llm =
+        switcher.start(remembered ? std::optional<std::string_view>(*remembered) : std::nullopt);
+    if (!llm) {
+        display().error(core::describe(llm.error()));
+        return EXIT_FAILURE;
+    }
+    if (switcher.models().size() > 1) {
+        if (auto added = tools.add(llm::make_switch_llm_tool(switcher)); !added) {
+            display().error(core::describe(added.error()));
+            return EXIT_FAILURE;
+        }
+        if (options.router) {
+            if (auto rules = llm::register_switch_rules(*options.router); !rules) {
+                display().error(core::describe(rules.error()));
+                return EXIT_FAILURE;
+            }
+        }
+    }
+
     core::Agent agent(std::move(*llm), std::move(tools), std::make_unique<CliConfirmation>(prompt),
                       std::move(options));
+    switcher.attach(agent);
 
     cli::Conversations conversations(std::move(store), agent, prompt);
+    // Le modèle choisi est retenu pour le prochain lancement.
+    switcher.on_switch([&conversations](const llm::ModelChoice& model) {
+        if (auto* base = conversations.store()) {
+            if (auto saved = base->set_state(kActiveModelKey, model.name); !saved) {
+                spdlog::warn("modèle actif non retenu : {}", core::describe(saved.error()));
+            }
+        }
+    });
     // Chaque message est enregistré, et les actions sont montrées en direct.
     agent.set_history_observer(core::HistoryObserver{
         .appended =
@@ -454,7 +537,7 @@ int run(int argc, char** argv) {
         ~ScreenGuard() { display().shutdown(); }
     } const screen_guard;
 
-    display().banner(agent.llm_name(), agent.tools().size(), conversations.describe_current());
+    display().banner(model_label(switcher), agent.tools().size(), conversations.describe_current());
     for (const auto& warning : startup_warnings) {
         display().warning(warning);
     }
@@ -474,7 +557,7 @@ int run(int argc, char** argv) {
             continue;
         }
         if (line.starts_with('/')) {
-            if (!run_command(agent, prompt, conversations, modules_ui, line)) {
+            if (!run_command(agent, prompt, conversations, modules_ui, switcher, line)) {
                 break;
             }
             continue;

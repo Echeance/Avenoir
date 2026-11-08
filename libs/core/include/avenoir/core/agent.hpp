@@ -96,7 +96,8 @@ struct AgentOptions {
 /// réponse finale. L'historique est conservé entre les requêtes.
 class Agent {
   public:
-    /// `llm` et `confirmer` ne doivent pas être nuls.
+    /// `confirmer` ne doit pas être nul. `llm` peut l'être (aucun modèle
+    /// configuré) : seule la voie rapide répond alors.
     Agent(std::unique_ptr<LlmProvider> llm, ToolRegistry tools,
           std::unique_ptr<ConfirmationHandler> confirmer, AgentOptions options = {});
 
@@ -115,6 +116,12 @@ class Agent {
     [[nodiscard]] const ToolRegistry& tools() const noexcept { return tools_; }
     [[nodiscard]] std::span<const Message> history() const noexcept { return history_; }
     [[nodiscard]] std::string_view llm_name() const;
+
+    /// Change de fournisseur LLM (changement de modèle) : la conversation
+    /// continue avec le nouveau, historique et journaux gardés. Pendant une
+    /// requête, seulement depuis un outil (entre deux appels au LLM). `llm`
+    /// ne doit pas être nul.
+    void set_llm(std::unique_ptr<LlmProvider> llm);
 
     /// Oublie la conversation en cours (et les journaux d'annulation).
     void reset() noexcept {

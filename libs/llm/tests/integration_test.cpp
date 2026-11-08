@@ -23,7 +23,8 @@ TEST_CASE("intégration : un vrai LLM répond", "[.integration]") {
     }
     const auto config = core::load_config(*path);
     REQUIRE(config.has_value());
-    auto provider = llm::make_provider(config->llm);
+    REQUIRE_FALSE(config->models.empty());
+    auto provider = llm::make_provider(config->models.front().config); // le premier modèle
     REQUIRE(provider.has_value());
 
     const std::vector<core::Message> messages{

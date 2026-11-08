@@ -1,5 +1,6 @@
 #include "avenoir/core/config.hpp"
 
+#include <algorithm>
 #include <array>
 #include <cstdint>
 #include <filesystem>
@@ -12,6 +13,8 @@
 #include <string>
 #include <string_view>
 #include <utility>
+#include <variant>
+#include <vector>
 
 #include <toml++/toml.hpp>
 
@@ -93,26 +96,25 @@ Result<const toml::table*> optional_table(const toml::table& root, std::string_v
 
 // ─── [llm] ──────────────────────────────────────────────────────────────────
 
-Result<LlmConfig> parse_llm(const toml::table& llm) {
-    constexpr std::string_view kSection = "llm";
-    auto provider = required_value<std::string>(llm, kSection, "provider");
+Result<LlmConfig> parse_llm(const toml::table& llm, std::string_view section) {
+    auto provider = required_value<std::string>(llm, section, "provider");
     if (!provider) {
         return std::unexpected(std::move(provider.error()));
     }
 
     if (*provider == "openai_compatible") {
         OpenAiCompatibleConfig config;
-        auto base_url = required_value<std::string>(llm, kSection, "base_url");
-        auto model = required_value<std::string>(llm, kSection, "model");
-        auto key_env = optional_value<std::string>(llm, kSection, "api_key_env");
-        auto temperature = optional_value<double>(llm, kSection, "temperature");
-        auto effort = optional_value<std::string>(llm, kSection, "reasoning_effort");
+        auto base_url = required_value<std::string>(llm, section, "base_url");
+        auto model = required_value<std::string>(llm, section, "model");
+        auto key_env = optional_value<std::string>(llm, section, "api_key_env");
+        auto temperature = optional_value<double>(llm, section, "temperature");
+        auto effort = optional_value<std::string>(llm, section, "reasoning_effort");
         if (auto error = first_error(base_url, model, key_env, temperature, effort)) {
             return std::unexpected(std::move(*error));
         }
         if (*effort && **effort != "none" && **effort != "low" && **effort != "medium" &&
             **effort != "high") {
-            return config_error(key_path(kSection, "reasoning_effort"),
+            return config_error(key_path(section, "reasoning_effort"),
                                 "none, low, medium ou high attendu");
         }
         config.base_url = std::move(*base_url);
@@ -125,11 +127,11 @@ Result<LlmConfig> parse_llm(const toml::table& llm) {
 
     if (*provider == "anthropic") {
         AnthropicConfig config;
-        auto model = required_value<std::string>(llm, kSection, "model");
-        auto key_env = optional_value<std::string>(llm, kSection, "api_key_env");
-        auto max_tokens = optional_integer(llm, kSection, "max_tokens", 1,
+        auto model = required_value<std::string>(llm, section, "model");
+        auto key_env = optional_value<std::string>(llm, section, "api_key_env");
+        auto max_tokens = optional_integer(llm, section, "max_tokens", 1,
                                            std::numeric_limits<std::uint32_t>::max());
-        auto base_url = optional_value<std::string>(llm, kSection, "base_url");
+        auto base_url = optional_value<std::string>(llm, section, "base_url");
         if (auto error = first_error(model, key_env, max_tokens, base_url)) {
             return std::unexpected(std::move(*error));
         }
@@ -146,9 +148,9 @@ Result<LlmConfig> parse_llm(const toml::table& llm) {
 
     if (*provider == "claude_code") {
         ClaudeCodeConfig config;
-        auto model = optional_value<std::string>(llm, kSection, "model");
-        auto command = optional_value<std::string>(llm, kSection, "command");
-        auto timeout = optional_integer(llm, kSection, "timeout_secs", 1, 3600);
+        auto model = optional_value<std::string>(llm, section, "model");
+        auto command = optional_value<std::string>(llm, section, "command");
+        auto timeout = optional_integer(llm, section, "timeout_secs", 1, 3600);
         if (auto error = first_error(model, command, timeout)) {
             return std::unexpected(std::move(*error));
         }
@@ -162,8 +164,9 @@ Result<LlmConfig> parse_llm(const toml::table& llm) {
         return config;
     }
 
-    return config_error("llm.provider", "fournisseur inconnu « " + *provider +
-                                            " » (openai_compatible, anthropic ou claude_code)");
+    return config_error(key_path(section, "provider"),
+                        "fournisseur inconnu « " + *provider +
+                            " » (openai_compatible, anthropic ou claude_code)");
 }
 
 // ─── [agent] ────────────────────────────────────────────────────────────────
@@ -254,6 +257,73 @@ Result<ModuleSettings> parse_module_settings(const toml::table& module,
     return settings;
 }
 
+/// Nom d'un modèle : minuscules ASCII, chiffres, « - » et « _ » (32 au plus).
+bool is_valid_model_name(std::string_view name) {
+    return !name.empty() && name.size() <= 32 && std::ranges::all_of(name, [](char c) {
+        return (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '-' || c == '_';
+    });
+}
+
+/// Clé `local` (booléen facultatif), réservée à `openai_compatible`.
+Result<std::optional<bool>> parse_local(const toml::table& table, std::string_view section,
+                                        const LlmConfig& llm) {
+    auto local = optional_value<bool>(table, section, "local");
+    if (local && local->has_value() && !std::holds_alternative<OpenAiCompatibleConfig>(llm)) {
+        return config_error(key_path(section, "local"),
+                            "réservé à openai_compatible (les autres fournisseurs sont distants)");
+    }
+    return local;
+}
+
+/// `[models.<nom>]` : les modèles, dans l'ordre du fichier (le premier sert
+/// par défaut).
+Result<std::vector<NamedLlm>> parse_models(const toml::table& root) {
+    std::vector<NamedLlm> models;
+    std::vector<toml::source_index> lines; // ligne de chaque modèle dans le fichier
+    auto table = optional_table(root, "models");
+    if (!table) {
+        return std::unexpected(std::move(table.error()));
+    }
+    if (*table == nullptr) {
+        return models;
+    }
+    for (const auto& [key, node] : **table) {
+        const std::string name(key.str());
+        const std::string section = "models." + name;
+        const auto* model = node.as_table();
+        if (model == nullptr) {
+            return config_error(section, "une table est attendue ([" + section + "])");
+        }
+        if (!is_valid_model_name(name)) {
+            return config_error(section, "nom invalide (minuscules, chiffres, - et _)");
+        }
+        auto llm = parse_llm(*model, section);
+        if (!llm) {
+            return std::unexpected(std::move(llm.error()));
+        }
+        auto local = parse_local(*model, section, *llm);
+        if (!local) {
+            return std::unexpected(std::move(local.error()));
+        }
+        models.push_back(NamedLlm{.name = name, .config = std::move(*llm), .local = *local});
+        lines.push_back(node.source().begin.line);
+    }
+    // toml++ range les clés par ordre alphabétique : on rétablit celui du
+    // fichier, qui désigne le modèle par défaut.
+    std::vector<std::size_t> order(models.size());
+    for (std::size_t i = 0; i < order.size(); ++i) {
+        order[i] = i;
+    }
+    std::ranges::sort(order,
+                      [&lines](std::size_t a, std::size_t b) { return lines[a] < lines[b]; });
+    std::vector<NamedLlm> sorted;
+    sorted.reserve(models.size());
+    for (const std::size_t i : order) {
+        sorted.push_back(std::move(models[i]));
+    }
+    return sorted;
+}
+
 Result<std::map<std::string, ModuleSettings, std::less<>>> parse_modules(const toml::table& root) {
     std::map<std::string, ModuleSettings, std::less<>> modules;
     auto table = optional_table(root, "modules");
@@ -291,21 +361,21 @@ Result<AppConfig> parse_config(std::string_view toml_text) {
                                                  ") : " + std::string(e.description()));
     }
 
-    auto llm_table = optional_table(root, "llm");
+    if (root.contains("llm")) {
+        return config_error("llm", "section remplacée par [models.<nom>] : un modèle par section, "
+                                   "le premier sert par défaut (voir config.example.toml)");
+    }
     auto agent_table = optional_table(root, "agent");
     auto permissions_table = optional_table(root, "permissions");
-    if (auto error = first_error(llm_table, agent_table, permissions_table)) {
+    if (auto error = first_error(agent_table, permissions_table)) {
         return std::unexpected(std::move(*error));
     }
-    if (*llm_table == nullptr) {
-        return config_error("llm", "section obligatoire absente");
+    AppConfig config;
+    auto models = parse_models(root);
+    if (!models) {
+        return std::unexpected(std::move(models.error()));
     }
-
-    auto llm = parse_llm(**llm_table);
-    if (!llm) {
-        return std::unexpected(std::move(llm.error()));
-    }
-    AppConfig config{.llm = std::move(*llm), .agent = {}, .permissions = {}, .modules = {}};
+    config.models = std::move(*models);
 
     if (*agent_table != nullptr) {
         auto agent = parse_agent(**agent_table);

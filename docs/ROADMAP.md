@@ -190,12 +190,14 @@ L'ordre suit un principe : **chaque jalon produit un assistant utilisable**, plu
 - ⬜ Réduire la latence : garder un processus `claude` ouvert en mode `--input-format stream-json` au lieu d'un lancement par appel
 - ⬜ Message d'erreur clair si la CLI n'est pas connectée (« lancez `claude` puis `/login` »)
 
-### 2.6 Changer de LLM à tout moment — P1
-- ⬜ Plusieurs modèles dans la configuration, chacun nommé (« léger », « claude »…), dont un par défaut
-- ⬜ Commande `/modele [nom]` : sans argument, liste les modèles (actif marqué) ; avec, bascule sur ce modèle ; la conversation continue avec le même historique
-- ⬜ Outil `switch_llm` (reversible) et règles de voie rapide (« passe sur le modèle léger », « utilise Claude ») ; annulable (retour au modèle précédent)
-- ⬜ Passer d'un modèle local à un fournisseur distant demande confirmation (directive de sécurité n° 17) ; interdit en mode « local uniquement »
-- ⬜ Modèle actif affiché dans le cadre d'accueil et la barre ; changement journalisé
+### 2.6 Changer de LLM à tout moment — P1 🔄
+- ✅ Plusieurs modèles dans la configuration : un par section `[models.<nom>]`, le premier par défaut ; sans modèle, seule la voie rapide répond
+- ✅ Dernier modèle utilisé retenu dans la base et repris au lancement suivant
+- ✅ Commande `/modele [nom]` : sans argument, liste les modèles (actif marqué) ; avec, bascule sur ce modèle ; la conversation continue avec le même historique
+- ✅ Outil `switch_llm` (reversible) et règles de voie rapide (« passe sur le modèle léger », « utilise le modèle claude ») ; annulable (retour au modèle précédent) ; nom reconnu sans casse ni accents
+- ✅ Passer à un modèle distant demande confirmation (directive de sécurité n° 17) ; local = adresse de la machine ou `local = true` déclaré
+- ✅ Modèle actif affiché dans le cadre d'accueil ; changement journalisé (journal d'audit de l'outil)
+- ⬜ Interdit en mode « local uniquement » (quand ce mode existera, jalon 3)
 
 **Fini quand :** « monte le son », « mets en pause », « cherche la météo à Lyon », « ouvre le navigateur », « passe sur le modèle léger » fonctionnent sur les deux OS.
 

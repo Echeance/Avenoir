@@ -2,37 +2,55 @@
 # Les clés d'API ne sont JAMAIS écrites ici : indiquez le nom de la variable
 # d'environnement qui les contient.
 
-# ─── Fournisseur LLM (un seul bloc [llm] actif) ────────────────────────────
+# ─── Modèles (LLM) ─────────────────────────────────────────────────────────
+# Un modèle par section [models.<nom>] (nom : minuscules, chiffres, - et _).
+# Le premier de la liste sert au premier lancement ; ensuite, Avenoir reprend
+# le dernier modèle utilisé. Changez à tout moment : `/modele <nom>`, « passe
+# sur le modèle leger », ou en le demandant. Passer à un modèle distant demande
+# confirmation (la conversation sortirait de la machine).
+# Sans aucun modèle, seule la voie rapide répond (« quelle heure est-il »…).
 
-# Option A — LLM local via Ollama (ou llama.cpp server, LM Studio, vLLM…)
-[llm]
+# LLM local via Ollama (ou llama.cpp server, LM Studio, vLLM…)
+[models.gemma]
 provider = "openai_compatible"
 base_url = "http://localhost:11434/v1"
-model = "gemma4:26b-a4b"      # carte de 24 Go ; plus léger : "ministral-3:8b" (docs/PROJECT.md § 2.5)
+model = "gemma4:26b-a4b"      # carte de 24 Go (docs/PROJECT.md § 2.5)
 temperature = 0.2
 reasoning_effort = "none"     # modèles qui « réfléchissent » (Qwen…) : bien plus rapide
+# local = true                # modèle qui vous appartient (cette machine ou votre
+                              # réseau) : pas de confirmation pour y passer,
+                              # chargement et déchargement permis. Par défaut,
+                              # seule l'adresse de la machine est tenue pour locale.
 
-# Option B — API compatible OpenAI distante (OpenAI, Mistral, OpenRouter…)
-# [llm]
+# Modèle local léger (~10 Go)
+[models.leger]
+provider = "openai_compatible"
+base_url = "http://localhost:11434/v1"
+model = "ministral-3:8b"
+temperature = 0.2
+reasoning_effort = "none"
+
+# API compatible OpenAI distante (OpenAI, Mistral, OpenRouter…)
+# [models.mistral]
 # provider = "openai_compatible"
 # base_url = "https://api.mistral.ai/v1"
 # model = "mistral-large-latest"
-# api_key_env = "MISTRAL_API_KEY"
+# api_key_env = "MISTRAL_API_KEY"   # NOM de la variable, jamais la clé
 
-# Option C — Anthropic
-# [llm]
+# Anthropic
+# [models.sonnet]
 # provider = "anthropic"
 # model = "claude-sonnet-5-5"
 # api_key_env = "ANTHROPIC_API_KEY"
 # max_tokens = 4096
 
-# Option D — Abonnement Claude (Pro / Max) via la CLI Claude Code, sans clé
-# d'API ni facturation au token : la CLI doit être installée et connectée
-# (`claude` puis `/login`). Les outils propres à Claude Code sont désactivés ;
-# il sert uniquement de moteur de langage. Usage personnel uniquement.
-# [llm]
+# Abonnement Claude (Pro / Max) via la CLI Claude Code, sans clé d'API ni
+# facturation au token : la CLI doit être installée et connectée (`claude`
+# puis `/login`). Les outils propres à Claude Code sont désactivés ; il sert
+# uniquement de moteur de langage. Usage personnel uniquement.
+# [models.claude]
 # provider = "claude_code"
-# model = "sonnet"            # optionnel : sonnet, opus, haiku…
+# model = "haiku"             # optionnel : sonnet, opus, haiku…
 # command = "claude"          # chemin complet si besoin (Windows : claude.exe)
 # timeout_secs = 180
 

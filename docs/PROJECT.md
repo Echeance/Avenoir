@@ -190,7 +190,7 @@ Pour les modèles qui « réfléchissent » avant de répondre (Qwen…), `reaso
 
 Mesures du 8 novembre 2026 sous Linux, prompt v4 (RX 7900 XTX, Ollama ROCm, Q4, sans réflexion) ; sous Windows (prompt v3), Ministral a obtenu le même score que sous Linux. À éviter : Qwen3.5 4B (suit les injections), Gemma 4 E4B (se trompe d'outil), Qwen3.5 9B (invente des informations, comme la date). Un nouveau modèle se juge en repassant le banc, pas sur ses scores annoncés.
 
-**Changer de modèle à tout moment** (prévu) : commande `/modele [nom]` dans la CLI, sélecteur dans l'application, et outil `switch_llm` avec ses règles de voie rapide (« passe sur le modèle léger », « utilise Claude »). La conversation continue avec le nouveau modèle (même historique). Les modèles disponibles sont ceux de la configuration et ceux installés depuis le magasin ; passer à un fournisseur distant demande confirmation (directive n° 17).
+**Changer de modèle à tout moment** : un modèle par section `[models.<nom>]` ; le premier sert au premier lancement, puis Avenoir reprend le dernier modèle utilisé (table `app_state` de la base) ; sans modèle, seule la voie rapide répond. Commande `/modele [nom]` dans la CLI (sélecteur dans l'application, plus tard), outil `switch_llm` (réversible, annulable) que le modèle actif peut appeler, et règles de voie rapide (« passe sur le modèle léger », « utilise le modèle claude » : le mot « modèle » est exigé). La conversation continue avec le nouveau modèle (même historique). Passer à un modèle distant demande toujours confirmation (directive n° 17) ; est local un serveur à l'adresse de la machine, ou déclaré `local = true` (réseau local). Code : `llm::ModelSwitcher` (`libs/llm/src/models.cpp`).
 
 **Magasin de modèles** (prévu) : liste de modèles recommandés, avec leur score au banc d'essai, la mémoire vidéo et le disque nécessaires ; installation en un geste (téléchargement par Ollama, ou fichier GGUF vérifié par somme de contrôle), désinstallation, et ajout d'un fournisseur distant (clé d'API dans le trousseau). Un modèle absent du banc est signalé comme non évalué.
 
@@ -462,7 +462,7 @@ Fichier `config.toml` (voir `config.example.toml`) :
 
 | Section | Rôle |
 |---|---|
-| `[llm]` | Fournisseur (`openai_compatible`, `anthropic` ou `claude_code`), modèle, URL, **nom** de la variable d'environnement de la clé |
+| `[models.<nom>]` | Un modèle par section, dans l'ordre voulu (le premier sert par défaut) : fournisseur (`openai_compatible`, `anthropic` ou `claude_code`), modèle, URL, **nom** de la variable d'environnement de la clé, `local` |
 | `[agent]` | `max_steps`, `fast_path`, `system_prompt` |
 | `[permissions]` | Politique par niveau de risque |
 | `[modules.<id>]` | Réglages de l'utilisateur par module : activation, risque relevé par outil |
@@ -507,7 +507,7 @@ Emplacement cible (phase 3) : `%APPDATA%\avenoir\config.toml` sous Windows, `$XD
 - [ ] Recherche d'applications installées (fichiers `.desktop`, menu Démarrer) pour `launch_app` tolérant
 - [ ] Recherche web (module : SearXNG auto-hébergé, ou API Brave/Tavily) + lecture de page
 - [ ] Streaming des réponses du LLM
-- [ ] Changer de LLM à tout moment : commande `/modele`, outil `switch_llm` et règles de voie rapide
+- [x] Changer de LLM à tout moment : commande `/modele`, outil `switch_llm` et règles de voie rapide
 
 ### Phase 3 : résident
 - [ ] Emplacement standard de la config, rotation des logs, fichier d'audit
@@ -588,7 +588,7 @@ Emplacement cible (phase 3) : `%APPDATA%\avenoir\config.toml` sous Windows, `$XD
 | 37 | **Mêmes symboles d'une colonne sur tous les systèmes** dans la CLI : `›` (requête), `»` (action), `▲` (avertissement), au lieu de `❯`, `⚙` et `⚠` | Essai sous Windows : `❯` manque aux polices de console (carré), `⚙` et `⚠` y sont dessinés en emoji de double largeur qui chevauchent le texte ; un seul jeu de symboles évite deux apparences à maintenir |
 | 38 | **Prompt système v4** : une règle de plus, « ne donne une donnée de l'ordinateur ou du monde que si un outil te l'a fournie ; n'en annonce aucune avant le résultat ; si l'outil échoue, dis-le sans inventer » ; nouveau critère du banc `preamble_excludes` (texte écrit avec un appel d'outil, avant son résultat) | Essai sous Windows : Ministral a décrit un faux système et annoncé une météo inventée avant d'appeler l'outil. Le banc l'a reproduit (prévisions inventées après un échec de l'outil, 5 fois sur 5) ; la règle corrige le cas sans rien dégrader (evals/resultats/COMPARAISON.md, série 4) |
 | 39 | **Identité et présence** (§ 2.10, directive 16) : propriétaire et liste blanche, vérification par la voix et / ou le visage, verrouillage et connexion automatiques ; tout optionnel, réglages par défaut les plus sûrs, biométrie locale et chiffrée | L'assistant agit sur l'ordinateur et entend tout le monde dans la pièce : il ne doit obéir qu'aux personnes autorisées. La voix s'imite : elle ne suffit jamais seule pour une action sensible ni pour déverrouiller. Pour la connexion, s'appuyer sur Windows Hello / PAM plutôt que stocker un mot de passe |
-| 40 | **Changer de LLM à tout moment** (commande `/modele`, outil `switch_llm` de la voie rapide, sélecteur de l'application) et **magasin de modèles** ; passer à un fournisseur distant demande confirmation (directive 17) | Le bon modèle dépend du moment (jeu en cours, besoin de qualité, hors ligne) ; changer ne doit pas faire perdre la conversation. Un changement vers le distant fait sortir la conversation de la machine : jamais en silence |
+| 40 | **Changer de LLM à tout moment** (commande `/modele`, outil `switch_llm` de la voie rapide, sélecteur de l'application) et **magasin de modèles** ; configuration réduite à des sections `[models.<nom>]` (le premier par défaut, aucun = voie rapide seule), dernier modèle utilisé retenu dans la base ; passer à un fournisseur distant demande confirmation (directive 17) | Le bon modèle dépend du moment (jeu en cours, besoin de qualité, hors ligne) ; changer ne doit pas faire perdre la conversation. Un changement vers le distant fait sortir la conversation de la machine : jamais en silence |
 
 ---
 

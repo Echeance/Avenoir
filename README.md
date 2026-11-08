@@ -54,7 +54,7 @@ La liste complète, sans rien omettre : **[docs/FEATURES.md](docs/FEATURES.md)**
 - 🌙 **Assistant résident** : démon en arrière-plan, raccourci clavier global, journal des actions, et la carte graphique libérée (ou le modèle léger choisi) quand vous lancez un jeu.
 - 🎙️ **Voix** : mot de réveil, reconnaissance et synthèse vocales, en local.
 - 🖥️ **Interface graphique** : un widget discret en haut de l'écran (avec le pingouin animé) et une application de réglages.
-- 🧠 **Changer de modèle à tout moment** (`/modele`, ou « passe sur le modèle léger ») et un **magasin de modèles** pour en installer.
+- 🧠 **Magasin de modèles** pour en installer en un geste.
 - 🔐 **Identité et présence** : seuls vous et les personnes que vous autorisez peuvent l'utiliser (voix, visage, ou les deux), verrouillage quand vous partez et déverrouillage à votre retour. Tout est optionnel et réglable, la biométrie reste sur votre machine.
 
 ---
@@ -111,7 +111,7 @@ L'exécutable est créé dans `build/release/apps/cli/avenoir`. Les dépendances
 cp config.example.toml config.toml
 ```
 
-Choisissez ensuite votre fournisseur LLM dans la section `[llm]` :
+Décrivez ensuite vos modèles, un par section `[models.<nom>]`. Le premier sert au premier lancement ; ensuite, Avenoir reprend le **dernier modèle utilisé**. Sans aucun modèle, seule la voie rapide répond.
 
 | Fournisseur | `provider` | Pour qui | Mise en place |
 |---|---|---|---|
@@ -120,10 +120,17 @@ Choisissez ensuite votre fournisseur LLM dans la section `[llm]` :
 | **Abonnement Claude** | `claude_code` | Claude Pro / Max, **sans clé d'API** | installer Claude Code, puis `claude` → `/login` |
 
 ```toml
-[llm]
+[models.gemma]
+provider = "openai_compatible"
+base_url = "http://localhost:11434/v1"
+model = "gemma4:26b-a4b"
+
+[models.claude]
 provider = "claude_code"
 model = "sonnet"
 ```
+
+**Changer de modèle à tout moment** : `/modele <nom>`, *« passe sur le modèle claude »*, ou en le demandant simplement. La conversation continue avec le nouveau modèle ; passer à un modèle distant demande confirmation.
 
 **Quel modèle ?** Mesuré sur nos requêtes de référence (26 requêtes, simples à piégées), sous Linux avec une RX 7900 XTX :
 
@@ -157,10 +164,17 @@ Deux modèles locaux, selon ce que fait la carte graphique :
 | **`ministral-3:8b`** | quand la carte sert à autre chose (jeu, rendu…) : moitié moins de mémoire, aucune injection suivie sur le banc d'essai | ~11 Go | ~0,8 s |
 
 ```toml
-[llm]
+[models.gemma]                  # au quotidien
 provider = "openai_compatible"
 base_url = "http://localhost:11434/v1"
-model = "gemma4:26b-a4b"        # ou "ministral-3:8b"
+model = "gemma4:26b-a4b"
+temperature = 0.2
+reasoning_effort = "none"
+
+[models.leger]                  # pendant les jeux : « passe sur le modèle leger »
+provider = "openai_compatible"
+base_url = "http://localhost:11434/v1"
+model = "ministral-3:8b"
 temperature = 0.2
 reasoning_effort = "none"
 ```
@@ -186,6 +200,7 @@ avenoir chemin/config.toml
 | `/aide` | liste des commandes |
 | `/outils` | outils disponibles et leur niveau de risque |
 | `/annuler` | annuler les actions de la dernière requête (répétable) |
+| `/modele [nom]` | modèles configurés, ou passer à un autre (aussi : *« passe sur le modèle leger »*) ; un modèle distant demande confirmation |
 | `/nouvelle [titre]` | nouvelle conversation (l'ancienne reste dans `/conversations`) |
 | `/reset` | efface la conversation en cours (messages et écran) après confirmation, en proposant d'en garder une transcription Markdown (`/supprimer` la propose aussi) |
 | `/transcription` | enregistre la conversation en cours dans un fichier Markdown (`transcriptions/` du dossier de données) |
@@ -270,7 +285,7 @@ Sous Windows, `scripts\build.ps1` offre les mêmes options et charge tout seul l
 **Essais avec de vrais modèles** : `avenoir-evals` passe les requêtes de référence ([`evals/requetes.toml`](evals/requetes.toml)) sur le modèle de votre configuration, avec de fausses versions des outils (rien n'est lancé), et écrit un rapport dans [`evals/resultats/`](evals/resultats/) :
 
 ```sh
-./build/debug/evals/avenoir-evals --model haiku --repeat 2         # config.toml du dossier courant
+./build/debug/evals/avenoir-evals --llm claude --repeat 2          # un modèle de config.toml (le premier par défaut)
 ./build/debug/evals/avenoir-evals --config ollama.toml --prompt essai.txt --only injection-meteo
 ```
 

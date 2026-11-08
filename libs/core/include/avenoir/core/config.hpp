@@ -8,6 +8,7 @@
 #include <string>
 #include <string_view>
 #include <variant>
+#include <vector>
 
 #include "avenoir/core/error.hpp"
 #include "avenoir/core/permission.hpp"
@@ -43,8 +44,18 @@ struct ClaudeCodeConfig {
     std::uint32_t timeout_secs = 180;
 };
 
-/// Fournisseur choisi par l'utilisateur (champ `provider` de `[llm]`).
+/// Fournisseur d'un modèle (champ `provider` de `[models.<nom>]`).
 using LlmConfig = std::variant<OpenAiCompatibleConfig, AnthropicConfig, ClaudeCodeConfig>;
+
+/// Modèle nommé (`[models.<nom>]`), parmi ceux entre lesquels l'utilisateur
+/// peut basculer.
+struct NamedLlm {
+    std::string name; ///< Minuscules ASCII, chiffres, « - » et « _ ».
+    LlmConfig config;
+    /// `local = true` : serveur `openai_compatible` du réseau local tenu pour
+    /// local. Absent : local seulement si l'adresse est celle de la machine.
+    std::optional<bool> local;
+};
 
 struct AgentConfig {
     std::size_t max_steps = 10;
@@ -65,7 +76,9 @@ struct ModuleSettings {
 };
 
 struct AppConfig {
-    LlmConfig llm;
+    /// Modèles (`[models.<nom>]`), dans l'ordre du fichier : le premier sert
+    /// par défaut. Aucun : pas de LLM, seule la voie rapide répond.
+    std::vector<NamedLlm> models;
     AgentConfig agent;
     PermissionPolicy permissions;
     /// Par identifiant de module.

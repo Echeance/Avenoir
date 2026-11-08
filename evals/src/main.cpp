@@ -1,7 +1,8 @@
 // avenoir-evals : passe les requêtes de référence (evals/requetes.toml) sur un
 // vrai modèle, avec des doublures d'outils, et écrit un rapport Markdown.
 //
-//   avenoir-evals [--config config.toml] [--model nom] [--reasoning effort] [--cases fichier]
+//   avenoir-evals [--config config.toml] [--llm nom] [--model id] [--reasoning effort] [--cases
+//   fichier]
 //                 [--only id,id] [--repeat N] [--prompt fichier] [--report fichier]
 
 #include <chrono>
@@ -42,6 +43,7 @@ struct Arguments {
     std::filesystem::path config = "config.toml";
     std::filesystem::path cases = AVENOIR_EVALS_CASES;
     std::filesystem::path modules = AVENOIR_EVALS_MODULES;
+    std::optional<std::string> llm; ///< Nom d'un `[models.<nom>]` ; absent : le premier.
     std::optional<std::string> model;
     std::optional<std::string> reasoning;
     std::optional<std::filesystem::path> prompt;
@@ -53,7 +55,8 @@ struct Arguments {
 constexpr std::string_view kUsage =
     "Usage : avenoir-evals [options]\n"
     "  --config fichier   configuration (fournisseur LLM), config.toml par défaut\n"
-    "  --model nom        remplace le modèle de la configuration\n"
+    "  --llm nom          modèle de la configuration ([models.<nom>]), le premier par défaut\n"
+    "  --model id         remplace l'identifiant de ce modèle (ex. ministral-3:8b)\n"
     "  --reasoning effort effort de réflexion (none, low, medium, high ; openai_compatible)\n"
     "  --cases fichier    requêtes de référence (evals/requetes.toml)\n"
     "  --only id,id       seulement ces cas\n"
@@ -77,6 +80,8 @@ std::optional<Arguments> parse_arguments(std::span<char*> argv) {
         const std::string value = argv[++i];
         if (option == "--config") {
             args.config = value;
+        } else if (option == "--llm") {
+            args.llm = value;
         } else if (option == "--model") {
             args.model = value;
         } else if (option == "--reasoning") {
@@ -223,11 +228,23 @@ int run(std::span<char*> argv) {
         std::println(std::cerr, "{}", core::describe(config.error()));
         return EXIT_FAILURE;
     }
+    if (config->models.empty()) {
+        std::println(std::cerr, "aucun modèle dans {} ([models.<nom>])", args->config.string());
+        return EXIT_FAILURE;
+    }
+    const auto chosen = args->llm
+                            ? std::ranges::find(config->models, *args->llm, &core::NamedLlm::name)
+                            : config->models.begin();
+    if (chosen == config->models.end()) {
+        std::println(std::cerr, "modèle inconnu : {}", args->llm.value_or(""));
+        return EXIT_FAILURE;
+    }
+    core::LlmConfig& model_config = chosen->config;
     if (args->model) {
-        override_model(config->llm, *args->model);
+        override_model(model_config, *args->model);
     }
     if (args->reasoning) {
-        auto* openai = std::get_if<core::OpenAiCompatibleConfig>(&config->llm);
+        auto* openai = std::get_if<core::OpenAiCompatibleConfig>(&model_config);
         if (openai == nullptr) {
             std::println(std::cerr, "--reasoning : seulement avec openai_compatible");
             return EXIT_FAILURE;
@@ -276,7 +293,7 @@ int run(std::span<char*> argv) {
         return EXIT_FAILURE;
     }
 
-    const std::string label = model_label(config->llm);
+    const std::string label = model_label(model_config);
     std::println("{} : {} cas × {}, {} outils", label, selected.size(), args->repeat,
                  specs->size());
 
@@ -284,7 +301,7 @@ int run(std::span<char*> argv) {
     for (const auto* test : selected) {
         evals::CaseResult result{.test = test, .attempts = {}};
         for (std::size_t i = 0; i < args->repeat; ++i) {
-            auto llm = llm::make_provider(config->llm);
+            auto llm = llm::make_provider(model_config);
             if (!llm) {
                 std::println(std::cerr, "{}", core::describe(llm.error()));
                 return EXIT_FAILURE;
