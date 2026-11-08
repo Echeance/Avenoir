@@ -377,6 +377,18 @@ core::Result<void> Store::remove_last_message(std::int64_t conversation) {
     return statement->bind(1, conversation).run();
 }
 
+core::Result<void> Store::clear_messages(std::int64_t conversation) {
+    auto statement =
+        Statement::prepare(impl_->db.get(), "DELETE FROM messages WHERE conversation_id = ?1");
+    if (!statement) {
+        return std::unexpected(std::move(statement.error()));
+    }
+    if (auto cleared = statement->bind(1, conversation).run(); !cleared) {
+        return cleared;
+    }
+    return impl_->touch(conversation);
+}
+
 core::Result<std::vector<core::Message>> Store::messages(std::int64_t conversation) const {
     auto statement = Statement::prepare(
         impl_->db.get(), "SELECT content FROM messages WHERE conversation_id = ?1 ORDER BY id");

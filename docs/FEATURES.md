@@ -83,7 +83,7 @@ Plateformes : **Linux** et **Windows** (sauf mention contraire).
 
 - Chaque message est **enregistré immédiatement** dans une base SQLite locale (`avenoir.db`), avec les appels et résultats d'outils et la consommation.
 - Au lancement : reprise de la dernière conversation et réaffichage des 50 derniers messages ; le LLM se souvient.
-- Commandes : `/nouvelle [titre]` (alias `/reset`, rien n'est effacé), `/conversations`, `/ouvrir <n° ou titre>`, `/renommer <titre>`, `/supprimer [n° ou titre]` (avec confirmation), `/historique`.
+- Commandes : `/nouvelle [titre]` (rien n'est effacé), `/reset` (efface les messages de la conversation en cours, qui garde son numéro et son titre ; s'il y en a : confirmation, puis proposition d'en garder une transcription Markdown dans `transcriptions/` du dossier de données, lisible par l'utilisateur seul — si elle échoue, rien n'est effacé ; l'écran et l'historique du terminal sont vidés, puis le cadre d'accueil réaffiché avec le chemin de la transcription), `/conversations`, `/ouvrir <n° ou titre>`, `/renommer <titre>`, `/supprimer [n° ou titre]` (avec confirmation, puis proposition de transcription), `/historique`, `/transcription` (même transcription Markdown que `/reset`, sans rien effacer). Transcriptions : en-tête (titre, numéro, date en toutes lettres, nombre d'échanges), une rubrique « › Vous » / « ◆ Avenoir » par message, appels d'outils repliés dans la réponse avec leurs arguments lisibles et leur résultat ; rien d'actif à l'ouverture dans un lecteur Markdown (résultats d'outils en blocs de code, HTML neutralisé et images désactivées hors code, bloc de code resté ouvert refermé), le code des messages restant intact.
 - Titre automatique (premiers mots de la première question).
 - Requêtes SQL toujours paramétrées ; schéma versionné ; suppression en cascade.
 - Une base illisible n'empêche pas de démarrer (conversations alors non conservées, avec un message).
@@ -120,7 +120,7 @@ Plateformes : **Linux** et **Windows** (sauf mention contraire).
 ## 9. Interface en ligne de commande
 
 - Exécutable `avenoir [chemin/config.toml]`.
-- **Commandes** : `/aide`, `/outils`, `/annuler`, `/modules`, `/risque [outil niveau]`, `/nouvelle`, `/reset`, `/conversations`, `/ouvrir`, `/renommer`, `/supprimer`, `/historique`, `/quitter` (`/q`), et celles des modules.
+- **Commandes** : `/aide`, `/outils`, `/annuler`, `/modules`, `/risque [outil niveau]`, `/nouvelle`, `/reset`, `/conversations`, `/ouvrir`, `/renommer`, `/supprimer`, `/historique`, `/transcription`, `/quitter` (`/q`), et celles des modules.
 - **Saisie** (replxx) : édition de ligne, historique des saisies conservé entre deux lancements, complétion des commandes (Tab), Ctrl+D pour quitter.
 - **Apparence** :
   - barre de saisie fixe en bas du terminal (grandit avec la saisie, suit les redimensionnements) ;

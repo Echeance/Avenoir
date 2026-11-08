@@ -1,17 +1,26 @@
 #include "conversations.hpp"
 
 #include <algorithm>
+#include <chrono>
 #include <cstdint>
+#include <exception>
+#include <expected>
+#include <filesystem>
 #include <format>
+#include <fstream>
+#include <ios>
 #include <optional>
 #include <span>
 #include <string>
 #include <string_view>
+#include <system_error>
 #include <utility>
 #include <variant>
+#include <vector>
 
 #include <spdlog/spdlog.h>
 
+#include "avenoir/storage/transcript.hpp"
 #include "avenoir/terminal/style.hpp"
 
 namespace avenoir::cli {
@@ -172,6 +181,84 @@ void Conversations::open(std::string_view target) {
     }
 }
 
+std::optional<Conversations::Cleared> Conversations::clear() {
+    const std::span<const core::Message> messages = agent_->history();
+    Cleared cleared;
+    if (!messages.empty()) {
+        if (!prompt_->ask_yes_no(std::format("Effacer les {} message(s) de « {} » ? [o/N] ",
+                                             messages.size(), title_))) {
+            display().info("Rien n'a été effacé.");
+            return std::nullopt;
+        }
+        if (prompt_->ask_yes_no("En garder une transcription (fichier Markdown) ? [o/N] ")) {
+            auto written = write_transcript(current_, title_, messages);
+            if (!written) {
+                display().error(std::format("transcription impossible ({}) : rien n'a été effacé",
+                                            written.error()));
+                return std::nullopt;
+            }
+            cleared.transcript = std::move(*written);
+        }
+    }
+    agent_->reset();
+    if (store_) {
+        if (auto removed = store_->clear_messages(current_); !removed) {
+            warn_storage(removed.error());
+        }
+    }
+    // Titre par défaut : la prochaine requête le remplacera.
+    auto_title_ = title_ == kDefaultTitle;
+    return cleared;
+}
+
+std::expected<std::filesystem::path, std::string>
+Conversations::write_transcript(std::int64_t id, std::string_view title,
+                                std::span<const core::Message> messages) {
+    std::chrono::local_time<std::chrono::minutes> date;
+    try {
+        const std::chrono::zoned_time now{std::chrono::current_zone(),
+                                          std::chrono::system_clock::now()};
+        date = std::chrono::floor<std::chrono::minutes>(now.get_local_time());
+    } catch (const std::exception& e) {
+        return std::unexpected(std::string("fuseau horaire : ") + e.what());
+    }
+    const auto base = storage::data_directory();
+    if (!base) {
+        return std::unexpected("dossier de données introuvable");
+    }
+    const std::filesystem::path directory = *base / "transcriptions";
+    std::error_code error;
+    std::filesystem::create_directories(directory, error);
+    if (error) {
+        return std::unexpected("dossier « transcriptions » : " + error.message());
+    }
+    // Lisible par l'utilisateur seul, comme les conversations.
+    std::filesystem::permissions(directory, std::filesystem::perms::owner_all,
+                                 std::filesystem::perm_options::replace, error);
+
+    const std::string name = storage::transcript_file_name(date, id, title);
+    std::filesystem::path path = directory / name;
+    // Deux transcriptions dans la même minute : suffixe plutôt qu'écrasement.
+    for (int n = 2; std::filesystem::exists(path, error) && n < 100; ++n) {
+        path = directory / (name.substr(0, name.size() - 3) + std::format("-{}.md", n));
+    }
+    if (std::filesystem::exists(path, error)) {
+        return std::unexpected("trop de transcriptions dans la même minute");
+    }
+    const std::string text = storage::transcript_markdown(title, id, date, messages);
+    {
+        std::ofstream file(path, std::ios::binary);
+        file.write(text.data(), static_cast<std::streamsize>(text.size()));
+        if (!file) {
+            return std::unexpected("écriture impossible");
+        }
+    }
+    std::filesystem::permissions(
+        path, std::filesystem::perms::owner_read | std::filesystem::perms::owner_write,
+        std::filesystem::perm_options::replace, error);
+    return path;
+}
+
 void Conversations::rename(std::string_view title) {
     if (!store_) {
         display().info("Conversations non conservées : base indisponible.");
@@ -207,11 +294,38 @@ void Conversations::remove(std::string_view target) {
         display().info("Rien n'a été supprimé.");
         return;
     }
+    std::optional<std::filesystem::path> transcript;
+    if (conversation->message_count > 0 &&
+        prompt_->ask_yes_no("En garder une transcription (fichier Markdown) ? [o/N] ")) {
+        // Conversation en cours : l'historique de l'agent ; sinon, la base.
+        std::vector<core::Message> stored;
+        std::span<const core::Message> messages = agent_->history();
+        if (conversation->id != current_) {
+            auto loaded = store.messages(conversation->id);
+            if (!loaded) {
+                display().error(std::format("transcription impossible ({}) : rien n'a été supprimé",
+                                            core::describe(loaded.error())));
+                return;
+            }
+            stored = std::move(*loaded);
+            messages = stored;
+        }
+        auto written = write_transcript(conversation->id, conversation->title, messages);
+        if (!written) {
+            display().error(std::format("transcription impossible ({}) : rien n'a été supprimé",
+                                        written.error()));
+            return;
+        }
+        transcript = std::move(*written);
+    }
     if (auto removed = store.remove(conversation->id); !removed) {
         warn_storage(removed.error());
         return;
     }
     display().success("Conversation supprimée.");
+    if (transcript) {
+        display().info("Transcription : " + utf8_path(*transcript));
+    }
     if (conversation->id != current_) {
         return;
     }
@@ -223,6 +337,20 @@ void Conversations::remove(std::string_view target) {
     } else {
         create({});
     }
+}
+
+void Conversations::transcribe() const {
+    const std::span<const core::Message> messages = agent_->history();
+    if (messages.empty()) {
+        display().info("Rien à transcrire : la conversation est vide.");
+        return;
+    }
+    auto written = write_transcript(current_, title_, messages);
+    if (!written) {
+        display().error(std::format("transcription impossible ({})", written.error()));
+        return;
+    }
+    display().success("Transcription : " + utf8_path(*written));
 }
 
 void Conversations::show_history() {

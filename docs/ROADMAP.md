@@ -142,7 +142,7 @@ L'ordre suit un principe : **chaque jalon produit un assistant utilisable**, plu
 - ✅ Écriture immédiate de chaque message, requêtes toujours paramétrées (aucune injection SQL possible)
 - ✅ Agent : `load_history` et observateur de l'historique (le cœur ne dépend pas du stockage) ; consommation conservée dans chaque réponse
 - ✅ CLI : reprise de la dernière conversation au lancement, réaffichage des 50 derniers messages
-- ✅ CLI : `/nouvelle [titre]` (et `/reset`, alias), `/conversations`, `/ouvrir <n° ou titre>`, `/renommer <titre>`, `/supprimer [n° ou titre]` (avec confirmation), `/historique`
+- ✅ CLI : `/nouvelle [titre]`, `/reset` (efface la conversation en cours et l'écran), `/conversations`, `/ouvrir <n° ou titre>`, `/renommer <titre>`, `/supprimer [n° ou titre]` (avec confirmation), `/historique`
 - ✅ Titre automatique (premiers mots de la première question, sans couper un caractère UTF-8)
 - ✅ Tests : aller-retour JSON de chaque message, données conservées après fermeture, renommage, suppression en cascade, titres piégés (injection SQL), ordre des conversations, observateur et reprise dans l'agent
 - ✅ Essai réel : conversation, fermeture, réouverture — le LLM se souvient ; toutes les commandes essayées

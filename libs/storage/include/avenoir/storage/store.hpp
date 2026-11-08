@@ -65,6 +65,8 @@ class Store {
     [[nodiscard]] core::Result<void> append_message(std::int64_t conversation,
                                                     const core::Message& message);
     [[nodiscard]] core::Result<void> remove_last_message(std::int64_t conversation);
+    /// Supprime tous les messages de la conversation, qui est conservée.
+    [[nodiscard]] core::Result<void> clear_messages(std::int64_t conversation);
     [[nodiscard]] core::Result<std::vector<core::Message>>
     messages(std::int64_t conversation) const;
 

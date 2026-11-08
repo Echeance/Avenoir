@@ -5,6 +5,7 @@ avenoir_add_library(storage
         src/message_json.cpp
         src/paths.cpp
         src/store.cpp
+        src/transcript.cpp
     DEPS
         avenoir::core)
 
@@ -14,4 +15,5 @@ target_link_libraries(avenoir_storage PRIVATE
 avenoir_add_tests(storage
     SOURCES
         tests/message_json_test.cpp
-        tests/store_test.cpp)
+        tests/store_test.cpp
+        tests/transcript_test.cpp)

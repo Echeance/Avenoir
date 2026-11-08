@@ -60,6 +60,9 @@ class Display {
     /// Bordure de la barre de saisie (ligne grise sur toute la largeur).
     [[nodiscard]] static std::string bar_rule();
 
+    /// Vide l'écran et l'historique du terminal (/reset). Sans effet hors
+    /// d'un terminal (sortie redirigée).
+    void clear();
     void banner(std::string_view llm, std::size_t tools, std::string_view conversation);
 
     /// Requête de l'utilisateur (réaffichage d'une conversation).

@@ -75,6 +75,21 @@ TEST_CASE("messages : ajout, relecture dans l'ordre, retrait du dernier", "[stor
     CHECK(count_of(store.conversation(id)) == 2);
 }
 
+TEST_CASE("effacer les messages garde la conversation et ne touche pas aux autres", "[store]") {
+    auto store = memory_store();
+    const auto cleared = store.create_conversation("À effacer");
+    const auto other = store.create_conversation("Autre");
+    REQUIRE(cleared.has_value());
+    REQUIRE(other.has_value());
+    REQUIRE(store.append_message(cleared->id, core::UserMessage{.content = "a"}).has_value());
+    REQUIRE(store.append_message(cleared->id, core::UserMessage{.content = "b"}).has_value());
+    REQUIRE(store.append_message(other->id, core::UserMessage{.content = "c"}).has_value());
+
+    REQUIRE(store.clear_messages(cleared->id).has_value());
+    CHECK(count_of(store.conversation(cleared->id)) == 0);
+    CHECK(count_of(store.conversation(other->id)) == 1);
+}
+
 TEST_CASE("la conversation la plus récente est celle qui a reçu un message", "[store]") {
     auto store = memory_store();
     const auto older = store.create_conversation("Ancienne");

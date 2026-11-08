@@ -330,6 +330,19 @@ void Display::finish_input(std::string_view prompt, bool entered, std::string_vi
     }
 }
 
+void Display::clear() {
+    const std::scoped_lock lock(mutex_);
+    clear_spinner();
+    transcript_.clear();
+    if (pinned_) {
+        // Zone de défilement remise à tout l'écran le temps de l'effacer.
+        emit("\x1b[r\x1b[2J\x1b[3J\x1b[H");
+        draw_bar(/*marker=*/true);
+    } else if (terminal::enabled()) {
+        emit("\x1b[2J\x1b[3J\x1b[H");
+    }
+}
+
 void Display::banner(std::string_view llm, std::size_t tools, std::string_view conversation) {
     const std::size_t inner = width() - 4;
     const std::string title = paint(std::format("Avenoir {}", core::version()), {.bold = true});

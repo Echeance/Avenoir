@@ -184,7 +184,9 @@ avenoir chemin/config.toml
 | `/aide` | liste des commandes |
 | `/outils` | outils disponibles et leur niveau de risque |
 | `/annuler` | annuler les actions de la dernière requête (répétable) |
-| `/nouvelle [titre]` | nouvelle conversation (`/reset` : idem, rien n'est effacé) |
+| `/nouvelle [titre]` | nouvelle conversation (l'ancienne reste dans `/conversations`) |
+| `/reset` | efface la conversation en cours (messages et écran) après confirmation, en proposant d'en garder une transcription Markdown (`/supprimer` la propose aussi) |
+| `/transcription` | enregistre la conversation en cours dans un fichier Markdown (`transcriptions/` du dossier de données) |
 | `/conversations` | liste des conversations |
 | `/ouvrir <n° ou titre>` | reprendre une conversation |
 | `/renommer <titre>` | renommer la conversation en cours |

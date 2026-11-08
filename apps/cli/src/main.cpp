@@ -85,14 +85,15 @@ void setup_logging() {
 std::vector<std::string> builtin_commands() {
     return {"aide",     "annuler", "conversations", "help",      "historique", "modules",
             "nouvelle", "ouvrir",  "outils",        "q",         "quit",       "quitter",
-            "renommer", "reset",   "risque",        "supprimer", "tools"};
+            "renommer", "reset",   "risque",        "supprimer", "tools",      "transcription"};
 }
 
 /// Commandes proposées à la complétion (Tab).
 std::vector<std::string> command_names(const cli::ModulesUi& modules) {
-    std::vector<std::string> names{
-        "/aide",   "/annuler", "/conversations", "/historique", "/modules", "/nouvelle", "/ouvrir",
-        "/outils", "/quitter", "/renommer",      "/reset",      "/risque",  "/supprimer"};
+    std::vector<std::string> names{"/aide",      "/annuler",      "/conversations", "/historique",
+                                   "/modules",   "/nouvelle",     "/ouvrir",        "/outils",
+                                   "/quitter",   "/renommer",     "/reset",         "/risque",
+                                   "/supprimer", "/transcription"};
     std::ranges::copy(modules.completion_names(), std::back_inserter(names));
     return names;
 }
@@ -117,12 +118,14 @@ void print_help(const cli::ModulesUi& modules) {
     out += modules.help();
     out += title("Conversations") +
            paint("  conservées entre deux lancements", {.color = Color::Gray}) + "\n";
-    out += command("/nouvelle [titre]", "nouvelle conversation (/reset : idem)") + "\n";
+    out += command("/nouvelle [titre]", "nouvelle conversation") + "\n";
+    out += command("/reset", "efface la conversation en cours et l'écran") + "\n";
     out += command("/conversations", "liste des conversations") + "\n";
     out += command("/ouvrir <n° ou titre>", "reprendre une conversation") + "\n";
     out += command("/renommer <titre>", "renommer la conversation en cours") + "\n";
     out += command("/supprimer [n° ou titre]", "supprimer une conversation") + "\n";
     out += command("/historique", "réafficher toute la conversation") + "\n";
+    out += command("/transcription", "enregistrer la conversation dans un fichier Markdown") + "\n";
     out += paint("Ctrl+C arrête l'action en cours sans quitter, puis propose d'annuler ce qui "
                  "peut l'être.",
                  {.color = Color::Gray});
@@ -259,8 +262,18 @@ bool run_command(core::Agent& agent, cli::Prompt& prompt, cli::Conversations& co
     }
     if (command == "/aide" || command == "/help") {
         print_help(modules);
-    } else if (command == "/nouvelle" || command == "/reset") {
+    } else if (command == "/nouvelle") {
         conversations.create(argument);
+    } else if (command == "/reset") {
+        if (const auto cleared = conversations.clear()) {
+            display().clear();
+            display().banner(agent.llm_name(), agent.tools().size(),
+                             conversations.describe_current());
+            display().success("Conversation effacée.");
+            if (cleared->transcript) {
+                display().info("Transcription : " + cli::utf8_path(*cleared->transcript));
+            }
+        }
     } else if (command == "/conversations") {
         conversations.list();
     } else if (command == "/ouvrir") {
@@ -271,6 +284,8 @@ bool run_command(core::Agent& agent, cli::Prompt& prompt, cli::Conversations& co
         conversations.remove(argument);
     } else if (command == "/historique") {
         conversations.show_history();
+    } else if (command == "/transcription") {
+        conversations.transcribe();
     } else if (command == "/outils" || command == "/tools") {
         print_tools(agent);
     } else if (command == "/annuler") {

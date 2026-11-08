@@ -276,7 +276,9 @@ Les conversations sont **persistantes** : à la réouverture de l'application ou
 
 | Commande | Effet |
 |---|---|
-| `/nouvelle [titre]` | crée une conversation et bascule dessus (`/reset` en est un alias : rien n'est effacé) |
+| `/nouvelle [titre]` | crée une conversation et bascule dessus (rien n'est effacé) |
+| `/transcription` | enregistre la conversation en cours dans `transcriptions/` du dossier de données (Markdown) |
+| `/reset` | efface les messages de la conversation en cours (confirmation s'il y en a, transcription Markdown proposée dans `transcriptions/`) et vide l'écran ; la conversation garde son numéro et son titre |
 | `/conversations` | liste les conversations (n°, titre, date, nombre de messages) |
 | `/ouvrir <n° ou titre>` | bascule sur une conversation et réaffiche ses messages |
 | `/renommer <titre>` | renomme la conversation en cours |
