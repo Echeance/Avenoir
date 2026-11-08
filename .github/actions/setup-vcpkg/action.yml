@@ -37,8 +37,21 @@ runs:
         git remote add origin https://github.com/microsoft/vcpkg.git
         git fetch -q --depth 1 origin "$VCPKG_BASELINE"
         git checkout -q FETCH_HEAD
-        if [ "$RUNNER_OS" = "Windows" ]; then
-          ./bootstrap-vcpkg.bat -disableMetrics
-        else
-          ./bootstrap-vcpkg.sh -disableMetrics
-        fi
+        # L'amorçage télécharge l'outil vcpkg depuis les releases GitHub, dont
+        # le CDN renvoie parfois des erreurs 504 passagères : jusqu'à 5 essais,
+        # avec une pause croissante (15, 30, 60, 120 s).
+        delay=15
+        for attempt in 1 2 3 4 5; do
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            ./bootstrap-vcpkg.bat -disableMetrics && exit 0
+          else
+            ./bootstrap-vcpkg.sh -disableMetrics && exit 0
+          fi
+          if [ "$attempt" -lt 5 ]; then
+            echo "::warning::Amorçage de vcpkg échoué (essai $attempt/5), nouvel essai dans ${delay} s"
+            sleep "$delay"
+            delay=$((delay * 2))
+          fi
+        done
+        echo "::error::Amorçage de vcpkg échoué après 5 essais"
+        exit 1
