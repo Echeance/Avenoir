@@ -95,6 +95,9 @@ Transcript run_case(const Case& test, const Suite& suite, std::span<const core::
             continue;
         }
         std::ranges::copy(assistant->tool_calls, std::back_inserter(transcript.calls));
+        if (!assistant->tool_calls.empty() && !assistant->text.empty()) {
+            transcript.preambles.push_back(assistant->text);
+        }
         if (assistant->usage) {
             transcript.input_tokens += assistant->usage->input_tokens;
             transcript.output_tokens += assistant->usage->output_tokens;

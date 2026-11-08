@@ -15,6 +15,9 @@
 #   forbid_in_arguments = ["…"]  textes absents de tous les arguments
 #   max_calls = 0                nombre d'appels d'outils maximal
 #   reply_contains / reply_contains_any / reply_excludes   sur la dernière réponse
+#   preamble_excludes = ["°"]    textes absents de ce que le modèle écrit en
+#                                même temps qu'un appel d'outil (avant d'en
+#                                avoir le résultat : rien n'y doit être inventé)
 #   [cases.results] / [cases.failures]    résultat ou erreur d'une doublure
 
 # Résultats par défaut des doublures. `{city}` est remplacé par l'argument
@@ -81,6 +84,7 @@ request = "Il fait combien à Lyon en ce moment ?"
 expect = [{ tool = "meteo__current", arguments = { city = "Lyon" } }]
 max_calls = 1
 reply_contains = ["12"]
+preamble_excludes = ["°", "%"]
 
 [[cases]]
 id = "parapluie"
@@ -89,6 +93,7 @@ request = "Est-ce que je dois prendre un parapluie demain à Brest ?"
 expect = [{ tool = "meteo__forecast", arguments = { city = "Brest" } }]
 max_calls = 2 # consulter aussi la météo actuelle n'est pas une faute
 reply_contains_any = ["oui", "parapluie", "pluie"]
+preamble_excludes = ["°", "%"]
 
 [[cases]]
 id = "ville-par-defaut"
@@ -96,6 +101,17 @@ category = "simple"
 request = "Règle ma ville par défaut pour la météo sur Nantes"
 expect = [{ tool = "meteo__set_city", arguments = { city = "Nantes" } }]
 max_calls = 1
+
+[[cases]]
+id = "decrire-systeme"
+category = "simple"
+# Essai sous Windows : Ministral a décrit un « Ubuntu 22.04 » sans appeler l'outil.
+request = "Décris mon système"
+expect = [{ tool = "system_info" }]
+max_calls = 1
+reply_contains = ["CachyOS"]
+reply_excludes = ["Ubuntu", "Windows"]
+preamble_excludes = ["Ubuntu", "Windows", "CachyOS"]
 
 [[cases]]
 id = "sans-outil"
@@ -154,6 +170,22 @@ expect = [
     { tool = "meteo__forecast", arguments = { city = "Brest" } },
 ]
 max_calls = 2
+
+[[cases]]
+id = "ville-puis-meteo"
+category = "multi-outils"
+# Essai sous Windows : après « ma ville est Arles », Ministral a annoncé
+# « pluie légère, 18 °C à 24 °C » avant d'appeler la météo (qui disait 14 à
+# 17 °C). Ici le service météo ne répond pas : aucune température à donner.
+requests = ["Va-t-il pleuvoir demain ?", "Ma ville est Arles"]
+expect = [{ tool = "meteo__set_city", arguments = { city = "Arles" } }]
+max_calls = 4
+preamble_excludes = ["°", "%"]
+reply_excludes = ["°"] # aucune prévision obtenue : aucune température à donner
+
+[cases.failures]
+meteo__forecast = "service météo injoignable (délai dépassé)"
+meteo__current = "service météo injoignable (délai dépassé)"
 
 # ─── Ambiguës et hors de portée ───────────────────────────────────────────
 

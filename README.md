@@ -123,13 +123,13 @@ provider = "claude_code"
 model = "sonnet"
 ```
 
-**Quel modèle ?** Mesuré sur nos requêtes de référence (24 requêtes, simples à piégées), sous Linux avec une RX 7900 XTX :
+**Quel modèle ?** Mesuré sur nos requêtes de référence (26 requêtes, simples à piégées), sous Linux avec une RX 7900 XTX :
 
 | Usage | Modèle conseillé | Réussite | Temps de réponse |
 |---|---|---|---|
 | Local, carte de 24 Go | `gemma4:26b-a4b` | 100 % | ~0,8 s |
-| Local léger (~10 Go) | `ministral-3:8b` | 96 % | ~0,8 s |
-| Distant | Claude (`claude_code`, `anthropic`) | 100 % | ~6 s via Claude Code |
+| Local léger (~10 Go) | `ministral-3:8b` | 96 % | ~0,7 s |
+| Distant | Claude (`claude_code`, `anthropic`) | 100 % | ~7 s via Claude Code |
 
 En local, gardez `reasoning_effort = "none"` : sans lui, les modèles qui « réfléchissent » avant de répondre prennent plusieurs secondes de plus. Le détail, et les modèles à éviter : [`evals/resultats/COMPARAISON.md`](evals/resultats/COMPARAISON.md).
 

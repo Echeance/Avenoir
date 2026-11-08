@@ -199,6 +199,17 @@ TEST_CASE("vérification d'un cas", "[evals]") {
     CHECK(check(days, as_text).size() == 1);
     as_text.calls[0].arguments["days"] = 2.0;
     CHECK(check(days, as_text).empty());
+
+    // Données annoncées avec l'appel, avant d'en avoir le résultat.
+    Case preamble;
+    preamble.preamble_excludes = {"°", "%"};
+    Transcript announced;
+    announced.preambles = {"Je regarde la météo d'Arles."};
+    CHECK(check(preamble, announced).empty());
+    announced.preambles.emplace_back("Il devrait faire 18 °C à 24 °C. Je vérifie.");
+    const auto invented = check(preamble, announced);
+    REQUIRE(invented.size() == 1);
+    CHECK(invented[0].contains("avant le résultat"));
 }
 
 TEST_CASE("passage d'un cas avec un LLM scripté et des doublures", "[evals]") {
@@ -222,6 +233,16 @@ TEST_CASE("passage d'un cas avec un LLM scripté et des doublures", "[evals]") {
     CHECK(transcript.input_tokens == 100);
     CHECK(transcript.cost_usd == 0.001);
     CHECK(check(test, transcript).empty());
+    CHECK(transcript.preambles.empty());
+
+    // Texte écrit avec l'appel : gardé pour vérifier qu'il n'invente rien.
+    auto with_text = call("meteo__current", {{"city", "Brest"}});
+    with_text.text = "Il doit faire 15 °C, je vérifie.";
+    transcript = run_case(
+        test, suite, all,
+        std::make_unique<ScriptedLlm>(std::deque{with_text, answer("Il fait 12 °C à Brest.")}),
+        RunOptions{.system_prompt = "test", .max_steps = 5, .policy = {}});
+    CHECK(transcript.preambles == std::vector<std::string>{"Il doit faire 15 °C, je vérifie."});
 
     // Refus de la confirmation : l'appel est noté, l'outil n'est pas exécuté.
     Case refused;

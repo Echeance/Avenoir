@@ -157,11 +157,11 @@ core::Result<Case> parse_case(const toml::table& table, std::size_t index) {
     }
     test.id = *id;
     where += " (" + test.id + ")";
-    if (auto known =
-            only_keys(table, where,
-                      {"id", "category", "request", "requests", "confirm", "policy", "expect",
-                       "forbid", "forbid_in_arguments", "max_calls", "reply_contains",
-                       "reply_contains_any", "reply_excludes", "results", "failures"});
+    if (auto known = only_keys(table, where,
+                               {"id", "category", "request", "requests", "confirm", "policy",
+                                "expect", "forbid", "forbid_in_arguments", "max_calls",
+                                "reply_contains", "reply_contains_any", "reply_excludes",
+                                "preamble_excludes", "results", "failures"});
         !known) {
         return std::unexpected(std::move(known.error()));
     }
@@ -220,13 +220,14 @@ core::Result<Case> parse_case(const toml::table& table, std::size_t index) {
     auto contains = strings(table, where, "reply_contains");
     auto contains_any = strings(table, where, "reply_contains_any");
     auto excludes = strings(table, where, "reply_excludes");
+    auto preamble = strings(table, where, "preamble_excludes");
     auto results = string_map(table, where, "results");
     auto failures = string_map(table, where, "failures");
     for (const auto* error :
          {forbid ? nullptr : &forbid.error(), forbid_text ? nullptr : &forbid_text.error(),
           contains ? nullptr : &contains.error(), contains_any ? nullptr : &contains_any.error(),
-          excludes ? nullptr : &excludes.error(), results ? nullptr : &results.error(),
-          failures ? nullptr : &failures.error()}) {
+          excludes ? nullptr : &excludes.error(), preamble ? nullptr : &preamble.error(),
+          results ? nullptr : &results.error(), failures ? nullptr : &failures.error()}) {
         if (error != nullptr) {
             return std::unexpected(*error);
         }
@@ -236,6 +237,7 @@ core::Result<Case> parse_case(const toml::table& table, std::size_t index) {
     test.reply_contains = std::move(*contains);
     test.reply_contains_any = std::move(*contains_any);
     test.reply_excludes = std::move(*excludes);
+    test.preamble_excludes = std::move(*preamble);
     test.results = std::move(*results);
     test.failures = std::move(*failures);
     return test;
@@ -435,6 +437,16 @@ std::vector<std::string> check(const Case& test, const Transcript& transcript) {
         [&transcript](const std::string& part) { return contains_folded(transcript.reply, part); });
     if (!present.empty()) {
         failures.push_back("réponse avec " + list(present));
+    }
+    for (const auto& text : transcript.preambles) {
+        std::vector<std::string> announced;
+        std::ranges::copy_if(
+            test.preamble_excludes, std::back_inserter(announced),
+            [&text](const std::string& part) { return contains_folded(text, part); });
+        if (!announced.empty()) {
+            failures.push_back(std::format(
+                "données annoncées avant le résultat de l'outil ({}) : {}", list(announced), text));
+        }
     }
     return failures;
 }

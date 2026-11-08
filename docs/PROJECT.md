@@ -179,15 +179,15 @@ Chaque dossier de `libs/` est une bibliothèque CMake (`avenoir::core`, `avenoir
 
 Pour les modèles qui « réfléchissent » avant de répondre (Qwen…), `reasoning_effort = "none"` (`openai_compatible`) coupe cette réflexion : la latence passe de plusieurs secondes à environ une seconde, sans perte mesurable sur les requêtes de référence.
 
-**Modèles recommandés**, d'après le banc d'essai (`evals/`, 24 requêtes de référence : simples, multi-outils, ambiguës, injections, refus). Les chiffres, la méthode et l'historique du prompt sont dans [`evals/resultats/COMPARAISON.md`](../evals/resultats/COMPARAISON.md).
+**Modèles recommandés**, d'après le banc d'essai (`evals/`, 26 requêtes de référence : simples, multi-outils, ambiguës, injections, refus, données inventées). Les chiffres, la méthode et l'historique du prompt sont dans [`evals/resultats/COMPARAISON.md`](../evals/resultats/COMPARAISON.md).
 
 | Usage | Modèle | Réussite | Latence | Mémoire |
 |---|---|---|---|---|
-| Local, carte de 24 Go | **Gemma 4 26B-A4B** (Ollama `gemma4:26b-a4b`) ; Qwen3.8 27B équivalent, deux fois plus lent | 72/72 | ~0,8 s | ~20 Go de VRAM |
-| Local léger | **Ministral 3 8B** (`ministral-3:8b`) : aucune injection suivie sur le banc ; Gemma 4 12B réussit un cas de plus mais en a suivi une | 69/72 | ~0,8 s | ~10 Go de VRAM |
-| Distant | **Claude** (`claude_code` ou `anthropic`) ; haiku suffit | 48/48 | ~6 s (Claude Code) | — |
+| Local, carte de 24 Go | **Gemma 4 26B-A4B** (Ollama `gemma4:26b-a4b`) ; Qwen3.8 27B équivalent, deux fois plus lent | 78/78 | ~0,8 s | ~20 Go de VRAM |
+| Local léger | **Ministral 3 8B** (`ministral-3:8b`) : aucune injection suivie sur le banc ; Gemma 4 12B réussit un cas de plus mais en a suivi une | 75/78 | ~0,7 s | ~10 Go de VRAM |
+| Distant | **Claude** (`claude_code` ou `anthropic`) ; haiku suffit | 52/52 | ~7 s (Claude Code) | — |
 
-Mesures du 8 novembre 2026 sous Linux (RX 7900 XTX, Ollama ROCm, Q4, sans réflexion). À éviter : Qwen3.5 4B (suit les injections), Gemma 4 E4B (se trompe d'outil), Qwen3.5 9B (invente des informations, comme la date). Un nouveau modèle se juge en repassant le banc, pas sur ses scores annoncés.
+Mesures du 8 novembre 2026 sous Linux, prompt v4 (RX 7900 XTX, Ollama ROCm, Q4, sans réflexion) ; sous Windows (prompt v3), Ministral a obtenu le même score que sous Linux. À éviter : Qwen3.5 4B (suit les injections), Gemma 4 E4B (se trompe d'outil), Qwen3.5 9B (invente des informations, comme la date). Un nouveau modèle se juge en repassant le banc, pas sur ses scores annoncés.
 
 ### 2.6 Modules
 
@@ -549,6 +549,7 @@ Emplacement cible (phase 3) : `%APPDATA%\avenoir\config.toml` sous Windows, `$XD
 | 35 | **`reasoning_effort`** facultatif pour `openai_compatible` (« none » recommandé en local) | Les modèles qui réfléchissent avant de répondre ajoutent des secondes de latence et des centaines de tokens, inacceptables pour un assistant système ; « none » ne dégrade pas les résultats du banc |
 | 36 | **Prompt système v3** et **modèles recommandés** (Gemma 4 26B-A4B en local 24 Go, Ministral 3 8B en léger, Claude en distant), choisis sur le banc d'essai ; la consigne de protocole de `claude_code` dit que les outils listés sont disponibles et se demandent dans `tool_calls` | Chaque règle du prompt répond à un échec mesuré ; une règle qui dit seulement quand demander rend un petit modèle hésitant (v2). En léger, la sécurité départage : on préfère le modèle qui n'a suivi aucune injection |
 | 37 | **Mêmes symboles d'une colonne sur tous les systèmes** dans la CLI : `›` (requête), `»` (action), `▲` (avertissement), au lieu de `❯`, `⚙` et `⚠` | Essai sous Windows : `❯` manque aux polices de console (carré), `⚙` et `⚠` y sont dessinés en emoji de double largeur qui chevauchent le texte ; un seul jeu de symboles évite deux apparences à maintenir |
+| 38 | **Prompt système v4** : une règle de plus, « ne donne une donnée de l'ordinateur ou du monde que si un outil te l'a fournie ; n'en annonce aucune avant le résultat ; si l'outil échoue, dis-le sans inventer » ; nouveau critère du banc `preamble_excludes` (texte écrit avec un appel d'outil, avant son résultat) | Essai sous Windows : Ministral a décrit un faux système et annoncé une météo inventée avant d'appeler l'outil. Le banc l'a reproduit (prévisions inventées après un échec de l'outil, 5 fois sur 5) ; la règle corrige le cas sans rien dégrader (evals/resultats/COMPARAISON.md, série 4) |
 
 ---
 

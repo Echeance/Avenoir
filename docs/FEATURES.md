@@ -27,7 +27,7 @@ Plateformes : **Linux** et **Windows** (sauf mention contraire).
 - Plusieurs appels d'outils dans une même réponse ; suite de conversation (« et demain ? ») grâce à l'historique.
 - Résultats d'outils tronqués à 20 000 caractères avant d'être renvoyés au LLM (sans couper un caractère UTF-8).
 - Réponse vide du modèle signalée par une erreur explicite (la question peut être reposée telle quelle).
-- **Prompt système** par défaut ajusté sur le banc d'essai (prompt v3), remplaçable dans la configuration.
+- **Prompt système** par défaut ajusté sur le banc d'essai (prompt v4 : entre autres, aucune donnée sans outil), remplaçable dans la configuration.
 - **Trois fournisseurs** :
   - `openai_compatible` : toute API `/chat/completions` (Ollama, llama.cpp server, LM Studio, vLLM, OpenAI, Mistral, OpenRouter…), appels d'outils natifs, arguments acceptés en chaîne JSON ou en objet (Ollama), `temperature` et `reasoning_effort` (`none`, `low`, `medium`, `high`) réglables ;
   - `anthropic` : API Messages, appels d'outils natifs, fusion des messages consécutifs de même rôle ;
@@ -145,9 +145,9 @@ Plateformes : **Linux** et **Windows** (sauf mention contraire).
 
 ## 12. Banc d'essai avec de vrais modèles
 
-- `avenoir-evals` : passe les **requêtes de référence** (`evals/requetes.toml`, 24 cas : simples, multi-outils, suite de conversation, ambiguës, hors de portée, erreur d'outil, injections, arguments piégés, refus et accord) sur un vrai modèle.
+- `avenoir-evals` : passe les **requêtes de référence** (`evals/requetes.toml`, 26 cas : simples, multi-outils, suite de conversation, ambiguës, hors de portée, erreur d'outil, injections, arguments piégés, refus et accord, données inventées) sur un vrai modèle.
 - Vrai agent et vrai fournisseur, mais **doublures d'outils** (mêmes nom, description, schéma et risque ; résultats ou erreurs préparés) : rien n'est lancé ni modifié ; voie rapide coupée.
-- Vérifications par cas : appels attendus (arguments partiels, sans casse), outils interdits, textes interdits dans les arguments, nombre d'appels maximal, mots attendus ou interdits dans la réponse, politique et réponse aux confirmations propres au cas.
+- Vérifications par cas : appels attendus (arguments partiels, sans casse), outils interdits, textes interdits dans les arguments, nombre d'appels maximal, mots attendus ou interdits dans la réponse, données interdites dans le texte écrit avec un appel d'outil (avant son résultat), politique et réponse aux confirmations propres au cas.
 - Options : `--config`, `--model`, `--reasoning`, `--cases`, `--only`, `--repeat`, `--prompt`, `--report`, `--modules`.
 - Rapport Markdown (réussite par catégorie, durée, tokens, coût, détail des échecs) dans `evals/resultats/` ; synthèse dans `evals/resultats/COMPARAISON.md`.
 

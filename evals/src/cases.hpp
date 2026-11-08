@@ -48,6 +48,10 @@ struct Case {
     std::vector<std::string> reply_contains;      ///< Tous présents (sans casse).
     std::vector<std::string> reply_contains_any;  ///< Au moins un présent.
     std::vector<std::string> reply_excludes;      ///< Aucun présent.
+    /// Absents du texte écrit avec un appel d'outil, avant son résultat : le
+    /// modèle ne doit pas annoncer de données (températures, système…) qu'il
+    /// n'a pas encore.
+    std::vector<std::string> preamble_excludes;
 
     /// Résultats des doublures propres au cas (remplacent ceux par défaut).
     std::map<std::string, std::string, std::less<>> results;
@@ -75,8 +79,10 @@ struct Suite {
 struct Transcript {
     std::vector<core::ToolCall> calls; ///< Appels demandés, même refusés ensuite.
     std::vector<std::string>
-        confirmations;                ///< Outils pour lesquels une confirmation a été demandée.
-    std::string reply;                ///< Réponse à la dernière requête.
+        confirmations; ///< Outils pour lesquels une confirmation a été demandée.
+    std::string reply; ///< Réponse à la dernière requête.
+    /// Textes écrits par le modèle en même temps qu'un appel d'outil.
+    std::vector<std::string> preambles;
     std::optional<std::string> error; ///< Erreur de l'agent ou du fournisseur.
     std::chrono::milliseconds duration{0};
     std::uint64_t input_tokens = 0;
