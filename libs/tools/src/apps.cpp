@@ -70,7 +70,9 @@ class OpenUrlTool final : public core::Tool {
     [[nodiscard]] core::ToolSpec spec() const override {
         return core::ToolSpec{
             .name = "open_url",
-            .description = "Ouvre une adresse web (http ou https) dans le navigateur par défaut.",
+            .description = "Ouvre une adresse web dans le navigateur par défaut. Seules les "
+                           "adresses http:// et https:// sont acceptées : jamais file://, un "
+                           "chemin local ou un autre protocole.",
             .input_schema = {{"type", "object"},
                              {"properties",
                               {{"url",
