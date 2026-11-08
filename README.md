@@ -49,7 +49,7 @@ Sûr par défaut, extensible par des modules, avec le LLM de votre choix — loc
 
 - 🧱 **Modules avancés** : onglets d'interface, fonctions de fond, appels entre modules, magasin de modules.
 - 🔊 **Contrôle du système** : volume, luminosité, mode sombre, multimédia, notifications, recherche web.
-- 🌙 **Assistant résident** : démon en arrière-plan, raccourci clavier global, journal des actions.
+- 🌙 **Assistant résident** : démon en arrière-plan, raccourci clavier global, journal des actions, et la carte graphique libérée (ou le modèle léger choisi) quand vous lancez un jeu.
 - 🎙️ **Voix** : mot de réveil, reconnaissance et synthèse vocales, en local.
 - 🖥️ **Interface graphique** : un widget discret en haut de l'écran (avec le pingouin animé) et une application de réglages.
 

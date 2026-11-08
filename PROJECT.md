@@ -476,6 +476,7 @@ Emplacement cible (phase 3) : `%APPDATA%\avenoir\config.toml` sous Windows, `$XD
 - [ ] Journal structuré : historique par conversation et global
 - [ ] Permissions durables (« toujours autoriser ») et révocables
 - [ ] Raccourci clavier global
+- [ ] Mémoire vidéo partagée avec les jeux : décharger le modèle local ou basculer sur le modèle léger quand une application exigeante passe en plein écran
 
 ### Phase 4 : tâches et modules avancés
 - [ ] Outils fichiers restreints à des dossiers autorisés
