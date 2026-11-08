@@ -35,12 +35,14 @@ TEST_CASE("openai : requête avec système, historique et outils", "[openai]") {
     const core::OpenAiCompatibleConfig config{.base_url = "http://localhost:11434/v1",
                                               .model = "qwen3:8b",
                                               .api_key_env = std::nullopt,
-                                              .temperature = 0.2};
+                                              .temperature = 0.2,
+                                              .reasoning_effort = "none"};
 
     const json body = llm::detail::openai_request_body(config, make_request(messages, tools));
 
     CHECK(body["model"] == "qwen3:8b");
     CHECK(body["temperature"] == 0.2);
+    CHECK(body["reasoning_effort"] == "none");
     REQUIRE(body["messages"].size() == 4);
     CHECK(body["messages"][0] == json{{"role", "system"}, {"content", "Tu es Avenoir."}});
     CHECK(body["messages"][2]["content"].is_null());
@@ -52,11 +54,15 @@ TEST_CASE("openai : requête avec système, historique et outils", "[openai]") {
 
 TEST_CASE("openai : pas d'outils ni de température si absents", "[openai]") {
     const std::vector<core::Message> messages{core::UserMessage{.content = "salut"}};
-    const core::OpenAiCompatibleConfig config{
-        .base_url = "u", .model = "m", .api_key_env = std::nullopt, .temperature = std::nullopt};
+    const core::OpenAiCompatibleConfig config{.base_url = "u",
+                                              .model = "m",
+                                              .api_key_env = std::nullopt,
+                                              .temperature = std::nullopt,
+                                              .reasoning_effort = std::nullopt};
     const json body = llm::detail::openai_request_body(config, make_request(messages, {}));
     CHECK_FALSE(body.contains("tools"));
     CHECK_FALSE(body.contains("temperature"));
+    CHECK_FALSE(body.contains("reasoning_effort"));
 }
 
 TEST_CASE("openai : lecture d'une réponse texte avec consommation", "[openai]") {

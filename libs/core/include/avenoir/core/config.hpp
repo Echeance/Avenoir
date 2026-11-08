@@ -22,6 +22,10 @@ struct OpenAiCompatibleConfig {
     std::string model;
     std::optional<std::string> api_key_env; ///< *Nom* de la variable, jamais la clé.
     std::optional<double> temperature;
+    /// Effort de réflexion des modèles qui raisonnent avant de répondre :
+    /// « none », « low », « medium » ou « high ». Absent : choix du serveur.
+    /// « none » réduit fortement la latence (Ollama, OpenAI…).
+    std::optional<std::string> reasoning_effort;
 };
 
 /// API Messages d'Anthropic.

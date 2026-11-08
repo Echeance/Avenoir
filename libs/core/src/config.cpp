@@ -106,13 +106,20 @@ Result<LlmConfig> parse_llm(const toml::table& llm) {
         auto model = required_value<std::string>(llm, kSection, "model");
         auto key_env = optional_value<std::string>(llm, kSection, "api_key_env");
         auto temperature = optional_value<double>(llm, kSection, "temperature");
-        if (auto error = first_error(base_url, model, key_env, temperature)) {
+        auto effort = optional_value<std::string>(llm, kSection, "reasoning_effort");
+        if (auto error = first_error(base_url, model, key_env, temperature, effort)) {
             return std::unexpected(std::move(*error));
+        }
+        if (*effort && **effort != "none" && **effort != "low" && **effort != "medium" &&
+            **effort != "high") {
+            return config_error(key_path(kSection, "reasoning_effort"),
+                                "none, low, medium ou high attendu");
         }
         config.base_url = std::move(*base_url);
         config.model = std::move(*model);
         config.api_key_env = std::move(*key_env);
         config.temperature = *temperature;
+        config.reasoning_effort = std::move(*effort);
         return config;
     }
 

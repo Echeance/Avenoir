@@ -91,6 +91,9 @@ json openai_request_body(const core::OpenAiCompatibleConfig& config,
         }
         body["tools"] = std::move(tools);
     }
+    if (config.reasoning_effort) {
+        body["reasoning_effort"] = *config.reasoning_effort;
+    }
     if (config.temperature) {
         body["temperature"] = *config.temperature;
     }

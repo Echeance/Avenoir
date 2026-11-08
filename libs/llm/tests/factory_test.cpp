@@ -11,7 +11,8 @@ TEST_CASE("fabrique : chaque configuration donne le bon fournisseur", "[factory]
         llm::make_provider(core::OpenAiCompatibleConfig{.base_url = "http://localhost:11434/v1",
                                                         .model = "m",
                                                         .api_key_env = std::nullopt,
-                                                        .temperature = std::nullopt});
+                                                        .temperature = std::nullopt,
+                                                        .reasoning_effort = std::nullopt});
     REQUIRE(openai.has_value());
     CHECK((*openai)->name() == "openai_compatible");
 

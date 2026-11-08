@@ -35,6 +35,30 @@ TEST_CASE("valeurs par défaut et fournisseur claude_code", "[config]") {
     CHECK(config->modules.empty());
 }
 
+TEST_CASE("effort de réflexion d'un modèle compatible OpenAI", "[config]") {
+    const auto config = parse_config(R"(
+        [llm]
+        provider = "openai_compatible"
+        base_url = "http://localhost:11434/v1"
+        model = "qwen3.5:9b"
+        reasoning_effort = "none"
+    )");
+    REQUIRE(config.has_value());
+    const auto* llm = std::get_if<OpenAiCompatibleConfig>(&config->llm);
+    REQUIRE(llm != nullptr);
+    CHECK(llm->reasoning_effort == "none");
+
+    const auto invalid = parse_config(R"(
+        [llm]
+        provider = "openai_compatible"
+        base_url = "http://localhost:11434/v1"
+        model = "m"
+        reasoning_effort = "maximum"
+    )");
+    REQUIRE_FALSE(invalid.has_value());
+    CHECK(describe(invalid.error()).contains("llm.reasoning_effort"));
+}
+
 TEST_CASE("fournisseur anthropic", "[config]") {
     const auto config = parse_config(R"(
         [llm]
