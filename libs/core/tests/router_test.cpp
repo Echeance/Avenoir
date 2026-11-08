@@ -18,6 +18,20 @@ TEST_CASE("lance une application", "[router]") {
     CHECK(router->route("  démarre org.gnome.Nautilus  ") ==
           FastRoute{.tool = "launch_app",
                     .arguments = nlohmann::json{{"name", "org.gnome.Nautilus"}}});
+    // Article permis, nom accentué ou composé.
+    CHECK(router->route("ouvre le bloc-notes") ==
+          FastRoute{.tool = "launch_app", .arguments = nlohmann::json{{"name", "bloc-notes"}}});
+    CHECK(router->route("lance la calculatrice") ==
+          FastRoute{.tool = "launch_app", .arguments = nlohmann::json{{"name", "calculatrice"}}});
+    CHECK(router->route("ouvre l'explorateur") ==
+          FastRoute{.tool = "launch_app", .arguments = nlohmann::json{{"name", "explorateur"}}});
+    CHECK(router->route("démarre éditeur") ==
+          FastRoute{.tool = "launch_app", .arguments = nlohmann::json{{"name", "éditeur"}}});
+    // « lance le modèle » est laissé aux règles des modèles.
+    CHECK_FALSE(router->route("lance le modèle").has_value());
+    // Métacaractères : la règle ne s'applique pas.
+    CHECK_FALSE(router->route("lance firefox;reboot").has_value());
+    CHECK_FALSE(router->route("ouvre /etc/passwd").has_value());
 }
 
 TEST_CASE("ouvre une URL", "[router]") {

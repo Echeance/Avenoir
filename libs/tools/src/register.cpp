@@ -1,3 +1,5 @@
+#include <utility>
+
 #include "avenoir/tools/tools.hpp"
 
 #include "platform.hpp"
@@ -18,7 +20,15 @@ core::Result<void> register_native_tools(core::ToolRegistry& registry) {
         if (auto added = registry.add(make_launch_app_tool()); !added) {
             return added;
         }
+        if (auto added = registry.add(make_list_apps_tool()); !added) {
+            return added;
+        }
         if (auto added = registry.add(make_open_url_tool()); !added) {
+            return added;
+        }
+    }
+    for (auto& tool : make_system_control_tools()) {
+        if (auto added = registry.add(std::move(tool)); !added) {
             return added;
         }
     }

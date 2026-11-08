@@ -45,6 +45,63 @@ std::expected<std::string, core::ToolError> validate_app_name(std::string_view n
     return std::string(trimmed);
 }
 
+std::expected<std::string, core::ToolError> validate_app_query(std::string_view name) {
+    const std::string_view trimmed = trim(name);
+    const auto refused = [&name] {
+        return invalid("nom d'application refusé : « " + std::string(name) + " »");
+    };
+    if (trimmed.empty() || trimmed.size() > kMaxAppNameLength || trimmed.front() == '-' ||
+        trimmed.front() == '.') {
+        return refused();
+    }
+    std::size_t i = 0;
+    while (i < trimmed.size()) {
+        const auto lead = static_cast<unsigned char>(trimmed[i]);
+        if (lead < 0x80U) {
+            const char c = trimmed[i++];
+            if (!is_ascii_alnum(c) && c != '.' && c != '-' && c != '_' && c != '+' && c != ' ' &&
+                c != '\'') {
+                return refused(); // contrôle, séparateur de commande, chemin…
+            }
+            continue;
+        }
+        // UTF-8 : longueur d'après l'octet de tête, puis octets de continuation.
+        std::size_t length = 0;
+        char32_t code = 0;
+        if ((lead & 0xE0U) == 0xC0U) {
+            length = 2;
+            code = lead & 0x1FU;
+        } else if ((lead & 0xF0U) == 0xE0U) {
+            length = 3;
+            code = lead & 0x0FU;
+        } else if ((lead & 0xF8U) == 0xF0U) {
+            length = 4;
+            code = lead & 0x07U;
+        } else {
+            return refused();
+        }
+        if (i + length > trimmed.size()) {
+            return refused();
+        }
+        for (std::size_t k = 1; k < length; ++k) {
+            const auto byte = static_cast<unsigned char>(trimmed[i + k]);
+            if ((byte & 0xC0U) != 0x80U) {
+                return refused();
+            }
+            code = (code << 6U) | (byte & 0x3FU);
+        }
+        // Contrôles C1, marques bidirectionnelles et caractères invisibles.
+        const bool dangerous = code < 0xA0 || (code >= 0x200B && code <= 0x200F) ||
+                               (code >= 0x202A && code <= 0x202E) ||
+                               (code >= 0x2066 && code <= 0x2069) || code == 0xFEFF;
+        if (dangerous) {
+            return refused();
+        }
+        i += length;
+    }
+    return std::string(trimmed);
+}
+
 std::expected<std::string, core::ToolError> validate_url(std::string_view url) {
     const std::string_view trimmed = trim(url);
     std::string_view rest;

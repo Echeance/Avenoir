@@ -30,7 +30,9 @@ std::string_view normalize(std::string_view input) {
 Result<FastRouter> FastRouter::with_defaults() {
     FastRouter router;
     // L'ordre compte : les URL avant les applications.
-    // Un seul « mot » pour l'application : « ouvre le fichier X et… » part au LLM.
+    // Un seul « mot » pour l'application, article permis (« ouvre le
+    // bloc-notes ») : « ouvre le fichier X et… » part au LLM. « lance le
+    // modèle » est laissé aux règles des modèles.
     struct Default {
         std::string_view pattern;
         std::string_view tool;
@@ -38,7 +40,8 @@ Result<FastRouter> FastRouter::with_defaults() {
     };
     const std::array<Default, 3> defaults{{
         {.pattern = R"(^(?:ouvre|va sur)\s+(https?://\S+)$)", .tool = "open_url", .arg = "url"},
-        {.pattern = R"(^(?:ouvre|lance|démarre)\s+([\w.+-]+)$)",
+        {.pattern =
+             R"(^(?:ouvre|lance|démarre)\s+(?:le\s+|la\s+|les\s+|l')?(?!(?:modèle|llm)$)([^\s'/\;&|$`<>"]+)$)",
          .tool = "launch_app",
          .arg = "name"},
         {.pattern = R"(^(?:quelle heure est-il|quel jour sommes-nous)\s*\??$)",

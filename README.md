@@ -36,8 +36,9 @@ Sûr par défaut, extensible par des modules, avec le LLM de votre choix — loc
 ### Aujourd'hui
 
 - 💬 **Dialogue en langage naturel** avec le LLM de votre choix : modèle local (Ollama, llama.cpp…), API distante (OpenAI, Mistral, Anthropic…) ou **votre abonnement Claude** via Claude Code, sans clé d'API.
-- 🛠️ **Des actions réelles** sur votre machine : lancer une application, ouvrir une page web, donner l'heure ou des informations sur le système.
-- ⚡ **Voie rapide** : les commandes simples (« lance firefox », « quelle heure est-il ? ») sont exécutées instantanément, sans LLM, même hors ligne.
+- 🛠️ **Des actions réelles** sur votre machine : lancer une application par son nom (« ouvre le bloc-notes », « lance le navigateur »), ouvrir une page web, donner l'heure ou des informations sur le système.
+- 🔊 **Contrôle du système** : volume, multimédia (pause, morceau suivant, ce qui passe), luminosité, mode sombre, verrouillage, notifications, mise en veille ; ce qui peut l'être s'annule.
+- ⚡ **Voie rapide** : les commandes simples (« lance firefox », « baisse le son », « pause », « quelle heure est-il ? ») sont exécutées instantanément, sans LLM, même hors ligne.
 - 🛡️ **Sûr par défaut** : chaque outil a un niveau de risque ; les actions sensibles demandent toujours votre accord.
 - ↩️ **Ctrl+C arrête, sans quitter**, puis propose d'**annuler** ce qui peut l'être ; `/annuler` remonte les requêtes précédentes.
 - 🗂️ **Conversations conservées** entre deux lancements, reprises et réaffichées automatiquement.
@@ -50,7 +51,7 @@ La liste complète, sans rien omettre : **[docs/FEATURES.md](docs/FEATURES.md)**
 ### Bientôt
 
 - 🧱 **Modules avancés** : onglets d'interface, fonctions de fond, appels entre modules, magasin de modules.
-- 🔊 **Contrôle du système** : volume, luminosité, mode sombre, multimédia, notifications, recherche web.
+- 🔎 **Recherche web** et lecture de pages, avec le moteur de votre choix.
 - 🌙 **Assistant résident** : démon en arrière-plan, raccourci clavier global, journal des actions, et la carte graphique libérée (ou le modèle léger choisi) quand vous lancez un jeu.
 - 🎙️ **Voix** : mot de réveil, reconnaissance et synthèse vocales, en local.
 - 🖥️ **Interface graphique** : un widget discret en haut de l'écran (avec le pingouin animé) et une application de réglages.
@@ -66,7 +67,7 @@ Avenoir agit sur une vraie machine et voit vos données : **la confidentialité 
 | Niveau de risque | Exemples | Par défaut |
 |---|---|---|
 | `lecture seule` | heure, informations système | exécuté |
-| `réversible` | lancer une application, ouvrir une URL | exécuté |
+| `réversible` | lancer une application, ouvrir une URL, régler le son | exécuté |
 | `SENSIBLE` | supprimer, envoyer, éteindre | **toujours confirmé** — même si la configuration dit le contraire |
 
 - **Les données ne sont jamais des instructions** : une page web ou un fichier piégé ne peut pas déclencher d'action sensible sans votre accord.
@@ -132,13 +133,13 @@ model = "sonnet"
 
 **Changer de modèle à tout moment** : `/modele <nom>`, *« passe sur le modèle claude »*, ou en le demandant simplement. La conversation continue avec le nouveau modèle ; passer à un modèle distant demande confirmation, et le mode « local uniquement » (`local_only = true` dans `[agent]`) l'interdit.
 
-**Quel modèle ?** Mesuré sur nos requêtes de référence (26 requêtes, simples à piégées), sous Linux avec une RX 7900 XTX :
+**Quel modèle ?** Mesuré sur nos requêtes de référence (32 requêtes, simples à piégées), sous Linux avec une RX 7900 XTX :
 
 | Usage | Modèle conseillé | Réussite | Temps de réponse |
 |---|---|---|---|
-| Local, carte de 24 Go | `gemma4:26b-a4b` | 100 % | ~0,8 s |
-| Local léger (~10 Go) | `ministral-3:8b` | 96 % | ~0,7 s |
-| Distant | Claude (`claude_code`, `anthropic`) | 100 % | ~7 s via Claude Code |
+| Local, carte de 24 Go | `gemma4:26b-a4b` | 100 % | ~0,7 s |
+| Local léger (~10 Go) | `ministral-3:8b` | 94 % | ~0,8 s |
+| Distant | Claude (`claude_code`, `anthropic`) | 98 % | ~7 s via Claude Code |
 
 En local, gardez `reasoning_effort = "none"` : sans lui, les modèles qui « réfléchissent » avant de répondre prennent plusieurs secondes de plus. Le détail, et les modèles à éviter : [`evals/resultats/COMPARAISON.md`](evals/resultats/COMPARAISON.md).
 
@@ -161,7 +162,7 @@ Trois modèles locaux, selon ce que fait la carte graphique :
 | Modèle | Quand | VRAM | Réponse |
 |---|---|---|---|
 | **`gemma4:26b-a4b`** | au quotidien, quand la carte est libre : le plus fiable et le plus rapide du banc d'essai | ~21 Go | ~0,8 s |
-| **`qwen3.8:27b`** | pour le code et les questions qui demandent une forte réflexion (avec `/raisonnement élevé`) : aussi fiable sur le banc, deux fois plus lent | ~20 Go | ~1,6 s (sans raisonnement) |
+| **`qwen3.8:27b`** | pour le code et les questions qui demandent une forte réflexion (avec `/raisonnement élevé`) : aussi fiable sur le banc, plus de deux fois plus lent | ~20 Go | ~1,8 s (sans raisonnement) |
 | **`ministral-3:8b`** | quand la carte sert à autre chose (jeu, rendu…) : moitié moins de mémoire, aucune injection suivie sur le banc d'essai | ~11 Go | ~0,8 s |
 
 ```toml
@@ -199,7 +200,9 @@ avenoir                      # utilise config.toml dans le dossier courant
 avenoir chemin/config.toml
 ```
 
-Écrivez simplement ce que vous voulez : *« quelle heure est-il ? »*, *« lance firefox »*, *« va-t-il pleuvoir demain ? »*, *« décris mon ordinateur »*…
+Écrivez simplement ce que vous voulez : *« quelle heure est-il ? »*, *« lance firefox »*, *« baisse le son »*, *« mets en pause »*, *« passe en mode sombre »*, *« va-t-il pleuvoir demain ? »*, *« décris mon ordinateur »*…
+
+Sous Linux, le contrôle du système s'appuie sur les programmes habituels du bureau : `wpctl` (ou `pactl`), `playerctl`, `brightnessctl`, `gsettings`, `loginctl`, `notify-send`. Un outil dont le programme manque n'est simplement pas proposé.
 
 ### Commandes
 
@@ -329,7 +332,7 @@ Le workflow `release` vérifie que le numéro du tag correspond à la version du
 |---|---|---|
 | **0 · Conception** | vision, architecture, sécurité, choix techniques | ✅ |
 | **1 · Socle** | cœur, LLM, outils, CLI, conversations, modules v1 | 🔄 en cours |
-| **2 · Au quotidien** | volume, écran, multimédia, applications, recherche web | ⬜ |
+| **2 · Au quotidien** | volume, écran, multimédia, applications, recherche web | 🔄 en cours |
 | **3 · Résident** | démon, journal, permissions durables, réglages scellés | ⬜ |
 | **4 · Tâches et modules** | fichiers, mémoire, appels entre modules | ⬜ |
 | **5 · Voix** | mot de réveil, reconnaissance et synthèse vocales | ⬜ |

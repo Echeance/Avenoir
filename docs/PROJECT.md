@@ -180,15 +180,15 @@ Chaque dossier de `libs/` est une bibliothèque CMake (`avenoir::core`, `avenoir
 
 Pour les modèles qui « réfléchissent » avant de répondre (Qwen…), `reasoning_effort = "none"` (`openai_compatible`) coupe cette réflexion : la latence passe de plusieurs secondes à environ une seconde, sans perte mesurable sur les requêtes de référence.
 
-**Modèles recommandés**, d'après le banc d'essai (`evals/`, 26 requêtes de référence : simples, multi-outils, ambiguës, injections, refus, données inventées). Les chiffres, la méthode et l'historique du prompt sont dans [`evals/resultats/COMPARAISON.md`](../evals/resultats/COMPARAISON.md).
+**Modèles recommandés**, d'après le banc d'essai (`evals/`, 32 requêtes de référence : simples, multi-outils, ambiguës, injections, refus, données inventées, contrôle du système). Les chiffres, la méthode et l'historique du prompt sont dans [`evals/resultats/COMPARAISON.md`](../evals/resultats/COMPARAISON.md).
 
 | Usage | Modèle | Réussite | Latence | Mémoire |
 |---|---|---|---|---|
-| Local, carte de 24 Go | **Gemma 4 26B-A4B** (Ollama `gemma4:26b-a4b`) ; Qwen3.8 27B équivalent, deux fois plus lent | 78/78 | ~0,8 s | ~20 Go de VRAM |
-| Local léger | **Ministral 3 8B** (`ministral-3:8b`) : aucune injection suivie sur le banc ; Gemma 4 12B réussit un cas de plus mais en a suivi une | 75/78 | ~0,7 s | ~10 Go de VRAM |
-| Distant | **Claude** (`claude_code` ou `anthropic`) ; haiku suffit | 52/52 | ~7 s (Claude Code) | — |
+| Local, carte de 24 Go | **Gemma 4 26B-A4B** (Ollama `gemma4:26b-a4b`) ; Qwen3.8 27B équivalent, plus de deux fois plus lent | 96/96 | ~0,7 s | ~20 Go de VRAM |
+| Local léger | **Ministral 3 8B** (`ministral-3:8b`) : aucune injection suivie sur le banc ; Gemma 4 12B réussit un cas de plus mais en a suivi une | 90/96 | ~0,8 s | ~10 Go de VRAM |
+| Distant | **Claude** (`claude_code` ou `anthropic`) ; haiku suffit | 63/64 | ~7 s (Claude Code) | — |
 
-Mesures du 8 novembre 2026 sous Linux, prompt v4 (RX 7900 XTX, Ollama ROCm, Q4, sans réflexion) ; sous Windows (prompt v3), Ministral a obtenu le même score que sous Linux. À éviter : Qwen3.5 4B (suit les injections), Gemma 4 E4B (se trompe d'outil), Qwen3.5 9B (invente des informations, comme la date). Un nouveau modèle se juge en repassant le banc, pas sur ses scores annoncés.
+Mesures du 8 novembre 2026 sous Linux, prompt v5 (RX 7900 XTX, Ollama ROCm, Q4, sans réflexion) ; sous Windows (prompt v3), Ministral a obtenu le même score que sous Linux. À éviter : Qwen3.5 4B (suit les injections), Gemma 4 E4B (se trompe d'outil), Qwen3.5 9B (invente des informations, comme la date). Un nouveau modèle se juge en repassant le banc, pas sur ses scores annoncés.
 
 **Changer de modèle à tout moment** : un modèle par section `[models.<nom>]` ; le premier sert au premier lancement, puis Avenoir reprend le dernier modèle utilisé (table `app_state` de la base) ; sans modèle, seule la voie rapide répond. Commande `/modele [nom]` dans la CLI (sélecteur dans l'application, plus tard), outil `switch_llm` (réversible, annulable) que le modèle actif peut appeler, et règles de voie rapide (« passe sur le modèle léger », « utilise le modèle claude » : le mot « modèle » est exigé). La conversation continue avec le nouveau modèle (même historique). Passer à un modèle distant demande toujours confirmation (directive n° 17) ; est local un serveur à l'adresse de la machine, ou déclaré `local = true` (réseau local). Code : `llm::ModelSwitcher` (`libs/llm/src/models.cpp`).
 
@@ -504,13 +504,13 @@ Emplacement cible (phase 3) : `%APPDATA%\avenoir\config.toml` sous Windows, `$XD
 - [x] Module météo fourni (Open-Meteo)
 - [x] CLI : confirmations, Ctrl+C, annulation, apparence soignée, barre de saisie fixe
 - [x] Conversations persistantes (SQLite)
-- [x] Tester avec plusieurs LLM réels (local et distant), ajuster le prompt système : banc d'essai `evals/`, 12 modèles, prompt v4, modèles recommandés ; essai sous Windows
+- [x] Tester avec plusieurs LLM réels (local et distant), ajuster le prompt système : banc d'essai `evals/`, 12 modèles, prompt v5, modèles recommandés ; essai sous Windows
 
 ### Phase 2 : contrôle système
-- [ ] Volume, luminosité, mode sombre, verrouillage, veille (`sensitive` : extinction, redémarrage)
-- [ ] Contrôle multimédia (MPRIS / SMTC)
-- [ ] Notifications système
-- [ ] Recherche d'applications installées (fichiers `.desktop`, menu Démarrer) pour `launch_app` tolérant
+- [x] Volume, luminosité, mode sombre, verrouillage, veille (`sensitive` : extinction, redémarrage)
+- [x] Contrôle multimédia (MPRIS / SMTC)
+- [x] Notifications système
+- [x] Recherche d'applications installées (fichiers `.desktop`, menu Démarrer) pour `launch_app` tolérant, outil `list_apps`
 - [ ] Recherche web (module : SearXNG auto-hébergé, ou API Brave/Tavily) + lecture de page
 - [ ] Streaming des réponses du LLM
 - [x] Changer de LLM à tout moment : commande `/modele`, outil `switch_llm` et règles de voie rapide
@@ -595,6 +595,9 @@ Emplacement cible (phase 3) : `%APPDATA%\avenoir\config.toml` sous Windows, `$XD
 | 38 | **Prompt système v4** : une règle de plus, « ne donne une donnée de l'ordinateur ou du monde que si un outil te l'a fournie ; n'en annonce aucune avant le résultat ; si l'outil échoue, dis-le sans inventer » ; nouveau critère du banc `preamble_excludes` (texte écrit avec un appel d'outil, avant son résultat) | Essai sous Windows : Ministral a décrit un faux système et annoncé une météo inventée avant d'appeler l'outil. Le banc l'a reproduit (prévisions inventées après un échec de l'outil, 5 fois sur 5) ; la règle corrige le cas sans rien dégrader (evals/resultats/COMPARAISON.md, série 4) |
 | 39 | **Identité et présence** (§ 2.10, directive 16) : propriétaire et liste blanche, vérification par la voix et / ou le visage, verrouillage et connexion automatiques ; tout optionnel, réglages par défaut les plus sûrs, biométrie locale et chiffrée | L'assistant agit sur l'ordinateur et entend tout le monde dans la pièce : il ne doit obéir qu'aux personnes autorisées. La voix s'imite : elle ne suffit jamais seule pour une action sensible ni pour déverrouiller. Pour la connexion, s'appuyer sur Windows Hello / PAM plutôt que stocker un mot de passe |
 | 40 | **Changer de LLM à tout moment** (commande `/modele`, outil `switch_llm` de la voie rapide, sélecteur de l'application) et **magasin de modèles** ; configuration réduite à des sections `[models.<nom>]` (le premier par défaut, aucun = voie rapide seule), dernier modèle utilisé retenu dans la base ; charger, décharger et recharger un modèle local à la demande ; passer à un fournisseur distant demande confirmation (directive 17) | Le bon modèle dépend du moment (jeu en cours, besoin de qualité, hors ligne) ; changer ne doit pas faire perdre la conversation. Un changement vers le distant fait sortir la conversation de la machine : jamais en silence |
+| 41 | **Index des applications installées** pour `launch_app` (fichiers `.desktop`, menu Démarrer et dossier Applications) ; traductions françaises des `.desktop` toujours en alias ; outil `list_apps` ; « navigateur » = navigateur par défaut | On demande une application par son nom affiché (« bloc-notes »), pas par son exécutable (`notepad`) ; Avenoir parle français même sur un système en anglais. Le nom cherché n'est jamais exécuté : seule l'entrée trouvée dans l'index est lancée |
+| 42 | **Contrôle du système** par les programmes standard du système sous Linux (`wpctl`/`pactl`, `playerctl`, `brightnessctl`, `gsettings`, `loginctl`, `notify-send`, `systemctl`), lancés par `reproc` en tableau d'arguments, plutôt que D-Bus par `sdbus-c++` ; API natives sous Windows (Core Audio, C++/WinRT pour SMTC, WMI, registre) ; outil enregistré seulement si la machine le permet | Aucune dépendance de plus, et le même code sert PipeWire et PulseAudio, GNOME et KDE ; un programme absent retire l'outil au lieu de faire échouer l'appel. Pas de shell, pas de chaîne construite (directive 3) |
+| 43 | **Prompt système v5** : « Avenoir demande lui-même confirmation avant une action sensible : appelle l'outil directement, ne demande pas d'abord en texte » | Sur « Éteins l'ordinateur », Ministral demandait confirmation en texte au lieu d'appeler `power` (3 fois sur 3), ce qui ferait confirmer deux fois ; la confirmation d'Avenoir reste la seule barrière fiable (evals/resultats/COMPARAISON.md, série 6) |
 
 ---
 

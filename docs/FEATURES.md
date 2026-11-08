@@ -59,7 +59,7 @@ Plateformes : **Linux** et **Windows** (sauf mention contraire).
 ## 2. Voie rapide
 
 - Commandes simples reconnues par des règles strictes et exécutées **sans LLM** : réponse quasi instantanée, même hors ligne.
-- Règles d'Avenoir : « ouvre / va sur <URL> », « ouvre / lance / démarre <application> », « quelle heure est-il ? », « quel jour sommes-nous ? ».
+- Règles d'Avenoir : « ouvre / va sur <URL> », « ouvre / lance / démarre <application> », « quelle heure est-il ? », « quel jour sommes-nous ? », et le contrôle du système (§ 3).
 - Règles déclarées par les modules (limitées à leurs propres outils, arguments fixes possibles) ; elles ne masquent jamais celles d'Avenoir.
 - Insensible à la casse, sur la phrase entière ; dans le doute, la phrase part au LLM.
 - Même contrôle des permissions et même journal d'annulation que les appels du LLM ; le texte de l'outil est affiché tel quel.
@@ -71,10 +71,22 @@ Plateformes : **Linux** et **Windows** (sauf mention contraire).
 |---|---|---|
 | `current_time` | lecture seule | date et heure locales en phrase française (« Il est 13 h 41, vendredi 6 novembre 2026. »), fuseau du système |
 | `system_info` | lecture seule | système, distribution, architecture, nom de la machine, nombre de cœurs |
-| `launch_app` | réversible | lance une application par son nom (Linux : `gtk-launch` puis exécutable du PATH, détaché ; Windows : `ShellExecuteW`) ; application inexistante signalée clairement |
+| `launch_app` | réversible | lance une application **par le nom qu'on lui donne** (« bloc-notes », « calculatrice », « Visual Studio Code », « code ») : cherchée d'abord parmi les applications installées (nom affiché, nom générique, mots-clés, exécutable ; sans casse, accents ni ponctuation), puis comme exécutable (Linux : `gtk-launch` puis PATH, détaché ; Windows : `ShellExecuteW`) ; « navigateur » lance le navigateur par défaut ; plusieurs candidates : listées pour demander laquelle ; introuvable : signalé clairement |
+| `list_apps` | lecture seule | cherche parmi les applications installées (« éditeur de texte ») ; sans recherche, leur nombre et une partie de la liste |
 | `open_url` | réversible | ouvre une adresse `http(s)` dans le navigateur par défaut (Linux : `xdg-open` ; Windows : `ShellExecuteW`) |
+| `set_volume` | réversible | volume de la sortie audio : niveau (0 à 100 %), variation (« +10 », « -10 »), son coupé ou remis ; sans argument, donne le volume ; régler le volume remet le son ; **annulable** (Linux : `wpctl`, sinon `pactl` ; Windows : Core Audio ; non proposé sans sortie audio) |
+| `media_control` | réversible | lecteur multimédia actif : lecture/pause, lecture, pause, suivant, précédent, arrêt ; `now_playing` dit ce qui passe (titre, artiste, état) (Linux : `playerctl`, MPRIS ; Windows : contrôles multimédias du système, SMTC) |
+| `set_brightness` | réversible | luminosité de l'écran intégré : niveau (1 à 100 %, jamais 0) ou variation ; sans argument, la donne ; **annulable** (Linux : `brightnessctl` ; Windows : WMI) ; non proposé sans écran réglable (PC de bureau) |
+| `set_dark_mode` | réversible | mode sombre ou clair du système ; sans argument, dit lequel est actif ; **annulable** (Linux : `gsettings`, GNOME et portail XDG ; Windows : registre `Personalize`, applications et système, fenêtres prévenues) |
+| `lock_screen` | réversible | verrouille la session (Linux : `loginctl lock-session` ; Windows : `LockWorkStation`) |
+| `notify` | lecture seule | notification du système (titre et message) ; texte nettoyé (caractères de contrôle, marques bidirectionnelles et invisibles retirés) et borné (Linux : `notify-send` ; Windows : icône de notification, retirée après 10 s ou à la fermeture) |
+| `power` | **sensible** | mise en veille, extinction ou redémarrage, **toujours confirmé** (Linux : `systemctl` ; Windows : `SetSuspendState`, `ExitWindowsEx`) |
 
-- Arguments validés côté outil : noms d'application sans métacaractère ni option, URL `http(s)` uniquement (24 tentatives d'injection testées).
+- **Index des applications installées** : fichiers `.desktop` sous Linux (dossiers XDG et Flatpak, nom dans la langue du système, traductions françaises en alias, `NoDisplay`/`Hidden` ignorés) ; sous Windows, raccourcis du menu Démarrer (noms localisés : `Notepad.lnk` → « Bloc-notes ») et applications du Store (dossier Applications) ; relu si une demande ne trouve rien ; navigateur par défaut (`mimeapps.list` sous Linux, association `https` sous Windows).
+- Voie rapide : « ouvre / lance / démarre [le, la, l'] X » (un seul mot, accents permis : « ouvre le bloc-notes »).
+- Voie rapide du contrôle du système : « monte / baisse le son », « coupe le son », « remets le son », « volume à 30 », « pause », « lecture », « morceau suivant / précédent », « qu'est-ce qui passe ? », « luminosité à 60 », « monte / baisse la luminosité », « (active le) mode sombre / clair », « verrouille l'ordinateur », « mets l'ordinateur en veille » (confirmé) ; éteindre et redémarrer passent toujours par le LLM.
+- Contrôle du système : programmes du système lancés par tableau d'arguments, jamais par un shell (Linux) ; API natives (Windows) ; nombres validés (« 30 », « 30 % », bornes), annulation refusée si l'état a changé depuis.
+- Arguments validés côté outil : nom d'application à chercher sans contrôle, séparateur de commande, chemin ni marque bidirectionnelle (accents et apostrophes permis) ; seul un nom ASCII strict peut être lancé tel quel ; URL `http(s)` uniquement (plus de 40 tentatives d'injection testées).
 - Un outil non pris en charge par le système n'est pas proposé.
 
 ## 4. Sécurité et permissions

@@ -12,7 +12,7 @@
 |---|---|---|
 | **0. Conception** | Vision, architecture, directives, choix de la stack | ✅ |
 | **1. Socle** | Projet CMake, CI, cœur (agent, permissions, voie rapide), LLM, premiers outils, hôte de modules v1, CLI, conversations persistantes | ✅ |
-| **2. Assistant du quotidien** | Contrôle système (volume, écran, multimédia), recherche web, applications installées, changer de LLM à tout moment | ⬜ |
+| **2. Assistant du quotidien** | Contrôle système (volume, écran, multimédia), recherche web, applications installées, changer de LLM à tout moment | 🔄 |
 | **3. Résident** | Démon en arrière-plan, IPC, journal structuré, permissions durables et révocables, magasin de modèles | ⬜ |
 | **4. Tâches et modules** | Fichiers, mémoire, contexte long, appels entre modules, fonctions de fond | ⬜ |
 | **5. Voix** | Mot de réveil, STT, TTS, confirmations vocales | ⬜ |
@@ -153,28 +153,34 @@ L'ordre suit un principe : **chaque jalon produit un assistant utilisable**, plu
 
 ---
 
-## Jalon 2 — Assistant du quotidien ⬜
+## Jalon 2 — Assistant du quotidien 🔄
 
 *But : couvrir les demandes qu'on fait vraiment tous les jours.*
 
-### 2.1 Contrôle système — P1
+### 2.1 Contrôle système — P1 ✅
 | Outil | Risque | Linux | Windows |
 |---|---|---|---|
-| `set_volume` / `mute` | reversible | PipeWire / PulseAudio (D-Bus, `sdbus-c++`) | Core Audio (`IAudioEndpointVolume`) |
-| `media_control` (lecture, pause, suivant) | reversible | MPRIS (D-Bus) | SMTC (C++/WinRT) |
-| `set_brightness` | reversible | logind / sysfs (D-Bus) | WMI |
-| `set_dark_mode` | reversible | portail XDG / gsettings | registre |
-| `lock_screen` | reversible | logind (D-Bus) | `LockWorkStation` |
-| `notify` | read_only | notifications D-Bus | toast Windows |
-| `power` (veille, extinction, redémarrage) | **sensitive** | logind | `ExitWindowsEx` |
+| ✅ `set_volume` (niveau, variation, son coupé) | reversible | `wpctl` (PipeWire), sinon `pactl` | Core Audio (`IAudioEndpointVolume`) |
+| ✅ `media_control` (lecture, pause, suivant, ce qui passe) | reversible | `playerctl` (MPRIS) | SMTC (C++/WinRT) |
+| ✅ `set_brightness` | reversible | `brightnessctl` | WMI (`WmiMonitorBrightness`) |
+| ✅ `set_dark_mode` | reversible | `gsettings` (GNOME, portail XDG) | registre `Personalize` |
+| ✅ `lock_screen` | reversible | `loginctl lock-session` | `LockWorkStation` |
+| ✅ `notify` | read_only | `notify-send` | icône de notification (`Shell_NotifyIconW`) |
+| ✅ `power` (veille, extinction, redémarrage) | **sensitive** | `systemctl` (logind) | `SetSuspendState`, `ExitWindowsEx` |
 
-- ⬜ Règles de voie rapide associées (« monte le son », « coupe le son », « pause »…)
-- ⬜ Un outil indisponible sur un OS n'est pas enregistré (PROJECT.md § 4.3)
+- ✅ Programmes du système lancés par `reproc` (tableau d'arguments) plutôt que D-Bus par `sdbus-c++` : aucune dépendance de plus (PROJECT.md, décision 41)
+- ✅ Annulation du volume, de la luminosité et du mode sombre, refusée si l'état a changé depuis
+- ✅ Règles de voie rapide associées (« monte le son », « coupe le son », « pause », « verrouille l'ordinateur », « mode sombre »…) ; extinction et redémarrage jamais par la voie rapide
+- ✅ Un outil indisponible sur un OS ou une machine n'est pas enregistré (PROJECT.md § 4.3) : pas de sortie audio, pas d'écran réglable, programme absent
+- ✅ Banc d'essai : 6 cas de plus (contrôle, refus d'extinction, injection par un titre de morceau), prompt v5 (evals/resultats/COMPARAISON.md, série 6)
+- ✅ Vérifié sous Windows (VM) : mode sombre, multimédia, notification émise, volume absent sans sortie audio
+- ℹ️ La notification n'a pas pu être vue à l'écran dans la VM (notifications coupées, la bulle de référence .NET non plus) : à vérifier sur un vrai poste Windows
 
-### 2.2 Applications installées — P1
-- ⬜ Index des applications : fichiers `.desktop` (Linux), menu Démarrer / App Paths (Windows)
-- ⬜ `launch_app` tolérant : « ouvre le navigateur », « lance vscode » → bonne application
-- ⬜ Outil `list_apps` (read_only) pour que le LLM puisse chercher
+### 2.2 Applications installées — P1 ✅
+- ✅ Index des applications : fichiers `.desktop` (Linux, dossiers XDG et Flatpak, traductions françaises en alias), raccourcis du menu Démarrer et applications du Store (Windows, noms localisés)
+- ✅ `launch_app` tolérant : « ouvre le bloc-notes », « ouvre le navigateur » (navigateur par défaut), « lance code » → bonne application ; plusieurs candidates proposées ; vérifié sous Windows (Bloc-notes, Edge)
+- ✅ Outil `list_apps` (read_only) pour que le LLM puisse chercher
+- ✅ Voie rapide : article et accents permis (« ouvre le bloc-notes »)
 
 ### 2.3 Recherche web — P1
 - ⬜ Choisir le moteur par défaut (question ouverte de PROJECT.md § 8) : SearXNG auto-hébergé, Brave Search API ou Tavily

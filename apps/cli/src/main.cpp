@@ -576,6 +576,10 @@ int run(int argc, char** argv) {
             display().error(core::describe(router.error()));
             return EXIT_FAILURE;
         }
+        if (auto rules = tools::register_system_rules(*router); !rules) {
+            display().error(core::describe(rules.error()));
+            return EXIT_FAILURE;
+        }
         options.router = std::move(*router);
     }
 
