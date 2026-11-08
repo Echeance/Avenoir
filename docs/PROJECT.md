@@ -22,10 +22,11 @@ Et **extensible** par des **modules** que n'importe qui peut écrire, dans n'imp
 ### Principes directeurs
 
 1. **Confidentialité et sécurité avant tout** : ce sont les aspects primordiaux de l'assistant, qui agit sur une vraie machine et voit des données personnelles. Elles priment sur toute fonctionnalité, tout confort et toute rapidité ; en cas de conflit, elles l'emportent. Aucune action sensible sans confirmation explicite, aucune donnée transmise sans nécessité.
-2. **Le LLM au choix de l'utilisateur** : local (Ollama, llama.cpp…) ou distant (Anthropic, OpenAI, Mistral…), sélectionné par configuration.
+2. **Le LLM au choix de l'utilisateur** : local (Ollama, llama.cpp…) ou distant (Anthropic, OpenAI, Mistral…), installable depuis un magasin de modèles et **changeable à tout moment** (commande, demande en langage naturel, application) sans perdre la conversation.
 3. **Réactif** : les commandes simples ne passent pas par le LLM.
 4. **Léger** : un démon en arrière-plan doit consommer peu de ressources.
 5. **Standards plutôt que formats maison** : JSON-RPC (compatible MCP) pour les modules, JSON Schema pour les outils.
+6. **Entièrement configurable, mais sécurisé d'abord** : chaque fonction, vérifications d'identité comprises, est optionnelle et réglable dans les paramètres. Les réglages par défaut sont les plus sûrs, et un réglage qui affaiblit la sécurité n'est jamais appliqué en silence (avertissement, confirmation, journal).
 
 ---
 
@@ -189,6 +190,10 @@ Pour les modèles qui « réfléchissent » avant de répondre (Qwen…), `reaso
 
 Mesures du 8 novembre 2026 sous Linux, prompt v4 (RX 7900 XTX, Ollama ROCm, Q4, sans réflexion) ; sous Windows (prompt v3), Ministral a obtenu le même score que sous Linux. À éviter : Qwen3.5 4B (suit les injections), Gemma 4 E4B (se trompe d'outil), Qwen3.5 9B (invente des informations, comme la date). Un nouveau modèle se juge en repassant le banc, pas sur ses scores annoncés.
 
+**Changer de modèle à tout moment** (prévu) : commande `/modele [nom]` dans la CLI, sélecteur dans l'application, et outil `switch_llm` avec ses règles de voie rapide (« passe sur le modèle léger », « utilise Claude »). La conversation continue avec le nouveau modèle (même historique). Les modèles disponibles sont ceux de la configuration et ceux installés depuis le magasin ; passer à un fournisseur distant demande confirmation (directive n° 17).
+
+**Magasin de modèles** (prévu) : liste de modèles recommandés, avec leur score au banc d'essai, la mémoire vidéo et le disque nécessaires ; installation en un geste (téléchargement par Ollama, ou fichier GGUF vérifié par somme de contrôle), désinstallation, et ajout d'un fournisseur distant (clé d'API dans le trousseau). Un modèle absent du banc est signalé comme non évalué.
+
 ### 2.6 Modules
 
 Un **module** étend l'assistant : outils pour le LLM, commandes, règles de voie rapide, fonctions de fond, contenu d'interface. C'est un **programme séparé** (n'importe quel langage) lancé par le démon, qui dialogue avec lui en **JSON-RPC 2.0 sur stdio**. Un module qui plante ne fait pas tomber l'assistant.
@@ -319,6 +324,29 @@ La CLI doit être agréable à lire : chaque type d'élément a son style, recon
 
 ---
 
+### 2.10 Identité et présence (prévu)
+
+Avenoir n'obéit qu'à son **propriétaire** et aux personnes qu'il a ajoutées à une **liste blanche**. Tout est optionnel, désactivable et réglable (principe n° 6) ; les réglages par défaut sont les plus sûrs.
+
+**Vérification de l'identité** (avant d'agir sur une requête) :
+
+| Moyen | Ce qui est vérifié | Limites |
+|---|---|---|
+| Voix | empreinte vocale du locuteur : timbre, rythme, prosodie, et tout autre trait mesurable (vérification du locuteur, sur la requête elle-même) | une voix s'enregistre et s'imite (synthèse) : jamais suffisante seule pour une action `sensitive` |
+| Visage | reconnaissance faciale par la caméra, avec détection du vivant (photo, vidéo, écran refusés ; caméra infrarouge si présente) | dépend de la lumière et du matériel |
+| Les deux | voix **et** visage, ou l'un **ou** l'autre, selon le réglage | — |
+
+- **Personne non reconnue** : réglable — refus de toute requête (défaut), lecture seule (`read_only`), ou confirmation par le propriétaire.
+- **Caméra indisponible** alors que la reconnaissance faciale est activée : réglable — l'assistant est **inutilisable** (défaut, le plus sûr) ou la reconnaissance faciale est sautée (les autres vérifications restent).
+- **Inscription** d'une personne (propriétaire ou liste blanche) : uniquement depuis l'application ou la CLI, par le propriétaire déjà vérifié, avec confirmation ; retrait et liste consultables.
+
+**Présence et verrouillage** :
+
+- **Verrouillage automatique** quand le propriétaire (ou une personne de la liste blanche) n'est plus devant l'ordinateur : visage absent pendant un délai réglable, ou inactivité de l'ordinateur suivie d'une question orale (« Tu es toujours là ? ») restée sans réponse reconnue.
+- **Déverrouillage et connexion automatiques** quand une personne autorisée est reconnue devant l'ordinateur, y compris à l'écran de connexion du système s'il demande un mot de passe. C'est la fonction la plus risquée : désactivée par défaut, visage obligatoire (jamais la voix seule), détection du vivant exigée, et intégration aux mécanismes du système plutôt que stockage du mot de passe (Windows Hello / fournisseur d'identification sous Windows, module PAM sous Linux, à la manière de Howdy) ; le mot de passe reste toujours possible.
+
+**Données biométriques** : traitées **localement uniquement** (jamais envoyées à un LLM, distant ou local, ni à un module), modèles d'empreinte chiffrés avec une clé du trousseau du système, jamais dans les journaux, effaçables à tout moment.
+
 ## 3. Directives de sécurité
 
 La **confidentialité** et la **sécurité** sont les aspects primordiaux d'Avenoir : ces règles priment sur toute considération de confort, de fonctionnalité ou de rapidité.
@@ -344,6 +372,8 @@ La **confidentialité** et la **sécurité** sont les aspects primordiaux d'Aven
     - ses réponses sont bornées (taille, délai), validées, et ses descriptions comme ses résultats sont des **données**, jamais des instructions ;
     - chacun de ses appels passe par le contrôle des permissions et le journal d'audit ; un module défaillant ou malveillant est isolé sans faire tomber l'assistant ;
     - plus tard : bac à sable des processus, signature et vérification des modules du magasin. Les modules fournis avec Avenoir suivent les mêmes règles.
+16. **Seules les personnes autorisées utilisent l'assistant** (§ 2.10) : le propriétaire et sa liste blanche, vérifiés par la voix, le visage ou les deux selon les réglages. Une vérification vocale seule ne suffit jamais pour une action `sensitive` ni pour déverrouiller l'ordinateur. Les données biométriques ne quittent jamais la machine, ne sont jamais données à un LLM ou à un module, sont chiffrées au repos et absentes des journaux. Chaque vérification réussie ou échouée, chaque verrouillage et déverrouillage est journalisé. Désactiver une vérification se fait comme abaisser un risque : avertissement, confirmation, journal.
+17. **Changer de LLM n'élargit jamais l'exposition en silence** : passer d'un modèle local à un fournisseur distant envoie la conversation hors de la machine ; ce changement demande confirmation (sauf accord durable) et le mode « local uniquement » l'interdit. Un modèle installé depuis le magasin est vérifié (somme de contrôle, source connue) avant d'être utilisé.
 
 ---
 
@@ -468,7 +498,7 @@ Emplacement cible (phase 3) : `%APPDATA%\avenoir\config.toml` sous Windows, `$XD
 - [x] Module météo fourni (Open-Meteo)
 - [x] CLI : confirmations, Ctrl+C, annulation, apparence soignée, barre de saisie fixe
 - [x] Conversations persistantes (SQLite)
-- [ ] Tester avec plusieurs LLM réels (local et distant), ajuster le prompt système — fait sous Linux (banc d'essai `evals/`, 12 modèles, prompt v3, modèles recommandés) ; reste l'essai sous Windows
+- [x] Tester avec plusieurs LLM réels (local et distant), ajuster le prompt système : banc d'essai `evals/`, 12 modèles, prompt v4, modèles recommandés ; essai sous Windows
 
 ### Phase 2 : contrôle système
 - [ ] Volume, luminosité, mode sombre, verrouillage, veille (`sensitive` : extinction, redémarrage)
@@ -477,6 +507,7 @@ Emplacement cible (phase 3) : `%APPDATA%\avenoir\config.toml` sous Windows, `$XD
 - [ ] Recherche d'applications installées (fichiers `.desktop`, menu Démarrer) pour `launch_app` tolérant
 - [ ] Recherche web (module : SearXNG auto-hébergé, ou API Brave/Tavily) + lecture de page
 - [ ] Streaming des réponses du LLM
+- [ ] Changer de LLM à tout moment : commande `/modele`, outil `switch_llm` et règles de voie rapide
 
 ### Phase 3 : résident
 - [ ] Emplacement standard de la config, rotation des logs, fichier d'audit
@@ -485,6 +516,7 @@ Emplacement cible (phase 3) : `%APPDATA%\avenoir\config.toml` sous Windows, `$XD
 - [ ] Permissions durables (« toujours autoriser ») et révocables
 - [ ] Raccourci clavier global
 - [ ] Mémoire vidéo partagée avec les jeux : décharger le modèle local ou basculer sur le modèle léger quand une application exigeante passe en plein écran
+- [ ] Magasin de modèles (CLI) : installer, désinstaller, lister les modèles avec leur score au banc
 
 ### Phase 4 : tâches et modules avancés
 - [ ] Outils fichiers restreints à des dossiers autorisés
@@ -499,12 +531,17 @@ Emplacement cible (phase 3) : `%APPDATA%\avenoir\config.toml` sous Windows, `$XD
 - [ ] Mot de réveil (openWakeWord / sherpa-onnx)
 - [ ] Confirmations vocales
 
+### Phase 5 bis : identité et présence
+- [ ] Propriétaire et liste blanche ; vérification de la voix (locuteur) et du visage (détection du vivant), seules ou combinées, toutes optionnelles
+- [ ] Comportements réglables : personne non reconnue, caméra indisponible
+- [ ] Verrouillage automatique en cas d'absence ; déverrouillage et connexion automatiques à la reconnaissance (intégration Windows Hello / PAM)
+
 ### Phase 6 : interface graphique (web dans la vue web système)
 - [ ] Hôte C++ des fenêtres (WebView2 / WebKitGTK, layer-shell sous Wayland)
 - [ ] Widget en haut de l'écran : barre pliée, widget déplié au survol, pingouin animé
 - [ ] Onglets du widget : activités, historique, infos système, version et mises à jour, chatbox, consommation Claude Code
 - [ ] Onglets des modules : déclaratifs, puis web isolés
-- [ ] Application principale : réglages, magasin de modules, conversations, historiques et logs, permissions, modules installés
+- [ ] Application principale : réglages, magasin de modules et de modèles, sélecteur de modèle, conversations, historiques et logs, permissions, modules installés, identité et présence
 
 ---
 
@@ -550,6 +587,8 @@ Emplacement cible (phase 3) : `%APPDATA%\avenoir\config.toml` sous Windows, `$XD
 | 36 | **Prompt système v3** et **modèles recommandés** (Gemma 4 26B-A4B en local 24 Go, Ministral 3 8B en léger, Claude en distant), choisis sur le banc d'essai ; la consigne de protocole de `claude_code` dit que les outils listés sont disponibles et se demandent dans `tool_calls` | Chaque règle du prompt répond à un échec mesuré ; une règle qui dit seulement quand demander rend un petit modèle hésitant (v2). En léger, la sécurité départage : on préfère le modèle qui n'a suivi aucune injection |
 | 37 | **Mêmes symboles d'une colonne sur tous les systèmes** dans la CLI : `›` (requête), `»` (action), `▲` (avertissement), au lieu de `❯`, `⚙` et `⚠` | Essai sous Windows : `❯` manque aux polices de console (carré), `⚙` et `⚠` y sont dessinés en emoji de double largeur qui chevauchent le texte ; un seul jeu de symboles évite deux apparences à maintenir |
 | 38 | **Prompt système v4** : une règle de plus, « ne donne une donnée de l'ordinateur ou du monde que si un outil te l'a fournie ; n'en annonce aucune avant le résultat ; si l'outil échoue, dis-le sans inventer » ; nouveau critère du banc `preamble_excludes` (texte écrit avec un appel d'outil, avant son résultat) | Essai sous Windows : Ministral a décrit un faux système et annoncé une météo inventée avant d'appeler l'outil. Le banc l'a reproduit (prévisions inventées après un échec de l'outil, 5 fois sur 5) ; la règle corrige le cas sans rien dégrader (evals/resultats/COMPARAISON.md, série 4) |
+| 39 | **Identité et présence** (§ 2.10, directive 16) : propriétaire et liste blanche, vérification par la voix et / ou le visage, verrouillage et connexion automatiques ; tout optionnel, réglages par défaut les plus sûrs, biométrie locale et chiffrée | L'assistant agit sur l'ordinateur et entend tout le monde dans la pièce : il ne doit obéir qu'aux personnes autorisées. La voix s'imite : elle ne suffit jamais seule pour une action sensible ni pour déverrouiller. Pour la connexion, s'appuyer sur Windows Hello / PAM plutôt que stocker un mot de passe |
+| 40 | **Changer de LLM à tout moment** (commande `/modele`, outil `switch_llm` de la voie rapide, sélecteur de l'application) et **magasin de modèles** ; passer à un fournisseur distant demande confirmation (directive 17) | Le bon modèle dépend du moment (jeu en cours, besoin de qualité, hors ligne) ; changer ne doit pas faire perdre la conversation. Un changement vers le distant fait sortir la conversation de la machine : jamais en silence |
 
 ---
 
@@ -560,3 +599,5 @@ Emplacement cible (phase 3) : `%APPDATA%\avenoir\config.toml` sous Windows, `$XD
 - Magasin de modules : hébergement, signature et vérification des modules.
 - Format exact des composants déclaratifs des onglets.
 - Moteur de recherche web par défaut.
+- Identité et présence : bibliothèques locales de vérification du locuteur et de reconnaissance faciale (avec détection du vivant), et intégration à la connexion du système (fournisseur d'identification Windows ou Windows Hello, module PAM sous Linux).
+- Magasin de modèles : source de la liste (fichier signé publié avec Avenoir ?), installation par Ollama seulement ou aussi par fichiers GGUF.

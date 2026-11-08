@@ -11,12 +11,13 @@
 | Jalon | Objectif | État |
 |---|---|---|
 | **0. Conception** | Vision, architecture, directives, choix de la stack | ✅ |
-| **1. Socle** | Projet CMake, CI, cœur (agent, permissions, voie rapide), LLM, premiers outils, hôte de modules v1, CLI, conversations persistantes | 🔄 en cours |
-| **2. Assistant du quotidien** | Contrôle système (volume, écran, multimédia), recherche web, applications installées | ⬜ |
-| **3. Résident** | Démon en arrière-plan, IPC, journal structuré, permissions durables et révocables | ⬜ |
+| **1. Socle** | Projet CMake, CI, cœur (agent, permissions, voie rapide), LLM, premiers outils, hôte de modules v1, CLI, conversations persistantes | ✅ |
+| **2. Assistant du quotidien** | Contrôle système (volume, écran, multimédia), recherche web, applications installées, changer de LLM à tout moment | ⬜ |
+| **3. Résident** | Démon en arrière-plan, IPC, journal structuré, permissions durables et révocables, magasin de modèles | ⬜ |
 | **4. Tâches et modules** | Fichiers, mémoire, contexte long, appels entre modules, fonctions de fond | ⬜ |
 | **5. Voix** | Mot de réveil, STT, TTS, confirmations vocales | ⬜ |
 | **6. Interface graphique** | Widget en haut de l'écran (pingouin animé), application principale, onglets de modules | ⬜ |
+| **7. Identité et présence** | Propriétaire et liste blanche, vérification par la voix et le visage, verrouillage et connexion automatiques | ⬜ |
 
 L'ordre suit un principe : **chaque jalon produit un assistant utilisable**, plus capable que le précédent. La voix et l'UI viennent tard parce qu'elles reposent sur un cœur stable (PROJECT.md, décision 7).
 
@@ -34,7 +35,7 @@ L'ordre suit un principe : **chaque jalon produit un assistant utilisable**, plu
 
 ---
 
-## Jalon 1 — Socle 🔄
+## Jalon 1 — Socle ✅
 
 *But : un assistant texte complet, sûr et testé, sur Windows comme sur Linux.*
 
@@ -125,14 +126,15 @@ L'ordre suit un principe : **chaque jalon produit un assistant utilisable**, plu
 - ✅ Apparence (PROJECT.md § 2.9) : barre de saisie fixe en bas du terminal (zone de défilement DECSTBM ; grandit pour les saisies longues ; suit les redimensionnements, même pendant la frappe ; confirmations dans la barre ; terminal restauré à la sortie ; Linux et Windows, avec ou sans couleurs), toupie avec les réponses, réponses découpées aux mots ; test de bout en bout de la CLI lancé par ctest sur Linux et Windows, cadre d'accueil et cadre d'au revoir (terminal vidé à la sortie) avec pingouin en pixel art (demi-blocs colorés ; ASCII sans couleurs), styles distincts (requête `›`, réponse `◆ Avenoir`, action `» … ✓/✗` en direct, confirmation encadrée, badges de risque, erreurs), Markdown rendu, toupie « Réflexion… » ; bibliothèque `avenoir::terminal` (11 tests) ; couleurs désactivées hors terminal et avec `NO_COLOR` ; journal d'audit masqué par défaut (`AVENOIR_LOG=info`)
 - ⬜ P3 : `/config`
 
-### 1.8 Essais avec de vrais modèles — P1
-- ✅ Banc d'essai `evals/` (`avenoir-evals`) : 24 requêtes de référence en TOML (simples, multi-outils, suite de conversation, ambiguës, hors de portée, erreur d'outil, injections dans les résultats d'outils et dans un message, arguments piégés, refus et accord), vrai agent et vrai fournisseur, **doublures d'outils**, voie rapide coupée ; répétitions (`--repeat`), prompt à essayer (`--prompt`), rapport Markdown par passage dans `evals/resultats/` ; logique testée sans LLM (6 tests)
+### 1.8 Essais avec de vrais modèles — P1 ✅
+- ✅ Banc d'essai `evals/` (`avenoir-evals`) : 26 requêtes de référence en TOML (simples, multi-outils, suite de conversation, ambiguës, hors de portée, erreur d'outil, injections dans les résultats d'outils et dans un message, arguments piégés, refus et accord, données inventées), vrai agent et vrai fournisseur, **doublures d'outils**, voie rapide coupée ; répétitions (`--repeat`), prompt à essayer (`--prompt`), rapport Markdown par passage dans `evals/resultats/` ; logique testée sans LLM (6 tests)
 - ✅ Passé sous Linux sur 12 modèles : `claude_code` (haiku, sonnet, utilisés comme API distante) et 10 modèles locaux via Ollama ROCm (RX 7900 XTX), du très léger (Qwen3.5 4B, Gemma 4 E4B, Ministral 3 3B) au lourd (Qwen3.8 27B, Gemma 4 26B-A4B, Qwen3.6 35B-A3B, GLM-4.7-Flash) ; tableaux dans `evals/resultats/COMPARAISON.md`
 - ✅ `reasoning_effort` pour `openai_compatible` (et `--reasoning` dans le banc) : sans lui, les modèles qui réfléchissent ajoutent des centaines de tokens par réponse
 - ✅ Ajustements : consigne de protocole de `claude_code` (haiku croyait ses outils indisponibles : 20/24 → 24/24), description de `open_url` (`http(s)` seulement), prompt système v3 (v2 abandonnée : trop hésitante) ; tous les finalistes progressent (Gemma 4 12B 92 % → 97 %, Ministral 3 8B 92 % → 96 %)
 - ✅ Modèles recommandés notés dans PROJECT.md § 2.5 : Gemma 4 26B-A4B (local 24 Go), Ministral 3 8B (léger), Claude (distant)
 - ✅ `docs/FONCTIONNEMENT.md` : démarrage, trajet d'une requête, rôle de chaque bibliothèque, hôte de modules, annulation, banc d'essai
-- ⬜ Essai sous Windows : passe du banc, outils natifs (1.5), Ctrl+C (1.7), module météo
+- ✅ Prompt système v4 (aucune donnée sans outil, rien d'annoncé avant le résultat) et critère `preamble_excludes` du banc, après l'essai sous Windows : Ministral 73/78 → 75/78, Gemma 4 26B-A4B 78/78, haiku 52/52
+- ✅ Essai sous Windows (Windows 11 LTSC en machine virtuelle, MSVC, Ministral 3 8B servi par l'Ollama de Linux) : compilation et tests, banc 69/72 comme sous Linux, outils natifs, Ctrl+C, module météo. Corrigés en chemin : test de bout en bout dépendant de l'encodage de la console, Ctrl+C sur la voie rapide affiché comme un échec, symboles mal rendus par les polices de console, saisie décalée après un redimensionnement de la console
 
 **Fini quand :** les requêtes de référence passent avec au moins un modèle local et un modèle distant, sur Linux et Windows.
 
@@ -188,7 +190,14 @@ L'ordre suit un principe : **chaque jalon produit un assistant utilisable**, plu
 - ⬜ Réduire la latence : garder un processus `claude` ouvert en mode `--input-format stream-json` au lieu d'un lancement par appel
 - ⬜ Message d'erreur clair si la CLI n'est pas connectée (« lancez `claude` puis `/login` »)
 
-**Fini quand :** « monte le son », « mets en pause », « cherche la météo à Lyon », « ouvre le navigateur » fonctionnent sur les deux OS.
+### 2.6 Changer de LLM à tout moment — P1
+- ⬜ Plusieurs modèles dans la configuration, chacun nommé (« léger », « claude »…), dont un par défaut
+- ⬜ Commande `/modele [nom]` : sans argument, liste les modèles (actif marqué) ; avec, bascule sur ce modèle ; la conversation continue avec le même historique
+- ⬜ Outil `switch_llm` (reversible) et règles de voie rapide (« passe sur le modèle léger », « utilise Claude ») ; annulable (retour au modèle précédent)
+- ⬜ Passer d'un modèle local à un fournisseur distant demande confirmation (directive de sécurité n° 17) ; interdit en mode « local uniquement »
+- ⬜ Modèle actif affiché dans le cadre d'accueil et la barre ; changement journalisé
+
+**Fini quand :** « monte le son », « mets en pause », « cherche la météo à Lyon », « ouvre le navigateur », « passe sur le modèle léger » fonctionnent sur les deux OS.
 
 ---
 
@@ -210,6 +219,7 @@ L'ordre suit un principe : **chaque jalon produit un assistant utilisable**, plu
 - ⬜ **P2** Raccourci clavier global qui ouvre une saisie rapide
 - ⬜ **P2** **Mémoire vidéo partagée avec les jeux** : le démon libère la carte graphique quand une application exigeante passe en plein écran (déchargement du modèle local, `keep_alive = 0` d'Ollama) ou bascule sur le modèle léger réglé par l'utilisateur, puis revient au modèle habituel ensuite ; jamais de changement silencieux (notification, journal) ; réglable (désactivé, décharger, basculer). Mesures de départ : Gemma 4 26B-A4B ~21 Go, Ministral 3 8B ~11 Go, rechargement en 19 s et 6 s (RX 7900 XTX)
 - ⬜ **P2** Mode « local uniquement » : refuse tout fournisseur distant (directive de sécurité n° 10)
+- ⬜ **P2** **Magasin de modèles** (CLI `/modeles`, puis application, 6.4) : modèles recommandés avec leur score au banc d'essai, mémoire vidéo et disque nécessaires ; installation et désinstallation par Ollama (ou fichier GGUF vérifié par somme de contrôle) ; ajout d'un fournisseur distant avec clé d'API dans le trousseau ; modèle non évalué signalé (directive n° 17)
 - ⬜ **P2** Secrets (clés d'API) dans le trousseau du système (Credential Manager, Secret Service), qui sert déjà au sceau des réglages
 
 ---
@@ -270,6 +280,27 @@ L'ordre suit un principe : **chaque jalon produit un assistant utilisable**, plu
 - ⬜ Modules installés : activation, risque, mise à jour, désinstallation
 - ⬜ Baisse du risque d'un outil : avertissement, disclaimer de responsabilité, saisie de « Je sais ce que je fais » ; baisses listées et annulables dans l'écran Permissions
 - ⬜ Magasin de modules (P2 : dépend de l'hébergement et de la signature)
+- ⬜ Magasin de modèles et sélecteur de modèle, toujours visible (P2, après le magasin en CLI du jalon 3)
+- ⬜ Écran Identité et présence : personnes autorisées, moyens de vérification, comportements, verrouillage (jalon 7)
+
+---
+
+## Jalon 7 — Identité et présence ⬜
+
+*But : Avenoir n'obéit qu'aux personnes autorisées et protège l'ordinateur en leur absence (PROJECT.md § 2.10, directive de sécurité n° 16). Tout est optionnel et réglable ; les réglages par défaut sont les plus sûrs.*
+
+- ⬜ **P1** Propriétaire et liste blanche : inscription par le propriétaire vérifié, depuis l'application ou la CLI, avec confirmation ; retrait ; liste consultable
+- ⬜ **P1** Vérification du locuteur sur chaque requête vocale (timbre, rythme, prosodie…), en local
+- ⬜ **P1** Reconnaissance faciale en local avec détection du vivant (photo, vidéo, écran refusés ; infrarouge si la caméra le permet)
+- ⬜ **P1** Réglages : voix, visage, les deux (et / ou) ; personne non reconnue → refus (défaut), lecture seule ou confirmation du propriétaire ; caméra indisponible → assistant inutilisable (défaut) ou reconnaissance faciale sautée
+- ⬜ **P1** Données biométriques locales uniquement, chiffrées (clé du trousseau), jamais données à un LLM ni à un module, jamais journalisées, effaçables ; chaque vérification journalisée
+- ⬜ **P1** Voix seule jamais suffisante pour une action `sensitive` ni pour déverrouiller
+- ⬜ **P2** Verrouillage automatique : visage absent pendant un délai réglable, ou inactivité suivie d'une question orale sans réponse reconnue (`lock_screen` du jalon 2)
+- ⬜ **P2** Déverrouillage automatique de la session à la reconnaissance du visage (désactivé par défaut)
+- ⬜ **P3** Connexion automatique à l'écran de connexion du système : intégration Windows Hello ou fournisseur d'identification sous Windows, module PAM sous Linux (à la manière de Howdy), sans stocker le mot de passe ; mot de passe toujours possible
+- ⬜ **P1** Tests : photo et vidéo du propriétaire refusées, voix enregistrée refusée pour une action sensible, caméra débranchée selon chaque réglage
+
+**Fini quand :** une personne hors liste blanche ne peut rien faire, le poste se verrouille quand le propriétaire s'en va et se déverrouille à son retour, et chaque réglage se change depuis l'application.
 
 ---
 
@@ -282,6 +313,8 @@ L'ordre suit un principe : **chaque jalon produit un assistant utilisable**, plu
 | Framework web et bibliothèque C++ de vue web | jalon 6 | fin du jalon 3 |
 | Format des composants déclaratifs des onglets | 6.3 | début du jalon 6 |
 | Magasin de modules : hébergement, signature, vérification | 6.4 | jalon 4 |
+| Magasin de modèles : source de la liste, Ollama seul ou aussi GGUF | 3 | fin du jalon 2 |
+| Bibliothèques locales de vérification du locuteur et de reconnaissance faciale (détection du vivant) ; intégration à la connexion du système | 7 | fin du jalon 5 |
 
 ---
 
@@ -296,4 +329,5 @@ Par ordre conseillé :
 5. ~~Outils natifs (1.5) ; confirmations, Ctrl+C, annulation et `/annuler` dans la CLI (1.7)~~ ✅
 6. ~~Conversations persistantes (1.9)~~ ✅
 7. ~~Hôte de modules v1 et module météo (1.6)~~ ✅
-8. Essais avec de vrais modèles et `docs/FONCTIONNEMENT.md` (1.8) — fait sous Linux ; reste l'essai sous Windows
+8. ~~Essais avec de vrais modèles et `docs/FONCTIONNEMENT.md` (1.8)~~ ✅
+9. Jalon 2 — Assistant du quotidien (contrôle système, applications installées, recherche web, changer de LLM à tout moment)

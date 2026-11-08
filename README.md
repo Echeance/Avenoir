@@ -54,6 +54,8 @@ La liste complète, sans rien omettre : **[docs/FEATURES.md](docs/FEATURES.md)**
 - 🌙 **Assistant résident** : démon en arrière-plan, raccourci clavier global, journal des actions, et la carte graphique libérée (ou le modèle léger choisi) quand vous lancez un jeu.
 - 🎙️ **Voix** : mot de réveil, reconnaissance et synthèse vocales, en local.
 - 🖥️ **Interface graphique** : un widget discret en haut de l'écran (avec le pingouin animé) et une application de réglages.
+- 🧠 **Changer de modèle à tout moment** (`/modele`, ou « passe sur le modèle léger ») et un **magasin de modèles** pour en installer.
+- 🔐 **Identité et présence** : seuls vous et les personnes que vous autorisez peuvent l'utiliser (voix, visage, ou les deux), verrouillage quand vous partez et déverrouillage à votre retour. Tout est optionnel et réglable, la biométrie reste sur votre machine.
 
 ---
 

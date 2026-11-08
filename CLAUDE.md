@@ -105,6 +105,8 @@ En-têtes publics dans `libs/<nom>/include/avenoir/<nom>/`, tests Catch2 dans `l
 - Secrets uniquement via variables d'environnement ; jamais dans `config.toml` ni dans les logs.
 - Réglages : le démon est le seul rédacteur ; ne jamais ajouter de chemin qui écrive ou relise les réglages sans vérifier le sceau (directive 14).
 - Modules : risque du manifeste relevable par l'utilisateur, `sensitive` si absent ; abaissable seulement depuis l'application ou la CLI après avertissement, disclaimer et saisie de « Je sais ce que je fais » (accord enregistré ; baisse sans accord ignorée) ; appels entre modules uniquement via l'hôte (permissions + audit).
+- Identité et présence (docs/PROJECT.md § 2.10, directive 16) : biométrie traitée en local uniquement, chiffrée, jamais donnée à un LLM ni à un module, jamais journalisée ; la voix seule ne suffit jamais pour une action `sensitive` ni pour déverrouiller ; désactiver une vérification se fait comme abaisser un risque.
+- Changer de LLM vers un fournisseur distant demande confirmation et est refusé en mode « local uniquement » (directive 17).
 - Onglets web des modules : iframe isolée, origine propre, CSP sans réseau, `postMessage` validé ; confirmations toujours dessinées par Avenoir (docs/PROJECT.md, directives 12 et 13).
 
 ## Écrire un outil natif
