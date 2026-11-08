@@ -74,9 +74,10 @@ class ModelSwitcher {
                   ProviderFactory factory = {}, JsonPoster poster = {}, JsonGetter getter = {});
 
     /// Modèle de départ : `preferred` (le dernier utilisé) s'il existe encore,
-    /// sinon le premier. Pas de confirmation : c'est un modèle de la
-    /// configuration, déjà choisi par l'utilisateur. Renvoie son fournisseur,
-    /// nul s'il n'y a aucun modèle.
+    /// sinon le premier (en mode « local uniquement » : seulement parmi les
+    /// modèles locaux ; aucun modèle local = pas de fournisseur). Pas de confirmation : c'est un
+    /// modèle de la configuration, déjà choisi par l'utilisateur. Renvoie son fournisseur, nul s'il
+    /// n'y a aucun modèle.
     [[nodiscard]] core::Result<std::unique_ptr<core::LlmProvider>>
     start(std::optional<std::string_view> preferred);
 
@@ -88,6 +89,12 @@ class ModelSwitcher {
     /// défaut) : déchargé à la fin de la requête, comme `/decharger`. Sur un
     /// autre serveur, le décharger ne libérerait rien pour le nouveau.
     void set_unload_on_switch(bool enabled) noexcept { unload_on_switch_ = enabled; }
+
+    /// Mode « local uniquement » : un modèle distant n'est jamais utilisé,
+    /// ni au lancement (`start` prend le premier modèle local), ni par
+    /// `switch_to` (refusé, sans même demander confirmation).
+    void set_local_only(bool enabled) noexcept { local_only_ = enabled; }
+    [[nodiscard]] bool local_only() const noexcept { return local_only_; }
 
     /// Appelée après chaque changement réussi (pour retenir le modèle).
     void on_switch(std::function<void(const ModelChoice&)> callback) {
@@ -167,6 +174,7 @@ class ModelSwitcher {
     JsonGetter getter_;
     std::vector<std::size_t> pending_unload_; ///< Modèles à décharger après la requête.
     bool unload_on_switch_ = true;
+    bool local_only_ = false;
 
     /// Met un modèle en attente de déchargement (une seule fois).
     void defer_unload(std::size_t index);

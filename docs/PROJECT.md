@@ -366,7 +366,7 @@ La **confidentialité** et la **sécurité** sont les aspects primordiaux d'Aven
 7. **Journal d'audit** : chaque exécution, refus ou échec d'outil est tracé (logger `spdlog` dédié : `audit`).
 8. **Modules** : risque `sensitive` par défaut, relevable par l'utilisateur ; abaissable seulement depuis l'application, après avertissement, disclaimer et saisie de « Je sais ce que je fais » (§ 2.6) ; permissions déclarées dans le manifeste, montrées à l'installation et révocables ; appels entre modules uniquement via l'hôte, avec contrôle des permissions et audit ; plus tard, bac à sable des processus.
 9. **Voix** : une transcription peut être fausse. Pour une action sensible déclenchée à la voix, la confirmation reformule l'action (« Je vais supprimer 12 fichiers dans Téléchargements, je confirme ? »).
-10. **Vie privée** : avec un LLM distant, ce qui est envoyé quitte la machine. Le documenter clairement à l'utilisateur ; prévoir un mode « local uniquement ».
+10. **Vie privée** : avec un LLM distant, ce qui est envoyé quitte la machine. Le documenter clairement à l'utilisateur ; mode « local uniquement » (`[agent] local_only`) : aucun modèle distant n'est alors utilisé.
 11. **Sûreté mémoire** : l'assistant traite des données non fiables (réponses de LLM, pages web, modules). Les règles C++ de la section 4.2 (RAII, pas de mémoire gérée à la main, analyseurs en CI) en font une exigence de sécurité, pas seulement de qualité.
 12. **Onglets web des modules** : iframe `sandbox="allow-scripts"` uniquement (pas d'origine partagée, ni popup, ni formulaire, ni navigation de la fenêtre principale) ; une origine par module (`avenoir-module://<id>/`) qui ne sert que les fichiers du module ; CSP stricte **sans accès réseau** (`connect-src 'none'`) : les données passent par le processus du module, soumis à ses permissions ; seul canal : `postMessage`, avec une API minimale (recevoir les données de *son* module, lui envoyer des événements), chaque message étant validé par l'hôte.
 13. **Confirmations non imitables** : les demandes de confirmation et de permission sont toujours dessinées par Avenoir, hors de tout contenu de module.
@@ -469,7 +469,7 @@ Fichier `config.toml` (voir `config.example.toml`) :
 | Section | Rôle |
 |---|---|
 | `[models.<nom>]` | Un modèle par section, dans l'ordre voulu (le premier sert par défaut) : fournisseur (`openai_compatible`, `anthropic` ou `claude_code`), modèle, URL, **nom** de la variable d'environnement de la clé, `local` |
-| `[agent]` | `max_steps`, `fast_path`, `system_prompt`, `unload_on_switch` |
+| `[agent]` | `max_steps`, `fast_path`, `system_prompt`, `unload_on_switch`, `local_only` |
 | `[permissions]` | Politique par niveau de risque |
 | `[modules.<id>]` | Réglages de l'utilisateur par module : activation, risque relevé par outil |
 

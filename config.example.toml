@@ -58,6 +58,8 @@ reasoning_effort = "none"
 [agent]
 max_steps = 10        # allers-retours LLM ↔ outils maximum par requête
 fast_path = true      # commandes simples traitées sans LLM
+local_only = false    # true : mode « local uniquement », aucun modèle distant
+                      # n'est utilisé (la conversation ne quitte jamais la machine)
 unload_on_switch = true # en changeant de modèle, décharger l'ancien s'il est sur le
                         # même serveur (libère sa mémoire vidéo) ; false : le garder
                         # chargé pour alterner vite entre deux petits modèles

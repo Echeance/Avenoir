@@ -190,7 +190,7 @@ L'ordre suit un principe : **chaque jalon produit un assistant utilisable**, plu
 - ⬜ Réduire la latence : garder un processus `claude` ouvert en mode `--input-format stream-json` au lieu d'un lancement par appel
 - ⬜ Message d'erreur clair si la CLI n'est pas connectée (« lancez `claude` puis `/login` »)
 
-### 2.6 Changer de LLM à tout moment — P1 🔄
+### 2.6 Changer de LLM à tout moment — P1 ✅
 - ✅ Plusieurs modèles dans la configuration : un par section `[models.<nom>]`, le premier par défaut ; sans modèle, seule la voie rapide répond
 - ✅ Dernier modèle utilisé retenu dans la base et repris au lancement suivant
 - ✅ Commande `/modele [nom]` : sans argument, liste les modèles (actif marqué) ; avec, bascule sur ce modèle ; la conversation continue avec le même historique
@@ -201,7 +201,7 @@ L'ordre suit un principe : **chaque jalon produit un assistant utilisable**, plu
 - ✅ Modèles chargés ou déchargés hors d'Avenoir annoncés pendant la saisie ; état des modèles : `/memoire`, outil `llm_status`, voie rapide
 - ✅ Changer le raisonnement à chaud, sans recharger le modèle : `/raisonnement`, outil `set_reasoning`, voie rapide ; retenu par modèle
 - ✅ Charger, décharger, recharger un modèle local (Ollama) : `/charger`, `/decharger`, `/recharger`, outils `load_llm` / `unload_llm`, voie rapide (« décharge le modèle », « libère la carte graphique », « allume le modèle gemma ») ; déchargement du modèle actif différé à la fin de la réponse
-- ⬜ Interdit en mode « local uniquement » (quand ce mode existera, jalon 3)
+- ✅ Mode « local uniquement » (`[agent] local_only`) : un modèle distant n'est jamais utilisé, ni au lancement (premier modèle local à la place, sinon voie rapide seule), ni par un changement (refusé sans confirmation possible)
 
 **Fini quand :** « monte le son », « mets en pause », « cherche la météo à Lyon », « ouvre le navigateur », « passe sur le modèle léger » fonctionnent sur les deux OS.
 
@@ -224,7 +224,7 @@ L'ordre suit un principe : **chaque jalon produit un assistant utilisable**, plu
 - ⬜ **P2** Réévaluer le modèle de concurrence (décision 12) pour le démon
 - ⬜ **P2** Raccourci clavier global qui ouvre une saisie rapide
 - ⬜ **P2** **Mémoire vidéo partagée avec les jeux** (déjà possible à la main : `/decharger`, « libère la carte graphique », 2.6) : le démon libère la carte graphique quand une application exigeante passe en plein écran (déchargement du modèle local, `keep_alive = 0` d'Ollama) ou bascule sur le modèle léger réglé par l'utilisateur, puis revient au modèle habituel ensuite ; jamais de changement silencieux (notification, journal) ; réglable (désactivé, décharger, basculer). Mesures de départ : Gemma 4 26B-A4B ~21 Go, Ministral 3 8B ~11 Go, rechargement en 19 s et 6 s (RX 7900 XTX)
-- ⬜ **P2** Mode « local uniquement » : refuse tout fournisseur distant (directive de sécurité n° 10)
+- ✅ **P2** Mode « local uniquement » : refuse tout fournisseur distant (directive de sécurité n° 10) — fait avec 2.6 (`[agent] local_only`)
 - ⬜ **P2** **Magasin de modèles** (CLI `/modeles`, puis application, 6.4) : modèles recommandés avec leur score au banc d'essai, mémoire vidéo et disque nécessaires ; installation et désinstallation par Ollama (ou fichier GGUF vérifié par somme de contrôle) ; ajout d'un fournisseur distant avec clé d'API dans le trousseau ; modèle non évalué signalé (directive n° 17)
 - ⬜ **P2** Secrets (clés d'API) dans le trousseau du système (Credential Manager, Secret Service), qui sert déjà au sceau des réglages
 

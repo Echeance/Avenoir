@@ -41,6 +41,7 @@ Plateformes : **Linux** et **Windows** (sauf mention contraire).
   - outil `switch_llm` (réversible, annulable : `/annuler` revient au modèle précédent, sauf si le modèle a changé entre-temps), que le modèle actif peut appeler ;
   - voie rapide : « passe / bascule / change sur (le) modèle X », « utilise le modèle X » (le mot « modèle » ou « llm » est exigé) ;
   - nom reconnu sans casse ni accents (« Léger » → `leger`), ou par identifiant du modèle (« ministral-3:8b ») ;
+  - **mode « local uniquement »** (`[agent] local_only = true`) : un modèle distant n'est jamais utilisé, ni au lancement (le premier modèle local à la place ; aucun : voie rapide seule, avec un avertissement), ni par un changement (refusé sans demander) ; `/modele` les marque indisponibles ;
   - **passer à un modèle distant demande toujours confirmation** (la conversation sortirait de la machine) ; local = adresse de la machine (`localhost`, `127.x`, `::1`) ou `local = true` déclaré pour un serveur du réseau local ;
   - modèle actif affiché dans le cadre d'accueil ;
   - **l'ancien modèle est déchargé** après la requête quand il est local, servi par le **même serveur** que le nouveau et différent de lui (sur un autre serveur, le décharger ne libérerait rien pour le nouveau) ; annoncé (« L'ancien modèle « gemma » sera déchargé », puis « déchargé : sa mémoire est libérée ») ; annulé si l'on revient sur lui avant la fin de la requête ; désactivable (`[agent] unload_on_switch = false`).
@@ -152,7 +153,7 @@ Plateformes : **Linux** et **Windows** (sauf mention contraire).
 ## 10. Configuration
 
 - Fichier `config.toml` (exemple commenté : `config.example.toml`) ; une clé inconnue ou de mauvais type est une erreur qui cite la clé.
-- Sections : `[models.<nom>]` (un par modèle, dans l'ordre voulu : fournisseur, modèle, adresse, nom de la variable de la clé, `temperature`, `reasoning_effort`, `max_tokens`, commande et délai de Claude Code, `local`) ; l'ancienne section `[llm]` est refusée avec un message qui indique la nouvelle forme ; `[agent]` (`max_steps`, `fast_path`, `system_prompt`, `unload_on_switch`), `[permissions]` (politique par niveau), `[modules.<id>]` (`enabled`, `risk` par outil).
+- Sections : `[models.<nom>]` (un par modèle, dans l'ordre voulu : fournisseur, modèle, adresse, nom de la variable de la clé, `temperature`, `reasoning_effort`, `max_tokens`, commande et délai de Claude Code, `local`) ; l'ancienne section `[llm]` est refusée avec un message qui indique la nouvelle forme ; `[agent]` (`max_steps`, `fast_path`, `system_prompt`, `unload_on_switch`, `local_only`), `[permissions]` (politique par niveau), `[modules.<id>]` (`enabled`, `risk` par outil).
 - Dossier de données : `~/.local/share/avenoir` (ou `$XDG_DATA_HOME`), `%LOCALAPPDATA%\avenoir` sous Windows.
 
 ## 11. Journaux

@@ -20,6 +20,10 @@ TEST_CASE("config.example.toml se charge", "[config]") {
     CHECK(config->agent.max_steps == 10);
     CHECK(config->agent.fast_path);
     CHECK(config->agent.unload_on_switch);
+    CHECK_FALSE(config->agent.local_only);
+    const auto local = parse_config("[agent]\nlocal_only = true\n");
+    REQUIRE(local.has_value());
+    CHECK(local->agent.local_only);
     CHECK(config->permissions.sensitive == Policy::Confirm);
 
     const auto keep = parse_config("[agent]\nunload_on_switch = false\n");

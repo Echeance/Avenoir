@@ -178,7 +178,8 @@ Result<AgentConfig> parse_agent(const toml::table& agent) {
     auto prompt = optional_value<std::string>(agent, kSection, "system_prompt");
     auto fast_path = optional_value<bool>(agent, kSection, "fast_path");
     auto unload_on_switch = optional_value<bool>(agent, kSection, "unload_on_switch");
-    if (auto error = first_error(max_steps, prompt, fast_path, unload_on_switch)) {
+    auto local_only = optional_value<bool>(agent, kSection, "local_only");
+    if (auto error = first_error(max_steps, prompt, fast_path, unload_on_switch, local_only)) {
         return std::unexpected(std::move(*error));
     }
     if (max_steps->has_value()) {
@@ -187,6 +188,7 @@ Result<AgentConfig> parse_agent(const toml::table& agent) {
     config.system_prompt = std::move(*prompt);
     config.fast_path = fast_path->value_or(config.fast_path);
     config.unload_on_switch = unload_on_switch->value_or(config.unload_on_switch);
+    config.local_only = local_only->value_or(config.local_only);
     return config;
 }
 

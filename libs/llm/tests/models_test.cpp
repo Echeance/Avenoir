@@ -574,3 +574,31 @@ TEST_CASE("état de chargement lisible, outil et voie rapide", "[models]") {
     CHECK(args("est-ce que le modèle qwen est chargé") == nlohmann::json{{"name", "qwen"}});
     CHECK(args("quels fichiers sont chargés").is_null());
 }
+
+TEST_CASE("mode local uniquement : aucun modèle distant", "[models][securite]") {
+    auto agent = make_agent();
+    CountingConfirmer confirmer(core::Decision::Approved);
+    llm::ModelSwitcher switcher(sample_models(), &confirmer, fake_factory());
+    switcher.set_local_only(true);
+    switcher.attach(agent);
+
+    // Distant retenu au lancement précédent : le premier modèle local à la place.
+    REQUIRE(switcher.start("claude").has_value());
+    CHECK(switcher.active()->name == "gemma");
+
+    const auto refused = switcher.switch_to("claude");
+    REQUIRE_FALSE(refused.has_value());
+    CHECK(refused.error().message.contains("local uniquement"));
+    CHECK(confirmer.asked == 0); // refusé sans même demander
+    CHECK(switcher.active()->name == "gemma");
+    CHECK(switcher.switch_to("leger").has_value()); // local : permis
+
+    // Aucun modèle local : pas de fournisseur, seule la voie rapide répond.
+    std::vector<llm::ModelChoice> remote_only{sample_models()[2]};
+    llm::ModelSwitcher none(remote_only, &confirmer, fake_factory());
+    none.set_local_only(true);
+    const auto provider = none.start(std::nullopt);
+    REQUIRE(provider.has_value());
+    CHECK(*provider == nullptr);
+    CHECK(none.active() == nullptr);
+}

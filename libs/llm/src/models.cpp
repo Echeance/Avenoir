@@ -584,9 +584,22 @@ ModelSwitcher::start(std::optional<std::string_view> preferred) {
         active_ = 0;
         return std::unique_ptr<core::LlmProvider>{};
     }
+    const auto allowed = [this](const ModelChoice* model) {
+        return model != nullptr && (!local_only_ || model->local);
+    };
     const auto* chosen = preferred ? find(*preferred) : nullptr;
+    if (!allowed(chosen)) {
+        chosen = nullptr;
+        for (const auto& model : models_) {
+            if (allowed(&model)) {
+                chosen = &model;
+                break;
+            }
+        }
+    }
     if (chosen == nullptr) {
-        chosen = models_.data();
+        active_ = models_.size(); // aucun modèle permis : voie rapide seulement
+        return std::unique_ptr<core::LlmProvider>{};
     }
     auto provider = factory_(chosen->config);
     if (!provider) {
@@ -614,6 +627,12 @@ core::Result<std::string> ModelSwitcher::switch_to(std::string_view name) {
     }
     if (agent_ == nullptr) {
         return core::make_error(core::ErrorCode::Config, "aucun agent auquel donner le modèle");
+    }
+    if (!target->local && local_only_) {
+        return core::make_error(core::ErrorCode::Config,
+                                std::format("mode « local uniquement » : le modèle distant « {} » "
+                                            "n'est pas utilisable",
+                                            target->name));
     }
     if (!target->local) {
         // Directive n° 17 : la conversation sortirait de la machine.

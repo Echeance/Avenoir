@@ -389,6 +389,9 @@ void print_models(const llm::ModelSwitcher& switcher) {
     for (const auto& model : switcher.models()) {
         const bool active = &model == switcher.active();
         std::string line = llm::describe(model);
+        if (switcher.local_only() && !model.local) {
+            line += " (indisponible : mode local uniquement)";
+        }
         if (std::holds_alternative<core::OpenAiCompatibleConfig>(model.config)) {
             line += ", raisonnement " + llm::reasoning_label(llm::ModelSwitcher::reasoning(model));
         }
@@ -662,6 +665,7 @@ int run(int argc, char** argv) {
     CliConfirmation switch_confirmer(prompt);
     llm::ModelSwitcher switcher(llm::models_from(*config), &switch_confirmer);
     switcher.set_unload_on_switch(config->agent.unload_on_switch);
+    switcher.set_local_only(config->agent.local_only);
     LoadWatch load_watch(switcher);
     // Modèle de départ : le dernier utilisé (retenu dans la base), sinon le
     // premier de la configuration ; aucun modèle : seule la voie rapide répond.
@@ -687,6 +691,10 @@ int run(int argc, char** argv) {
     if (!llm) {
         display().error(core::describe(llm.error()));
         return EXIT_FAILURE;
+    }
+    if (switcher.local_only() && switcher.active() == nullptr && !switcher.models().empty()) {
+        startup_warnings.emplace_back(
+            "mode « local uniquement » : aucun modèle local, seule la voie rapide répond");
     }
     // Charger / décharger : seulement s'il y a un modèle local.
     if (std::ranges::any_of(switcher.models(), &llm::ModelChoice::local)) {

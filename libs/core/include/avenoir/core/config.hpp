@@ -64,6 +64,9 @@ struct AgentConfig {
     /// En changeant de modèle, décharger l'ancien s'il est local et servi
     /// par le même serveur que le nouveau (libère sa mémoire vidéo).
     bool unload_on_switch = true;
+    /// Mode « local uniquement » (directive de sécurité n° 10) : aucun modèle
+    /// distant n'est utilisé, ni au lancement ni par un changement de modèle.
+    bool local_only = false;
 };
 
 /// Réglages de l'utilisateur pour un module (`[modules.<id>]`). Le module
