@@ -125,7 +125,7 @@ void Conversations::list() {
         const bool current = c.id == current_;
         display().plain(
             std::format("{} {}  {}  {}",
-                        current ? terminal::paint("▶", {.color = Color::Green, .bold = true}) : " ",
+                        current ? terminal::paint("●", {.color = Color::Green, .bold = true}) : " ",
                         terminal::paint(std::format("{:>4}", c.id), {.color = Color::Gray}),
                         terminal::paint(terminal::ellipsize(c.title, 50), {.bold = current}),
                         terminal::paint(std::format("{} · {} message(s)",

@@ -125,7 +125,7 @@ Plateformes : **Linux** et **Windows** (sauf mention contraire).
 - **Apparence** :
   - barre de saisie fixe en bas du terminal (grandit avec la saisie, suit les redimensionnements) ;
   - cadre d'accueil avec le pingouin en pixel art (ASCII sans couleurs) ;
-  - styles distincts pour la requête (❯), la réponse (◆ Avenoir), les actions (⚙ … ✓ / ✗ en direct), les confirmations encadrées, les badges de risque et les erreurs ;
+  - styles distincts pour la requête (›), la réponse (◆ Avenoir), les actions (» … ✓ / ✗ en direct), les avertissements (▲) — symboles d'une colonne présents dans les polices de console courantes, Windows compris, les confirmations encadrées, les badges de risque et les erreurs ;
   - réponses en Markdown rendu, découpées aux mots ; toupie « Réflexion… » ;
   - couleurs désactivées hors terminal et avec `NO_COLOR`.
 - Avertissements de démarrage (modules ignorés ou en échec) affichés après l'accueil.

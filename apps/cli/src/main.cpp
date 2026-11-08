@@ -3,7 +3,7 @@
 // Usage : avenoir [chemin/vers/config.toml]      (défaut : config.toml)
 // Logs  : variable AVENOIR_LOG (trace, debug, info, warn, error). Par défaut,
 //         seuls les avertissements s'affichent ; le journal d'audit n'apparaît
-//         qu'avec AVENOIR_LOG (les actions sont déjà montrées par les lignes ⚙).
+//         qu'avec AVENOIR_LOG (les actions sont déjà montrées par les lignes d'action).
 // Couleurs : désactivées hors d'un terminal ou si NO_COLOR est défini.
 //
 // Ctrl+C ne ferme pas Avenoir : il arrête l'action en cours puis propose
@@ -131,7 +131,7 @@ void print_help(const cli::ModulesUi& modules) {
 
 void print_tools(const core::Agent& agent) {
     for (const auto& spec : agent.tools().specs()) {
-        display().plain(std::format("  {} {}  {}", paint("⚙", {.color = Color::Yellow}),
+        display().plain(std::format("  {} {}  {}", paint(cli::kToolGlyph, {.color = Color::Yellow}),
                                     terminal::pad(paint(spec.name, {.bold = true}), 24),
                                     terminal::risk_badge(spec.risk)));
         display().plain("    " +

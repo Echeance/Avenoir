@@ -16,8 +16,17 @@
 
 namespace avenoir::cli {
 
-/// Affichage de la CLI : un style par type d'élément (requête ❯, réponse
-/// ◆ Avenoir, action ⚙, confirmation, erreur…) et une toupie pendant que le
+/// Symboles de l'invite (requête), des actions (outil) et des avertissements.
+/// Choisis pour exister dans les polices de console courantes (Consolas,
+/// Cascadia Mono…) et n'occuper qu'une colonne : « ❯ » manque à ces polices,
+/// « ⚙ » et « ⚠ » y sont dessinés en emoji de double largeur, qui chevauchent
+/// le texte suivant. Les mêmes sur tous les systèmes.
+inline constexpr std::string_view kPromptGlyph = "›";
+inline constexpr std::string_view kToolGlyph = "»";
+inline constexpr std::string_view kWarningGlyph = "▲";
+
+/// Affichage de la CLI : un style par type d'élément (requête ›, réponse
+/// ◆ Avenoir, action », confirmation, erreur…) et une toupie pendant que le
 /// LLM réfléchit. Toutes les écritures passent par ici, sous un verrou : la
 /// toupie (thread principal) et les actions (thread de la requête) ne
 /// s'écrivent jamais en même temps.
@@ -59,12 +68,12 @@ class Display {
     void assistant(std::string_view markdown);
     /// Retient les appels d'outils d'une réponse ; affichés avec leur résultat.
     void tool_calls(std::span<const core::ToolCall> calls);
-    /// « ⚙ outil arguments  ✓ » (ou ✗ et l'erreur).
+    /// « » outil arguments  ✓ » (ou ✗ et l'erreur).
     void tool_result(const core::ToolResultMessage& result);
 
     void info(std::string_view text);    ///< Message système, discret.
     void success(std::string_view text); ///< ✓ vert.
-    void warning(std::string_view text); ///< ⚠ jaune.
+    void warning(std::string_view text); ///< ▲ jaune.
     void error(std::string_view text);   ///< ✗ rouge, sur stderr.
     void plain(std::string_view text);   ///< Texte déjà mis en forme.
 
@@ -79,7 +88,7 @@ class Display {
     void suspend_thinking();
     void resume_thinking();
 
-    /// Invite de saisie : « ❯ » coloré, ou « > » sans couleurs.
+    /// Invite de saisie : « › » coloré, ou « > » sans couleurs.
     [[nodiscard]] static std::string prompt_marker();
 
   private:

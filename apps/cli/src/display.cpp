@@ -149,7 +149,7 @@ void Display::draw_bar(bool marker) const {
     std::string out = scroll_region(region_bottom()) + go_to(prompt_row() - 1) + "\x1b[J" +
                       bar_rule() + go_to(rows_) + bar_rule() + go_to(prompt_row());
     if (marker) {
-        out += paint("❯", {.color = Color::Gray}) + " ";
+        out += paint(kPromptGlyph, {.color = Color::Gray}) + " ";
     }
     emit(out);
 }
@@ -383,8 +383,8 @@ void Display::banner(std::string_view llm, std::size_t tools, std::string_view c
 }
 
 void Display::user(std::string_view text) {
-    const std::string line = "\n" + paint("❯", {.color = Color::Cyan, .bold = true}) + " " +
-                             paint(text, {.bold = true}) + "\n";
+    const std::string line = "\n" + paint(kPromptGlyph, {.color = Color::Cyan, .bold = true}) +
+                             " " + paint(text, {.bold = true}) + "\n";
     const std::scoped_lock lock(mutex_);
     write(line);
 }
@@ -417,7 +417,7 @@ void Display::tool_result(const core::ToolResultMessage& result) {
     if (call == pending_.end()) {
         return;
     }
-    std::string line = "  " + paint("⚙", {.color = Color::Yellow}) + " " + call->name;
+    std::string line = "  " + paint(kToolGlyph, {.color = Color::Yellow}) + " " + call->name;
     if (const auto arguments = summarize_arguments(call->arguments); !arguments.empty()) {
         line += " " + paint(terminal::ellipsize(arguments, 40), kMuted);
     }
@@ -443,7 +443,8 @@ void Display::success(std::string_view text) {
 
 void Display::warning(std::string_view text) {
     const std::scoped_lock lock(mutex_);
-    write(paint("⚠ " + std::string(text), {.color = Color::Yellow}) + "\n");
+    write(paint(std::string(kWarningGlyph) + " " + std::string(text), {.color = Color::Yellow}) +
+          "\n");
 }
 
 void Display::error(std::string_view text) {
@@ -467,7 +468,10 @@ void Display::confirmation(const core::ToolSpec& spec, const core::ToolCall& cal
         lines.push_back(paint(line, kMuted));
     }
     const std::scoped_lock lock(mutex_);
-    write("\n" + terminal::box("⚠ Action à confirmer", lines, Color::Yellow, width()) + "\n");
+    write("\n" +
+          terminal::box(std::string(kWarningGlyph) + " Action à confirmer", lines, Color::Yellow,
+                        width()) +
+          "\n");
 }
 
 void Display::start_thinking() {
@@ -526,7 +530,8 @@ void Display::resume_thinking() {
 }
 
 std::string Display::prompt_marker() {
-    return terminal::enabled() ? paint("❯", {.color = Color::Cyan, .bold = true}) + " " : "> ";
+    return terminal::enabled() ? paint(kPromptGlyph, {.color = Color::Cyan, .bold = true}) + " "
+                               : "> ";
 }
 
 void print_messages(std::span<const core::Message> messages, std::optional<std::size_t> limit) {

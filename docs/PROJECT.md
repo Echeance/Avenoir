@@ -283,7 +283,7 @@ Les conversations sont **persistantes** : à la réouverture de l'application ou
 | `/supprimer [n° ou titre]` | supprime une conversation (la conversation en cours par défaut), après confirmation |
 | `/historique` | réaffiche toute la conversation en cours |
 
-- **Défilement** : la conversation se remonte avec le défilement du terminal. Au démarrage et avec `/ouvrir`, les **50 derniers messages** sont réaffichés (pour ne pas inonder le terminal) ; `/historique` affiche tout. Les appels d'outils sont affichés de façon compacte (`⚙ launch_app « firefox »`).
+- **Défilement** : la conversation se remonte avec le défilement du terminal. Au démarrage et avec `/ouvrir`, les **50 derniers messages** sont réaffichés (pour ne pas inonder le terminal) ; `/historique` affiche tout. Les appels d'outils sont affichés de façon compacte (`» launch_app « firefox »`).
 - **Historique des saisies de la CLI** : les lignes tapées sont aussi conservées (flèches haut/bas), dans `cli_history.txt`, en clair, dans le même dossier de données.
 - **Droits** : le dossier de données est réservé à l'utilisateur (`700`), la base et l'historique des saisies aussi (`600`) ; sous Windows, `%LOCALAPPDATA%` est déjà propre à l'utilisateur.
 - **Limites** : les conversations sont stockées **en clair** sur la machine (chiffrement optionnel envisagé plus tard) ; les actions d'annulation (`/annuler`) ne survivent pas à un redémarrage (les actions passées restent visibles dans l'historique, mais ne sont plus annulables) ; une très longue conversation reprise est renvoyée en entier au LLM (résumé automatique prévu au jalon 4).
@@ -295,12 +295,12 @@ La CLI doit être agréable à lire : chaque type d'élément a son style, recon
 | Élément | Rendu |
 |---|---|
 | Accueil | cadre avec le **pingouin en pixel art** (demi-blocs ▀ ▄ colorés, couleurs 24 bits ou 256 selon le terminal ; en ASCII sans couleurs), version, LLM, conversation en cours |
-| Barre de saisie | **fixe en bas du terminal** : une ligne grise, l'invite `❯` cyan, une ligne grise ; tout le reste défile au-dessus. Elle **grandit** quand la saisie dépasse une ligne et reprend sa taille après validation ; les confirmations s'y répondent (« Autoriser ? [o/N] ») |
-| Requête de l'utilisateur | `❯` cyan, texte en gras, **sans cadre** dans l'historique |
+| Barre de saisie | **fixe en bas du terminal** : une ligne grise, l'invite `›` cyan, une ligne grise ; tout le reste défile au-dessus. Elle **grandit** quand la saisie dépasse une ligne et reprend sa taille après validation ; les confirmations s'y répondent (« Autoriser ? [o/N] ») |
+| Requête de l'utilisateur | `›` cyan, texte en gras, **sans cadre** dans l'historique |
 | Réponse d'Avenoir | `◆ Avenoir` blanc, puis le texte précédé d'une barre `│` ; **Markdown rendu** (gras, italique, `code`, titres, puces `•`, citations, blocs de code) |
-| Action en cours | `⚙ outil « argument »` jaune, suivi de `✓` vert ou `✗` rouge et de l'erreur, affichés **en direct** |
+| Action en cours | `» outil « argument »` jaune, suivi de `✓` vert ou `✗` rouge et de l'erreur, affichés **en direct** |
 | Réflexion du LLM | toupie animée, temps écoulé et rappel « Ctrl+C pour arrêter », **avec les réponses** (au-dessus de la barre) |
-| Confirmation | cadre jaune « ⚠ Action à confirmer », badge de risque, arguments |
+| Confirmation | cadre jaune « ▲ Action à confirmer », badge de risque, arguments |
 | Risques | `lecture seule` vert, `réversible` jaune, `SENSIBLE` rouge (confirmations, `/outils`) |
 | Erreur | `✗ Erreur :` rouge, sur la sortie d'erreur |
 | Messages système | gris discret |
@@ -312,7 +312,7 @@ La CLI doit être agréable à lire : chaque type d'élément a son style, recon
 - **Réponses découpées aux mots** : chaque ligne garde la barre `│`.
 - **Toutes les sorties de la CLI passent par un seul module d'affichage**, sous un verrou : la toupie (thread principal) et les actions (thread de la requête) ne s'écrivent jamais en même temps ; la toupie est suspendue pendant une confirmation.
 - **Sans terminal ou avec `NO_COLOR`** (https://no-color.org) : ni couleur ni animation, texte simple (les marqueurs Markdown sont tout de même retirés). Sous Windows, les séquences de couleur de la console sont activées.
-- **Journal d'audit** : masqué à l'écran par défaut (les lignes `⚙` montrent déjà les actions) ; visible avec `AVENOIR_LOG=info`. Il sera écrit dans un fichier au jalon 3.
+- **Journal d'audit** : masqué à l'écran par défaut (les lignes `»` montrent déjà les actions) ; visible avec `AVENOIR_LOG=info`. Il sera écrit dans un fichier au jalon 3.
 
 ---
 
@@ -545,6 +545,7 @@ Emplacement cible (phase 3) : `%APPDATA%\avenoir\config.toml` sous Windows, `$XD
 | 34 | **Banc d'essai avec de vrais modèles** (`evals/`, `avenoir-evals`) : requêtes de référence en TOML, vrai agent et vrai fournisseur, mais **doublures d'outils** (mêmes nom, description, schéma et risque, résultats préparés) ; rapport Markdown versionné ; jamais lancé par ctest ni la CI | Mesurer plutôt que deviner (choix des modèles, effet d'une phrase du prompt) ; reproductible et sans effet sur la machine ; les doublures permettent de tester les injections dans les résultats d'outils |
 | 35 | **`reasoning_effort`** facultatif pour `openai_compatible` (« none » recommandé en local) | Les modèles qui réfléchissent avant de répondre ajoutent des secondes de latence et des centaines de tokens, inacceptables pour un assistant système ; « none » ne dégrade pas les résultats du banc |
 | 36 | **Prompt système v3** et **modèles recommandés** (Gemma 4 26B-A4B en local 24 Go, Ministral 3 8B en léger, Claude en distant), choisis sur le banc d'essai ; la consigne de protocole de `claude_code` dit que les outils listés sont disponibles et se demandent dans `tool_calls` | Chaque règle du prompt répond à un échec mesuré ; une règle qui dit seulement quand demander rend un petit modèle hésitant (v2). En léger, la sécurité départage : on préfère le modèle qui n'a suivi aucune injection |
+| 37 | **Mêmes symboles d'une colonne sur tous les systèmes** dans la CLI : `›` (requête), `»` (action), `▲` (avertissement), au lieu de `❯`, `⚙` et `⚠` | Essai sous Windows : `❯` manque aux polices de console (carré), `⚙` et `⚠` y sont dessinés en emoji de double largeur qui chevauchent le texte ; un seul jeu de symboles évite deux apparences à maintenir |
 
 ---
 

@@ -152,7 +152,8 @@ void ModulesUi::print_status() const {
             display().plain("    " + gray("variables transmises : " + join(status.env, ", ")));
         }
         for (const auto& tool : status.tools) {
-            display().plain(std::format("    {} {}  {}", paint("⚙", {.color = Color::Yellow}),
+            display().plain(std::format("    {} {}  {}",
+                                        paint(kToolGlyph, {.color = Color::Yellow}),
                                         terminal::pad(paint(tool.name, {.bold = true}), 26),
                                         terminal::risk_badge(tool.risk)));
         }
