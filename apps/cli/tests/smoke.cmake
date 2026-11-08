@@ -19,6 +19,9 @@ execute_process(
     OUTPUT_VARIABLE output
     ERROR_VARIABLE errors
     RESULT_VARIABLE code
+    # Avenoir écrit en UTF-8 ; sans cela, CMake décode avec la page de code de
+    # la console (850 sur un Windows français) et les accents sont illisibles.
+    ENCODING UTF-8
     TIMEOUT 60)
 
 if(NOT code EQUAL 0)
