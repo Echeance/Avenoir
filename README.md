@@ -161,7 +161,7 @@ Trois modèles locaux, selon ce que fait la carte graphique :
 | Modèle | Quand | VRAM | Réponse |
 |---|---|---|---|
 | **`gemma4:26b-a4b`** | au quotidien, quand la carte est libre : le plus fiable et le plus rapide du banc d'essai | ~21 Go | ~0,8 s |
-| **`qwen3.8:27b`** | quand Gemma se trompe ou pour un deuxième avis : aussi fiable, deux fois plus lent | ~20 Go | ~1,6 s |
+| **`qwen3.8:27b`** | pour le code et les questions qui demandent une forte réflexion (avec `/raisonnement élevé`) : aussi fiable sur le banc, deux fois plus lent | ~20 Go | ~1,6 s (sans raisonnement) |
 | **`ministral-3:8b`** | quand la carte sert à autre chose (jeu, rendu…) : moitié moins de mémoire, aucune injection suivie sur le banc d'essai | ~11 Go | ~0,8 s |
 
 ```toml
@@ -172,7 +172,7 @@ model = "gemma4:26b-a4b"
 temperature = 0.2
 reasoning_effort = "none"
 
-[models.qwen]                   # deuxième avis : « passe sur le modèle qwen »
+[models.qwen]                   # code et fortes réflexions : « passe sur le modèle qwen »
 provider = "openai_compatible"
 base_url = "http://localhost:11434/v1"
 model = "qwen3.8:27b"
