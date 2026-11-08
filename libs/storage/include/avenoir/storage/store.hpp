@@ -25,7 +25,7 @@ struct ConversationInfo {
     std::size_t message_count = 0;
 };
 
-/// Risque d'un outil de module choisi avec /risque (PROJECT.md § 2.6).
+/// Risque d'un outil de module choisi avec /risque (docs/PROJECT.md § 2.6).
 struct RiskChoice {
     std::string tool; ///< Nom complet (`id__outil`).
     core::RiskLevel risk = core::RiskLevel::Sensitive;

@@ -1,6 +1,6 @@
 # Roadmap d'Avenoir
 
-> Plan de travail détaillé, découpé en jalons livrables. La vision et les grandes phases sont dans [`PROJECT.md`](../PROJECT.md) (§ 6) ; ce document dit **quoi faire, dans quel ordre, et quand c'est fini**.
+> Plan de travail détaillé, découpé en jalons livrables. La vision et les grandes phases sont dans [`PROJECT.md`](PROJECT.md) (§ 6) ; ce document dit **quoi faire, dans quel ordre, et quand c'est fini**.
 >
 > Légende : ✅ fait · 🔄 en cours · ⬜ à faire · **P1** indispensable · **P2** important · **P3** confort
 

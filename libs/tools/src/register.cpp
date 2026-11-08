@@ -13,7 +13,7 @@ core::Result<void> register_native_tools(core::ToolRegistry& registry) {
         return added;
     }
     // Un outil indisponible sur cet OS n'est pas enregistré : le LLM ne doit
-    // pas voir un outil inutilisable (PROJECT.md § 4.3).
+    // pas voir un outil inutilisable (docs/PROJECT.md § 4.3).
     if (platform::supports_launching()) {
         if (auto added = registry.add(make_launch_app_tool()); !added) {
             return added;

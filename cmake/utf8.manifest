@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <!-- Windows : UTF-8 comme page de codes active du programme (Windows 10 1903+).
      Les arguments, chemins et variables d'environnement reçus en chaînes
-     étroites sont alors en UTF-8, comme sur Linux (PROJECT.md § 4.3). -->
+     étroites sont alors en UTF-8, comme sur Linux (docs/PROJECT.md § 4.3). -->
 <assembly manifestVersion="1.0" xmlns="urn:schemas-microsoft-com:asm.v1">
   <application>
     <windowsSettings>

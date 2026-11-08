@@ -16,7 +16,7 @@ enum class ErrorCode : std::uint8_t {
     Module,          ///< Échec d'un module externe (lancement, délai, réponse invalide…).
 };
 
-/// Erreur renvoyée par les bibliothèques (jamais d'exception, voir PROJECT.md § 4.2).
+/// Erreur renvoyée par les bibliothèques (jamais d'exception, voir docs/PROJECT.md § 4.2).
 struct Error {
     ErrorCode code = ErrorCode::Config;
     std::string message;

@@ -52,7 +52,7 @@ struct ToolError {
 struct ToolOutput;
 using ToolResult = std::expected<ToolOutput, ToolError>;
 
-/// Moyen de défaire une action (PROJECT.md § 2.4, « Annulation des actions »).
+/// Moyen de défaire une action (docs/PROJECT.md § 2.4, « Annulation des actions »).
 /// `run` doit **vérifier que l'état n'a pas changé** depuis l'action avant de
 /// restaurer, et échouer sinon plutôt que d'écraser quelque chose.
 struct UndoAction {

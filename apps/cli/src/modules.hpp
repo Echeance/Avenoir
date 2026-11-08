@@ -16,7 +16,7 @@
 namespace avenoir::cli {
 
 /// Phrase exacte exigée pour abaisser le risque d'un outil de module
-/// (PROJECT.md § 2.6, décision 21).
+/// (docs/PROJECT.md § 2.6, décision 21).
 inline constexpr std::string_view kAgreementPhrase = "Je sais ce que je fais";
 
 /// Modules dans la CLI : /modules, /risque et commandes des modules.

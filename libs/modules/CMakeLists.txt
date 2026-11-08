@@ -1,5 +1,5 @@
 # avenoir::modules — hôte de modules : manifestes, processus JSON-RPC sur
-# stdio, compatibilité MCP (PROJECT.md § 2.6).
+# stdio, compatibilité MCP (docs/PROJECT.md § 2.6).
 
 if(WIN32)
     set(_avenoir_modules_platform src/platform/windows.cpp)

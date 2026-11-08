@@ -7,7 +7,7 @@
 // Couleurs : désactivées hors d'un terminal ou si NO_COLOR est défini.
 //
 // Ctrl+C ne ferme pas Avenoir : il arrête l'action en cours puis propose
-// d'annuler ce qui peut l'être (PROJECT.md § 2.4). /quitter ou Ctrl+D quitte.
+// d'annuler ce qui peut l'être (docs/PROJECT.md § 2.4). /quitter ou Ctrl+D quitte.
 
 #include <algorithm>
 #include <atomic>
@@ -476,7 +476,7 @@ int run(int argc, char** argv) {
 } // namespace
 
 int main(int argc, char** argv) {
-    // Seul endroit où les exceptions sont tolérées (PROJECT.md § 4.2) :
+    // Seul endroit où les exceptions sont tolérées (docs/PROJECT.md § 4.2) :
     // elles sont toutes arrêtées ici.
     try {
         return run(argc, argv);

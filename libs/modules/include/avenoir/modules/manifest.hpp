@@ -59,7 +59,7 @@ struct TabDeclaration {
     TabKind kind = TabKind::Declarative;
 };
 
-/// Contenu validé d'un `module.toml` (PROJECT.md § 2.6). Il est lu **avant**
+/// Contenu validé d'un `module.toml` (docs/PROJECT.md § 2.6). Il est lu **avant**
 /// de lancer le module : rien de ce qu'il déclare n'est exécuté à ce stade.
 struct Manifest {
     std::string id; ///< `[a-z0-9-]`, égal au nom du dossier.

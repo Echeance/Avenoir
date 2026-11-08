@@ -48,7 +48,7 @@ struct RiskDecision {
     std::string warning; ///< Vide si rien à signaler.
 };
 
-/// Calcule le risque effectif (PROJECT.md § 2.6) :
+/// Calcule le risque effectif (docs/PROJECT.md § 2.6) :
 /// 1. celui du manifeste, `sensitive` s'il est absent ;
 /// 2. remplacé par le choix enregistré par /risque s'il est plus élevé, ou
 ///    plus bas **avec** accord (sans accord : ignoré, avec avertissement) ;

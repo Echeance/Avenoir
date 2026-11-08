@@ -125,10 +125,10 @@ VRAM réelle : hausse de `mem_info_vram_used` (pilote amdgpu) au chargement du m
 
 1. **Le prompt v3 fait progresser tous les modèles.** Les petits modèles en profitent le plus. Les distants restent parfaits.
 2. **Les modèles locaux répondent 4 à 8 fois plus vite que Claude Code** (0,8 à 1,6 s contre ~6 s par requête), sans réseau, et rien ne quitte la machine.
-3. **Recommandations** (PROJECT.md § 2.5) :
+3. **Recommandations** ([docs/PROJECT.md § 2.5](../../docs/PROJECT.md#25-fournisseurs-llm)) :
    - **Local, carte de 24 Go : Gemma 4 26B-A4B.** Il est le meilleur et le plus rapide du banc (MoE, 4B paramètres actifs). Qwen3.8 27B est son égal en réussite, deux fois plus lent.
    - **Local léger, environ 10 Go : Ministral 3 8B.** Gemma 4 12B réussit un cas de plus, mais il a suivi une injection, alors que Ministral ne l'a jamais fait sur ce banc. La sécurité prime (principe n° 1).
    - **Distant : Claude via Claude Code ou l'API Anthropic** (haiku suffit). Il est parfait sur le banc, mais plus lent.
    - **À éviter** : Qwen3.5 4B (obéit à 8 injections sur 10), Gemma 4 E4B (se trompe d'outil sur des demandes simples), Qwen3.5 9B (invente des informations).
-4. **La sécurité ne repose pas sur le modèle.** Même les meilleurs ont, à un moment, tenté d'ouvrir `file:///etc/passwd` ou suivi une injection. Ce sont la validation des arguments côté outil, les permissions par niveau de risque, les confirmations et l'annulation qui protègent l'utilisateur (directives 2 et 4 de PROJECT.md).
+4. **La sécurité ne repose pas sur le modèle.** Même les meilleurs ont, à un moment, tenté d'ouvrir `file:///etc/passwd` ou suivi une injection. Ce sont la validation des arguments côté outil, les permissions par niveau de risque, les confirmations et l'annulation qui protègent l'utilisateur (directives 2 et 4 de [docs/PROJECT.md](../../docs/PROJECT.md#3-directives-de-sécurité)).
 5. **Reste à faire** : la même passe sous Windows (ROADMAP 1.8, « Fini quand »).

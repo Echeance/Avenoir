@@ -8,7 +8,7 @@
 [llm]
 provider = "openai_compatible"
 base_url = "http://localhost:11434/v1"
-model = "gemma4:26b-a4b"      # carte de 24 Go ; plus léger : "ministral-3:8b" (PROJECT.md § 2.5)
+model = "gemma4:26b-a4b"      # carte de 24 Go ; plus léger : "ministral-3:8b" (docs/PROJECT.md § 2.5)
 temperature = 0.2
 reasoning_effort = "none"     # modèles qui « réfléchissent » (Qwen…) : bien plus rapide
 

@@ -96,10 +96,14 @@ avenoir/
 ├── CMakePresets.json       Préréglages : debug, release, asan (Linux / Windows)
 ├── vcpkg.json              Dépendances (mode manifeste)
 ├── config.example.toml     Configuration commentée
-├── PROJECT.md              Ce document
 ├── modules/                Modules fournis avec Avenoir (programmes séparés) : meteo/
 ├── evals/                  Banc d'essai avec de vrais modèles : requêtes de référence, rapports
-├── docs/                   ROADMAP.md, FONCTIONNEMENT.md (comment le code s'articule), images du README
+├── docs/
+│   ├── PROJECT.md          Ce document
+│   ├── FEATURES.md         Liste exhaustive des fonctionnalités existantes
+│   ├── ROADMAP.md          Plan de travail détaillé
+│   ├── FONCTIONNEMENT.md   Comment le code s'articule
+│   └── readme/             Images du README et leurs générateurs
 ├── libs/
 │   ├── core/               Cœur, sans dépendance à l'OS, au LLM ou à la voix
 │   │   ├── include/avenoir/core/
@@ -175,7 +179,7 @@ Chaque dossier de `libs/` est une bibliothèque CMake (`avenoir::core`, `avenoir
 
 Pour les modèles qui « réfléchissent » avant de répondre (Qwen…), `reasoning_effort = "none"` (`openai_compatible`) coupe cette réflexion : la latence passe de plusieurs secondes à environ une seconde, sans perte mesurable sur les requêtes de référence.
 
-**Modèles recommandés**, d'après le banc d'essai (`evals/`, 24 requêtes de référence : simples, multi-outils, ambiguës, injections, refus). Les chiffres, la méthode et l'historique du prompt sont dans [`evals/resultats/COMPARAISON.md`](evals/resultats/COMPARAISON.md).
+**Modèles recommandés**, d'après le banc d'essai (`evals/`, 24 requêtes de référence : simples, multi-outils, ambiguës, injections, refus). Les chiffres, la méthode et l'historique du prompt sont dans [`evals/resultats/COMPARAISON.md`](../evals/resultats/COMPARAISON.md).
 
 | Usage | Modèle | Réussite | Latence | Mémoire |
 |---|---|---|---|---|
@@ -414,6 +418,7 @@ La **confidentialité** et la **sécurité** sont les aspects primordiaux d'Aven
 
 - Branches courtes, messages de commit au format *Conventional Commits* (`feat:`, `fix:`, `refactor:`…).
 - Toute décision d'architecture notable : ajout d'une entrée dans la section 7 (« Journal des décisions »).
+- `docs/FEATURES.md` liste toutes les fonctionnalités existantes, de façon exhaustive : chaque fonctionnalité ajoutée, modifiée ou retirée y est reportée dans le même commit.
 - Images du README dans `docs/readme/`, avec leurs générateurs : `penguin.py` (pingouin SVG, à garder identique à `Display::banner`), `capture.sh` + `terminal_render.py` (capture réelle de la CLI rendue en PNG).
 
 ---
@@ -448,7 +453,7 @@ Emplacement cible (phase 3) : `%APPDATA%\avenoir\config.toml` sous Windows, `$XD
 
 ## 6. Feuille de route
 
-> Plan détaillé, priorités et critères de fin : [`docs/ROADMAP.md`](docs/ROADMAP.md).
+> Plan détaillé, priorités et critères de fin : [`ROADMAP.md`](ROADMAP.md).
 
 ### Phase 1 : socle en mode texte
 - [x] Projet CMake + vcpkg + préréglages

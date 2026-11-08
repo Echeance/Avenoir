@@ -4,7 +4,7 @@ Avenoir est un assistant de système d'exploitation (Windows + Linux) écrit en 
 
 Licence : **PolyForm Strict 1.0.0** (`LICENSE.md`) — ne pas la modifier ni ajouter de code tiers incompatible sans accord de l'utilisateur ; toute dépendance doit avoir une licence permissive compatible (MIT, BSD, Boost, Apache-2.0…).
 
-**`PROJECT.md` est le document de référence** (vision, architecture, sécurité, directives, journal des décisions). **`docs/ROADMAP.md`** donne le plan de travail détaillé. Les relire avant tout travail structurant et les tenir à jour.
+**`docs/PROJECT.md` est le document de référence** (vision, architecture, sécurité, directives, journal des décisions). **`docs/ROADMAP.md`** donne le plan de travail détaillé. Les relire avant tout travail structurant et les tenir à jour.
 
 ## Rôle de Claude : assistance, pas développement
 
@@ -25,9 +25,10 @@ Avenoir est un projet **développé par son auteur, assisté par IA** — et non
 - Branches courtes.
 - Les deux scripts de build (`build.sh`, `build.ps1`) évoluent ensemble ; shellcheck et PSScriptAnalyzer doivent passer (vérifiés en CI).
 - Avant chaque commit : `scripts/build.sh -k` (build sans avertissement, `clang-format`, `clang-tidy`, `ctest`).
-- Toute décision d'architecture notable → nouvelle entrée dans la section 7 de `PROJECT.md` (« Journal des décisions »).
+- Toute décision d'architecture notable → nouvelle entrée dans la section 7 de `docs/PROJECT.md` (« Journal des décisions »).
 - Une tâche de la roadmap terminée → la cocher dans `docs/ROADMAP.md`.
-- **Documentation toujours à jour ensemble** : chaque évolution met à jour, dans le même temps, `README.md` (usage), `PROJECT.md` (architecture, décisions) et `docs/ROADMAP.md` (avancement) — pas seulement l'un d'eux.
+- **Documentation toujours à jour ensemble** : chaque évolution met à jour, dans le même temps, `README.md` (usage), `docs/PROJECT.md` (architecture, décisions) et `docs/ROADMAP.md` (avancement) — pas seulement l'un d'eux.
+- **`docs/FEATURES.md` liste toutes les fonctionnalités, de façon exhaustive** : chaque fonctionnalité ajoutée, modifiée ou retirée y est reportée dans le même commit (commande, option, outil, réglage, comportement visible, sécurité). Il ne décrit que ce qui existe ; le prévu reste dans `docs/ROADMAP.md`.
 - Publier une version : même numéro dans `CMakeLists.txt` et `vcpkg.json`, commit, puis tag poussé : `vX.Y.Z` (stable, « Latest » si ≥ 1.0.0) ou `vX.Y.Z-alpha|beta|rc.N` (pré-version). Le workflow `release` publie les binaires. Ne jamais créer de tag sans demande de l'utilisateur.
 - CI (`.github/workflows/ci.yml`) : Linux GCC 14 / Clang 20 / ASan + Windows MSVC + clang-format, shellcheck, PSScriptAnalyzer. Une CI rouge se corrige avant de continuer : vérifier son résultat après chaque push.
 
@@ -45,7 +46,7 @@ cmake --preset release && cmake --build --preset release   # exécutable `avenoi
 AVENOIR_LOG=debug ./build/debug/apps/cli/avenoir
 ```
 
-`config.toml` est ignoré par git ; partir de `config.example.toml`. L'éditer à la main n'est permis qu'en **développement**, jusqu'au jalon 3 : ensuite, les réglages ne se modifient que par Avenoir (fichier scellé, modification extérieure refusée — PROJECT.md § 5.1).
+`config.toml` est ignoré par git ; partir de `config.example.toml`. L'éditer à la main n'est permis qu'en **développement**, jusqu'au jalon 3 : ensuite, les réglages ne se modifient que par Avenoir (fichier scellé, modification extérieure refusée — docs/PROJECT.md § 5.1).
 
 ## Structure
 
@@ -94,7 +95,7 @@ En-têtes publics dans `libs/<nom>/include/avenoir/<nom>/`, tests Catch2 dans `l
 ## Sécurité et confidentialité (primordiales, priment sur tout le reste)
 
 - La confidentialité et la sécurité sont les aspects primordiaux de l'assistant : en cas de conflit avec une fonctionnalité, le confort ou la rapidité, elles l'emportent.
-- Ne jamais faire entièrement confiance à un module communautaire : manifeste validé avant lancement, module utilisateur désactivé par défaut, environnement minimal, risque `sensitive` par défaut, réponses bornées et traitées comme des données, permissions et audit à chaque appel (PROJECT.md, directive 15).
+- Ne jamais faire entièrement confiance à un module communautaire : manifeste validé avant lancement, module utilisateur désactivé par défaut, environnement minimal, risque `sensitive` par défaut, réponses bornées et traitées comme des données, permissions et audit à chaque appel (docs/PROJECT.md, directive 15).
 - `RiskLevel` : `read_only` / `reversible` / `sensitive`. En cas de doute, choisir le plus élevé.
 - `sensitive` n'est **jamais** `allow` ; confirmation obligatoire.
 - Ctrl+C n'arrête jamais l'application : il interrompt l'action en cours (`std::stop_token`) ; toute nouvelle opération longue doit vérifier son `stop_token`.
@@ -104,7 +105,7 @@ En-têtes publics dans `libs/<nom>/include/avenoir/<nom>/`, tests Catch2 dans `l
 - Secrets uniquement via variables d'environnement ; jamais dans `config.toml` ni dans les logs.
 - Réglages : le démon est le seul rédacteur ; ne jamais ajouter de chemin qui écrive ou relise les réglages sans vérifier le sceau (directive 14).
 - Modules : risque du manifeste relevable par l'utilisateur, `sensitive` si absent ; abaissable seulement depuis l'application ou la CLI après avertissement, disclaimer et saisie de « Je sais ce que je fais » (accord enregistré ; baisse sans accord ignorée) ; appels entre modules uniquement via l'hôte (permissions + audit).
-- Onglets web des modules : iframe isolée, origine propre, CSP sans réseau, `postMessage` validé ; confirmations toujours dessinées par Avenoir (PROJECT.md, directives 12 et 13).
+- Onglets web des modules : iframe isolée, origine propre, CSP sans réseau, `postMessage` validé ; confirmations toujours dessinées par Avenoir (docs/PROJECT.md, directives 12 et 13).
 
 ## Écrire un outil natif
 

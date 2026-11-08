@@ -59,7 +59,7 @@ struct ActionRecord {
     std::optional<UndoAction> undo; ///< Vide si l'action n'est pas annulable.
 };
 
-/// Journal d'annulation d'une requête (PROJECT.md § 2.4).
+/// Journal d'annulation d'une requête (docs/PROJECT.md § 2.4).
 struct RequestJournal {
     std::string request; ///< Texte de la requête de l'utilisateur.
     std::vector<ActionRecord> actions;

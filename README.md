@@ -18,7 +18,7 @@ Sûr par défaut, extensible par des modules, avec le LLM de votre choix — loc
 [Utilisation](#-utilisation) ·
 [Architecture](#-architecture) ·
 [Feuille de route](#-feuille-de-route) ·
-[Documentation](PROJECT.md)
+[Documentation](docs/PROJECT.md)
 
 </div>
 
@@ -44,6 +44,8 @@ Sûr par défaut, extensible par des modules, avec le LLM de votre choix — loc
 - 🧩 **Modules** : Avenoir s'étend par des programmes séparés, écrits dans n'importe quel langage (outils, commandes, phrases de la voie rapide), y compris les serveurs **MCP** existants. Un module **météo** est fourni : *« quel temps fait-il à Lyon ? »*, `/meteo`, prévisions sur 7 jours.
 - 🎨 **Une CLI soignée** : barre de saisie fixe en bas du terminal, réponses en Markdown, actions affichées en direct, toupie pendant la réflexion — et respect de `NO_COLOR`.
 - 🐧 **Linux et Windows**, compilés et testés à chaque modification.
+
+La liste complète, sans rien omettre : **[docs/FEATURES.md](docs/FEATURES.md)**.
 
 ### Bientôt
 
@@ -71,7 +73,7 @@ Avenoir agit sur une vraie machine et voit vos données : **la confidentialité 
 - **Vos conversations restent chez vous**, dans un fichier lisible par vous seul.
 - **Aucune confiance aveugle envers les modules** : manifeste vérifié avant tout lancement, module que vous installez désactivé tant que vous ne l'activez pas, environnement minimal (pas vos clés d'API), outils `SENSIBLE` par défaut, réponses bornées et nettoyées, chaque appel contrôlé et journalisé. Abaisser le risque d'un outil exige de taper « Je sais ce que je fais ».
 
-Toutes les règles : [PROJECT.md — Directives de sécurité](PROJECT.md#3-directives-de-sécurité).
+Toutes les règles : [PROJECT.md — Directives de sécurité](docs/PROJECT.md#3-directives-de-sécurité).
 
 ---
 
@@ -134,7 +136,7 @@ En local, gardez `reasoning_effort = "none"` : sans lui, les modèles qui « ré
 Les autres sections règlent l'agent (`[agent]`), les permissions par niveau de risque (`[permissions]`) et les modules (`[modules.<id>]` : activation, risque relevé). Tout est commenté dans [`config.example.toml`](config.example.toml).
 
 > [!IMPORTANT]
-> À partir du jalon 3, les réglages ne se modifieront **que depuis Avenoir** : le fichier sera scellé et toute modification faite en dehors sera refusée ([PROJECT.md § 5.1](PROJECT.md#51-réglages-modifiables-uniquement-par-avenoir)).
+> À partir du jalon 3, les réglages ne se modifieront **que depuis Avenoir** : le fichier sera scellé et toute modification faite en dehors sera refusée ([PROJECT.md § 5.1](docs/PROJECT.md#51-réglages-modifiables-uniquement-par-avenoir)).
 
 ### 🧑‍💻 Le setup de l'auteur
 
@@ -210,7 +212,7 @@ Les modules fournis sont dans `modules/`, à côté de l'exécutable ; ceux que 
 
 Le module **météo** utilise [Open-Meteo](https://open-meteo.com) (données CC BY 4.0, sans clé d'API) : seuls le nom de la ville et ses coordonnées sont envoyés. Réglez votre ville une fois (*« ma ville est Lyon »* ou `/ville Lyon`, annulable) ; précisez le pays en cas d'homonymes (*« météo à Brest, France »*).
 
-Écrire un module : [PROJECT.md § 4.5](PROJECT.md#45-écrire-un-module).
+Écrire un module : [PROJECT.md § 4.5](docs/PROJECT.md#45-écrire-un-module).
 
 ---
 
@@ -243,7 +245,7 @@ Le cœur est écrit en **C++23**, découpé en bibliothèques indépendantes :
 | `modules/meteo` | module météo fourni (programme séparé) |
 | `evals` | banc d'essai avec de vrais modèles (`avenoir-evals`) |
 
-Vision, décisions et directives : **[PROJECT.md](PROJECT.md)**. Comment le code s'articule (démarrage, trajet d'une requête, rôle de chaque bibliothèque) : **[docs/FONCTIONNEMENT.md](docs/FONCTIONNEMENT.md)**.
+Vision, décisions et directives : **[docs/PROJECT.md](docs/PROJECT.md)**. Comment le code s'articule (démarrage, trajet d'une requête, rôle de chaque bibliothèque) : **[docs/FONCTIONNEMENT.md](docs/FONCTIONNEMENT.md)**.
 
 ---
 

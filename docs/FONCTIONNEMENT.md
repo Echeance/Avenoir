@@ -1,6 +1,6 @@
 # Fonctionnement du code d'Avenoir
 
-Ce document décrit **le code tel qu'il existe aujourd'hui** : comment il démarre, le trajet d'une requête et le rôle de chaque bibliothèque. La vision et l'architecture cible (démon, interface web, voix) sont dans [`PROJECT.md`](../PROJECT.md), l'avancement dans [`ROADMAP.md`](ROADMAP.md). Ce document se met à jour avec le code, comme eux.
+Ce document décrit **le code tel qu'il existe aujourd'hui** : comment il démarre, le trajet d'une requête et le rôle de chaque bibliothèque. La vision et l'architecture cible (démon, interface web, voix) sont dans [`PROJECT.md`](PROJECT.md), l'avancement dans [`ROADMAP.md`](ROADMAP.md). Ce document se met à jour avec le code, comme eux.
 
 Aujourd'hui, Avenoir est **une CLI** (`apps/cli`, exécutable `avenoir`) qui contient l'agent. Le démon et les interfaces graphiques viendront aux jalons 3 et 6. Ils réutiliseront les mêmes bibliothèques : la CLI ne fait qu'assembler.
 

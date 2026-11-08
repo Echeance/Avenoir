@@ -53,14 +53,14 @@ struct AgentConfig {
 };
 
 /// Réglages de l'utilisateur pour un module (`[modules.<id>]`). Le module
-/// lui-même se décrit dans son `module.toml` (PROJECT.md § 2.6).
+/// lui-même se décrit dans son `module.toml` (docs/PROJECT.md § 2.6).
 struct ModuleSettings {
     /// Absent : activé pour un module fourni avec Avenoir, désactivé pour un
     /// module installé par l'utilisateur (directive de sécurité n° 15).
     std::optional<bool> enabled;
     /// Risque demandé par outil (nom court, sans le préfixe `id__`). Il ne
     /// peut que **relever** celui du manifeste : une baisse écrite ici est
-    /// ignorée (elle exige un accord enregistré, PROJECT.md § 2.6).
+    /// ignorée (elle exige un accord enregistré, docs/PROJECT.md § 2.6).
     std::map<std::string, RiskLevel, std::less<>> risk;
 };
 
