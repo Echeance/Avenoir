@@ -43,6 +43,10 @@ Plateformes : **Linux** et **Windows** (sauf mention contraire).
   - nom reconnu sans casse ni accents (« Léger » → `leger`), ou par identifiant du modèle (« ministral-3:8b ») ;
   - **passer à un modèle distant demande toujours confirmation** (la conversation sortirait de la machine) ; local = adresse de la machine (`localhost`, `127.x`, `::1`) ou `local = true` déclaré pour un serveur du réseau local ;
   - modèle actif affiché dans le cadre d'accueil.
+- **Charger, décharger, recharger un modèle local** (servi par Ollama, `keep_alive`) : commandes `/charger [nom]`, `/decharger [nom]`, `/recharger [nom]` (le modèle actif par défaut), outils `load_llm` (option `reload`) et `unload_llm` que le modèle peut appeler, voie rapide (« décharge / stoppe / arrête / éteins le modèle [X] », « libère la carte graphique », « charge / allume / démarre / lance le modèle [X] », « recharge le modèle [X] ») :
+  - décharger libère la mémoire vidéo (mesuré : 12 Go → 1 Go pour Ministral 3 8B) ; le modèle se recharge tout seul à la requête suivante ;
+  - décharger le modèle actif pendant une requête est **différé à la fin de la réponse** (sinon elle le rechargerait aussitôt), puis annoncé ;
+  - refusé pour un modèle distant ou un serveur qui n'est pas Ollama, avec un message clair.
 
 ## 2. Voie rapide
 
@@ -127,7 +131,7 @@ Plateformes : **Linux** et **Windows** (sauf mention contraire).
 ## 9. Interface en ligne de commande
 
 - Exécutable `avenoir [chemin/config.toml]`.
-- **Commandes** : `/aide`, `/outils`, `/annuler`, `/modules`, `/risque [outil niveau]`, `/modele [nom]`, `/nouvelle`, `/reset`, `/conversations`, `/ouvrir`, `/renommer`, `/supprimer`, `/historique`, `/transcription`, `/quitter` (`/q`), et celles des modules.
+- **Commandes** : `/aide`, `/outils`, `/annuler`, `/modules`, `/risque [outil niveau]`, `/modele [nom]`, `/charger`, `/decharger`, `/recharger`, `/nouvelle`, `/reset`, `/conversations`, `/ouvrir`, `/renommer`, `/supprimer`, `/historique`, `/transcription`, `/quitter` (`/q`), et celles des modules.
 - **Saisie** (replxx) : édition de ligne, historique des saisies conservé entre deux lancements, complétion des commandes (Tab), Ctrl+D pour quitter.
 - **Apparence** :
   - barre de saisie fixe en bas du terminal (grandit avec la saisie, suit les redimensionnements, sous Windows aussi) ;

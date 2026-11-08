@@ -252,3 +252,100 @@ TEST_CASE("modèle de départ : le dernier utilisé, sinon le premier", "[models
     CHECK(none.active() == nullptr);
     CHECK_FALSE(none.switch_to("gemma").has_value());
 }
+
+namespace {
+
+struct Sent {
+    std::string url;
+    nlohmann::json body;
+};
+
+llm::JsonPoster recording_poster(std::vector<Sent>& sent) {
+    return [&sent](const std::string& url, const nlohmann::json& body,
+                   const std::stop_token& /*stop*/) -> core::Result<nlohmann::json> {
+        sent.push_back({.url = url, .body = body});
+        return nlohmann::json::object();
+    };
+}
+
+} // namespace
+
+TEST_CASE("charger, décharger, recharger un modèle local", "[models]") {
+    auto agent = make_agent();
+    std::vector<Sent> sent;
+    llm::ModelSwitcher switcher(sample_models(), nullptr, fake_factory(), recording_poster(sent));
+    switcher.attach(agent);
+    REQUIRE(switcher.start("gemma").has_value());
+
+    // Un autre modèle que l'actif : tout de suite.
+    const auto loaded = switcher.set_residency("leger", llm::Residency::Load, {});
+    REQUIRE(loaded.has_value());
+    CHECK(loaded->contains("chargé"));
+    REQUIRE(sent.size() == 1);
+    CHECK(sent[0].url == "http://localhost:11434/api/generate");
+    CHECK(sent[0].body == nlohmann::json{{"model", "ministral-3:8b"}});
+
+    REQUIRE(switcher.set_residency("leger", llm::Residency::Unload, {}).has_value());
+    REQUIRE(sent.size() == 2);
+    CHECK(sent[1].body == nlohmann::json{{"model", "ministral-3:8b"}, {"keep_alive", 0}});
+
+    REQUIRE(switcher.set_residency("leger", llm::Residency::Reload, {}).has_value());
+    REQUIRE(sent.size() == 4); // déchargé puis chargé
+    CHECK(sent[2].body.contains("keep_alive"));
+    CHECK_FALSE(sent[3].body.contains("keep_alive"));
+
+    // Le modèle actif : différé à la fin de la requête (sa réponse le rechargerait).
+    const auto deferred = switcher.set_residency("", llm::Residency::Unload, {});
+    REQUIRE(deferred.has_value());
+    CHECK(deferred->contains("à la fin de cette réponse"));
+    CHECK(sent.size() == 4);
+    const auto done = switcher.finish_request();
+    CHECK(done.value_or("").contains("déchargé"));
+    REQUIRE(sent.size() == 5);
+    CHECK(sent[4].body == nlohmann::json{{"model", "gemma4:26b-a4b"}, {"keep_alive", 0}});
+    CHECK_FALSE(switcher.finish_request().has_value()); // plus rien en attente
+
+    // Rechargé avant la fin de la requête : le déchargement différé est annulé.
+    REQUIRE(switcher.set_residency("gemma", llm::Residency::Unload, {}).has_value());
+    REQUIRE(switcher.set_residency("gemma", llm::Residency::Load, {}).has_value());
+    CHECK_FALSE(switcher.finish_request().has_value());
+
+    // Modèle distant ou inconnu : refusé, rien envoyé.
+    const auto before = sent.size();
+    CHECK_FALSE(switcher.set_residency("claude", llm::Residency::Load, {}).has_value());
+    CHECK_FALSE(switcher.set_residency("gpt", llm::Residency::Unload, {}).has_value());
+    CHECK(sent.size() == before);
+}
+
+TEST_CASE("outils et voie rapide pour charger et décharger", "[models]") {
+    auto agent = make_agent();
+    std::vector<Sent> sent;
+    llm::ModelSwitcher switcher(sample_models(), nullptr, fake_factory(), recording_poster(sent));
+    switcher.attach(agent);
+    REQUIRE(switcher.start(std::nullopt).has_value());
+    const auto tools = llm::make_residency_tools(switcher);
+    REQUIRE(tools.size() == 2);
+    CHECK(tools[0]->spec().name == "unload_llm");
+    CHECK(tools[1]->spec().name == "load_llm");
+    CHECK(tools[1]->spec().input_schema["properties"].contains("reload"));
+
+    REQUIRE(tools[1]->call({{"name", "leger"}, {"reload", true}}, {}).has_value());
+    CHECK(sent.size() == 2);
+    CHECK(tools[0]->call(nlohmann::json::object(), {})->content.contains("à la fin"));
+    CHECK_FALSE(tools[0]->call({{"name", "claude"}}, {}).has_value());
+
+    core::FastRouter router;
+    REQUIRE(llm::register_residency_rules(router).has_value());
+    const auto route = [&router](std::string_view input) {
+        return router.route(input).value_or(core::FastRoute{.tool = "", .arguments = {}});
+    };
+    CHECK(route("décharge le modèle").tool == "unload_llm");
+    CHECK(route("Stoppe le modèle gemma").arguments == nlohmann::json{{"name", "gemma"}});
+    CHECK(route("libère la carte graphique").tool == "unload_llm");
+    CHECK(route("allume le modèle leger").arguments == nlohmann::json{{"name", "leger"}});
+    CHECK(route("recharge le modèle").arguments == nlohmann::json{{"reload", true}});
+    CHECK(route("recharge le llm gemma").arguments ==
+          nlohmann::json{{"reload", true}, {"name", "gemma"}});
+    CHECK(route("arrête la musique").tool.empty());
+    CHECK(route("charge mon téléphone").tool.empty());
+}

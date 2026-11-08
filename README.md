@@ -180,7 +180,7 @@ reasoning_effort = "none"
 ```
 
 > [!TIP]
-> Un modèle chargé garde sa mémoire vidéo même sans rien faire. Le calcul, lui, est quasi nul au repos. Ollama le décharge **5 minutes** après la dernière requête (`OLLAMA_KEEP_ALIVE`). Pour libérer la carte tout de suite, avant de jouer : `ollama stop gemma4:26b-a4b`. La requête suivante le recharge, ce qui prend environ 6 s pour Ministral et 19 s pour Gemma.
+> Un modèle chargé garde sa mémoire vidéo même sans rien faire. Le calcul, lui, est quasi nul au repos. Ollama le décharge **5 minutes** après la dernière requête (`OLLAMA_KEEP_ALIVE`). Pour libérer la carte tout de suite, avant de jouer : `/decharger`, ou *« libère la carte graphique »*. La requête suivante le recharge, ce qui prend environ 6 s pour Ministral et 19 s pour Gemma.
 
 ---
 
@@ -201,6 +201,7 @@ avenoir chemin/config.toml
 | `/outils` | outils disponibles et leur niveau de risque |
 | `/annuler` | annuler les actions de la dernière requête (répétable) |
 | `/modele [nom]` | modèles configurés, ou passer à un autre (aussi : *« passe sur le modèle leger »*) ; un modèle distant demande confirmation |
+| `/charger [nom]` · `/decharger [nom]` · `/recharger [nom]` | charger un modèle local en mémoire, le décharger (libère la mémoire vidéo, par exemple avant un jeu) ou le recharger ; le modèle actif par défaut (aussi : *« décharge le modèle »*, *« libère la carte graphique »*, *« allume le modèle gemma »*) |
 | `/nouvelle [titre]` | nouvelle conversation (l'ancienne reste dans `/conversations`) |
 | `/reset` | efface la conversation en cours (messages et écran) après confirmation, en proposant d'en garder une transcription Markdown (`/supprimer` la propose aussi) |
 | `/transcription` | enregistre la conversation en cours dans un fichier Markdown (`transcriptions/` du dossier de données) |

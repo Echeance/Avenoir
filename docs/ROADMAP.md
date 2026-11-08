@@ -197,6 +197,7 @@ L'ordre suit un principe : **chaque jalon produit un assistant utilisable**, plu
 - ✅ Outil `switch_llm` (reversible) et règles de voie rapide (« passe sur le modèle léger », « utilise le modèle claude ») ; annulable (retour au modèle précédent) ; nom reconnu sans casse ni accents
 - ✅ Passer à un modèle distant demande confirmation (directive de sécurité n° 17) ; local = adresse de la machine ou `local = true` déclaré
 - ✅ Modèle actif affiché dans le cadre d'accueil ; changement journalisé (journal d'audit de l'outil)
+- ✅ Charger, décharger, recharger un modèle local (Ollama) : `/charger`, `/decharger`, `/recharger`, outils `load_llm` / `unload_llm`, voie rapide (« décharge le modèle », « libère la carte graphique », « allume le modèle gemma ») ; déchargement du modèle actif différé à la fin de la réponse
 - ⬜ Interdit en mode « local uniquement » (quand ce mode existera, jalon 3)
 
 **Fini quand :** « monte le son », « mets en pause », « cherche la météo à Lyon », « ouvre le navigateur », « passe sur le modèle léger » fonctionnent sur les deux OS.
@@ -219,7 +220,7 @@ L'ordre suit un principe : **chaque jalon produit un assistant utilisable**, plu
 - ⬜ **P1** Permissions durables (« toujours autoriser cet outil de ce module ») et révocables ; permissions de module accordées à l'installation, révocables
 - ⬜ **P2** Réévaluer le modèle de concurrence (décision 12) pour le démon
 - ⬜ **P2** Raccourci clavier global qui ouvre une saisie rapide
-- ⬜ **P2** **Mémoire vidéo partagée avec les jeux** : le démon libère la carte graphique quand une application exigeante passe en plein écran (déchargement du modèle local, `keep_alive = 0` d'Ollama) ou bascule sur le modèle léger réglé par l'utilisateur, puis revient au modèle habituel ensuite ; jamais de changement silencieux (notification, journal) ; réglable (désactivé, décharger, basculer). Mesures de départ : Gemma 4 26B-A4B ~21 Go, Ministral 3 8B ~11 Go, rechargement en 19 s et 6 s (RX 7900 XTX)
+- ⬜ **P2** **Mémoire vidéo partagée avec les jeux** (déjà possible à la main : `/decharger`, « libère la carte graphique », 2.6) : le démon libère la carte graphique quand une application exigeante passe en plein écran (déchargement du modèle local, `keep_alive = 0` d'Ollama) ou bascule sur le modèle léger réglé par l'utilisateur, puis revient au modèle habituel ensuite ; jamais de changement silencieux (notification, journal) ; réglable (désactivé, décharger, basculer). Mesures de départ : Gemma 4 26B-A4B ~21 Go, Ministral 3 8B ~11 Go, rechargement en 19 s et 6 s (RX 7900 XTX)
 - ⬜ **P2** Mode « local uniquement » : refuse tout fournisseur distant (directive de sécurité n° 10)
 - ⬜ **P2** **Magasin de modèles** (CLI `/modeles`, puis application, 6.4) : modèles recommandés avec leur score au banc d'essai, mémoire vidéo et disque nécessaires ; installation et désinstallation par Ollama (ou fichier GGUF vérifié par somme de contrôle) ; ajout d'un fournisseur distant avec clé d'API dans le trousseau ; modèle non évalué signalé (directive n° 17)
 - ⬜ **P2** Secrets (clés d'API) dans le trousseau du système (Credential Manager, Secret Service), qui sert déjà au sceau des réglages

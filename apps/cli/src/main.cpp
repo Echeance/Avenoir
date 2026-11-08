@@ -30,6 +30,7 @@
 #include <variant>
 #include <vector>
 
+#include <nlohmann/json.hpp>
 #include <spdlog/sinks/stdout_color_sinks.h>
 #include <spdlog/spdlog.h>
 
@@ -84,18 +85,18 @@ void setup_logging() {
 /// Commandes d'Avenoir (sans « / »), alias compris : un module ne peut pas
 /// en déclarer une du même nom.
 std::vector<std::string> builtin_commands() {
-    return {"aide",    "annuler", "conversations", "help",     "historique",
-            "modules", "model",   "modele",        "nouvelle", "ouvrir",
-            "outils",  "q",       "quit",          "quitter",  "renommer",
-            "reset",   "risque",  "supprimer",     "tools",    "transcription"};
+    return {"aide",       "annuler",   "charger",   "conversations", "decharger",    "help",
+            "historique", "recharger", "modules",   "model",         "modele",       "nouvelle",
+            "ouvrir",     "outils",    "q",         "quit",          "quitter",      "renommer",
+            "reset",      "risque",    "supprimer", "tools",         "transcription"};
 }
 
 /// Commandes proposées à la complétion (Tab).
 std::vector<std::string> command_names(const cli::ModulesUi& modules) {
-    std::vector<std::string> names{"/aide",   "/annuler",   "/conversations", "/historique",
-                                   "/modele", "/modules",   "/nouvelle",      "/ouvrir",
-                                   "/outils", "/quitter",   "/renommer",      "/reset",
-                                   "/risque", "/supprimer", "/transcription"};
+    std::vector<std::string> names{
+        "/aide",       "/annuler",  "/charger", "/decharger", "/recharger", "/conversations",
+        "/historique", "/modele",   "/modules", "/nouvelle",  "/ouvrir",    "/outils",
+        "/quitter",    "/renommer", "/reset",   "/risque",    "/supprimer", "/transcription"};
     std::ranges::copy(modules.completion_names(), std::back_inserter(names));
     return names;
 }
@@ -113,6 +114,10 @@ void print_help(const cli::ModulesUi& modules) {
     out += command("/outils", "outils disponibles et leur niveau de risque") + "\n";
     out += command("/annuler", "annuler les actions de la dernière requête (répétable)") + "\n";
     out += command("/modele [nom]", "modèles disponibles, ou changer de modèle") + "\n";
+    out +=
+        command("/charger [nom]", "charger un modèle local en mémoire (actif par défaut)") + "\n";
+    out += command("/decharger [nom]", "le décharger : libère la mémoire vidéo") + "\n";
+    out += command("/recharger [nom]", "le décharger puis le recharger") + "\n";
     out += command("/quitter", "quitter (ou Ctrl+D)") + "\n";
     out += title("Modules") + "\n";
     out += command("/modules", "modules installés, permissions et outils") + "\n";
@@ -255,6 +260,14 @@ std::string_view trim(std::string_view text) {
 /// Clé de la base où est retenu le dernier modèle utilisé.
 constexpr std::string_view kActiveModelKey = "llm.active";
 
+/// Après chaque requête ou commande : déchargement différé du modèle actif
+/// (demandé pendant la requête, que sa réponse aurait rechargé).
+void finish_request(llm::ModelSwitcher& switcher) {
+    if (auto note = switcher.finish_request()) {
+        display().info(*note);
+    }
+}
+
 /// Modèle actif pour le cadre d'accueil.
 std::string model_label(const llm::ModelSwitcher& switcher) {
     const auto* active = switcher.active();
@@ -336,6 +349,25 @@ bool run_command(core::Agent& agent, cli::Prompt& prompt, cli::Conversations& co
             // revient au modèle précédent) et confirmation pour un modèle distant.
             const core::ToolCall call{
                 .id = {}, .name = "switch_llm", .arguments = {{"name", std::string(argument)}}};
+            const std::string input(line);
+            run_request(agent, prompt, [&agent, &input, &call](const std::stop_token& stop) {
+                return agent.run_tool(input, call, stop);
+            });
+        }
+    } else if (command == "/charger" || command == "/decharger" || command == "/recharger") {
+        const bool unload = command == "/decharger";
+        const char* tool = unload ? "unload_llm" : "load_llm";
+        if (agent.tools().find(tool) == nullptr) {
+            display().info("Aucun modèle local à charger ou décharger.");
+        } else {
+            nlohmann::json arguments = nlohmann::json::object();
+            if (!argument.empty()) {
+                arguments["name"] = std::string(argument);
+            }
+            if (command == "/recharger") {
+                arguments["reload"] = true;
+            }
+            const core::ToolCall call{.id = {}, .name = tool, .arguments = std::move(arguments)};
             const std::string input(line);
             run_request(agent, prompt, [&agent, &input, &call](const std::stop_token& stop) {
                 return agent.run_tool(input, call, stop);
@@ -484,6 +516,21 @@ int run(int argc, char** argv) {
         display().error(core::describe(llm.error()));
         return EXIT_FAILURE;
     }
+    // Charger / décharger : seulement s'il y a un modèle local.
+    if (std::ranges::any_of(switcher.models(), &llm::ModelChoice::local)) {
+        for (auto& tool : llm::make_residency_tools(switcher)) {
+            if (auto added = tools.add(std::move(tool)); !added) {
+                display().error(core::describe(added.error()));
+                return EXIT_FAILURE;
+            }
+        }
+        if (options.router) {
+            if (auto rules = llm::register_residency_rules(*options.router); !rules) {
+                display().error(core::describe(rules.error()));
+                return EXIT_FAILURE;
+            }
+        }
+    }
     if (switcher.models().size() > 1) {
         if (auto added = tools.add(llm::make_switch_llm_tool(switcher)); !added) {
             display().error(core::describe(added.error()));
@@ -560,12 +607,14 @@ int run(int argc, char** argv) {
             if (!run_command(agent, prompt, conversations, modules_ui, switcher, line)) {
                 break;
             }
+            finish_request(switcher);
             continue;
         }
         const std::string request(line);
         run_request(agent, prompt, [&agent, &request](const std::stop_token& stop) {
             return agent.handle(request, stop);
         });
+        finish_request(switcher);
     }
     display().farewell(conversations.describe_current());
     return EXIT_SUCCESS;

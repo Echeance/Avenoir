@@ -1,12 +1,16 @@
 #pragma once
 
 #include <cstddef>
+#include <cstdint>
 #include <functional>
 #include <memory>
 #include <optional>
+#include <stop_token>
 #include <string>
 #include <string_view>
 #include <vector>
+
+#include <nlohmann/json.hpp>
 
 #include "avenoir/core/agent.hpp"
 #include "avenoir/core/config.hpp"
@@ -40,6 +44,13 @@ struct ModelChoice {
 /// Modèles de la configuration (`[models.<nom>]`), dans l'ordre du fichier.
 [[nodiscard]] std::vector<ModelChoice> models_from(const core::AppConfig& config);
 
+/// Charger un modèle local en mémoire (vidéo), l'en décharger, ou les deux.
+enum class Residency : std::uint8_t { Load, Unload, Reload };
+
+/// Requête POST JSON vers le serveur d'un modèle (remplaçable dans les tests).
+using JsonPoster = std::function<core::Result<nlohmann::json>(
+    const std::string& url, const nlohmann::json& body, const std::stop_token& stop)>;
+
 using ProviderFactory =
     std::function<core::Result<std::unique_ptr<core::LlmProvider>>(const core::LlmConfig&)>;
 
@@ -51,7 +62,7 @@ class ModelSwitcher {
     /// `models` peut être vide (pas de LLM : seule la voie rapide répond).
     /// `confirmer` : nul = tout passage à un modèle distant est refusé.
     ModelSwitcher(std::vector<ModelChoice> models, core::ConfirmationHandler* confirmer,
-                  ProviderFactory factory = {});
+                  ProviderFactory factory = {}, JsonPoster poster = {});
 
     /// Modèle de départ : `preferred` (le dernier utilisé) s'il existe encore,
     /// sinon le premier. Pas de confirmation : c'est un modèle de la
@@ -85,6 +96,18 @@ class ModelSwitcher {
     /// « gemma, leger, claude » : pour les messages d'erreur.
     [[nodiscard]] std::string names() const;
 
+    /// Charge, décharge ou recharge le modèle `name` (vide : le modèle actif)
+    /// dans la mémoire de son serveur. Modèles locaux servis par Ollama
+    /// seulement (`keep_alive`). Décharger le modèle actif pendant une requête
+    /// est **différé** à la fin de celle-ci (`finish_request`) : sa réponse le
+    /// rechargerait aussitôt. Renvoie la phrase à afficher.
+    [[nodiscard]] core::Result<std::string>
+    set_residency(std::string_view name, Residency residency, const std::stop_token& stop);
+
+    /// À appeler après chaque requête ou commande : exécute le déchargement
+    /// différé, s'il y en a un. Renvoie la phrase à afficher, ou rien.
+    [[nodiscard]] std::optional<std::string> finish_request();
+
   private:
     std::vector<ModelChoice> models_;
     std::size_t active_ = 0;
@@ -92,11 +115,26 @@ class ModelSwitcher {
     ProviderFactory factory_;
     core::Agent* agent_ = nullptr;
     std::function<void(const ModelChoice&)> on_switch_;
+    JsonPoster poster_;
+    std::optional<std::size_t> pending_unload_; ///< Modèle à décharger après la requête.
+
+    /// Requête `keep_alive` au serveur Ollama du modèle.
+    [[nodiscard]] core::Result<void> send_residency(const ModelChoice& model, bool load,
+                                                    const std::stop_token& stop) const;
 };
 
 /// Outil `switch_llm` (réversible, annulable : retour au modèle précédent).
 /// Sa description liste les modèles de `switcher`, qui doit lui survivre.
 [[nodiscard]] std::shared_ptr<core::Tool> make_switch_llm_tool(ModelSwitcher& switcher);
+
+/// Outils `unload_llm` (décharger, « stopper ») et `load_llm` (charger,
+/// « allumer », ou recharger) : réversibles, sans annulation promise.
+[[nodiscard]] std::vector<std::shared_ptr<core::Tool>>
+make_residency_tools(ModelSwitcher& switcher);
+
+/// Règles de voie rapide : « décharge le modèle », « libère la carte
+/// graphique », « charge le modèle gemma », « recharge le modèle »…
+[[nodiscard]] core::Result<void> register_residency_rules(core::FastRouter& router);
 
 /// Règles de voie rapide : « passe sur le modèle léger », « utilise le modèle
 /// claude »… (le mot « modèle » ou « llm » est exigé : règles strictes).

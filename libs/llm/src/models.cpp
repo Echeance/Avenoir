@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <array>
+#include <chrono>
 #include <cstddef>
 #include <format>
 #include <memory>
@@ -9,6 +10,7 @@
 #include <stop_token>
 #include <string>
 #include <string_view>
+#include <tuple>
 #include <type_traits>
 #include <utility>
 #include <variant>
@@ -17,6 +19,8 @@
 #include <nlohmann/json.hpp>
 
 #include "avenoir/llm/factory.hpp"
+
+#include "http.hpp"
 
 namespace avenoir::llm {
 
@@ -233,11 +237,124 @@ std::vector<ModelChoice> models_from(const core::AppConfig& config) {
 }
 
 ModelSwitcher::ModelSwitcher(std::vector<ModelChoice> models, core::ConfirmationHandler* confirmer,
-                             ProviderFactory factory)
-    : models_(std::move(models)), confirmer_(confirmer), factory_(std::move(factory)) {
+                             ProviderFactory factory, JsonPoster poster)
+    : models_(std::move(models)), confirmer_(confirmer), factory_(std::move(factory)),
+      poster_(std::move(poster)) {
     if (!factory_) {
         factory_ = [](const core::LlmConfig& config) { return make_provider(config); };
     }
+    if (!poster_) {
+        poster_ = [](const std::string& url, const nlohmann::json& body,
+                     const std::stop_token& stop) {
+            // Charger un gros modèle prend du temps (~20 s pour 20 Go).
+            return detail::post_json(detail::HttpRequest{.url = url,
+                                                         .headers = {},
+                                                         .body = body.dump(),
+                                                         .timeout = std::chrono::seconds{180}},
+                                     stop);
+        };
+    }
+}
+
+core::Result<void> ModelSwitcher::send_residency(const ModelChoice& model, bool load,
+                                                 const std::stop_token& stop) const {
+    const auto* openai = std::get_if<core::OpenAiCompatibleConfig>(&model.config);
+    if (openai == nullptr || !model.local) {
+        return core::make_error(core::ErrorCode::Config,
+                                std::format("« {} » est un modèle distant : rien à charger ni à "
+                                            "décharger sur cette machine",
+                                            model.name));
+    }
+    // API d'Ollama, à côté de son API compatible OpenAI (…/v1) : une requête
+    // sans prompt charge le modèle ; keep_alive = 0 le décharge.
+    std::string root = openai->base_url;
+    while (root.ends_with('/')) {
+        root.pop_back();
+    }
+    if (root.ends_with("/v1")) {
+        root.resize(root.size() - 3);
+    }
+    nlohmann::json body{{"model", openai->model}};
+    if (!load) {
+        body["keep_alive"] = 0;
+    }
+    auto sent = poster_(root + "/api/generate", body, stop);
+    if (!sent) {
+        if (sent.error().code == core::ErrorCode::Cancelled) {
+            return std::unexpected(std::move(sent.error()));
+        }
+        return core::make_error(core::ErrorCode::Llm,
+                                std::format("le serveur de « {} » n'a pas pu {} le modèle "
+                                            "(Ollama seulement) : {}",
+                                            model.name, load ? "charger" : "décharger",
+                                            sent.error().message));
+    }
+    return {};
+}
+
+core::Result<std::string> ModelSwitcher::set_residency(std::string_view name, Residency residency,
+                                                       const std::stop_token& stop) {
+    const ModelChoice* target = name.empty() ? active() : find(name);
+    if (target == nullptr) {
+        return core::make_error(
+            core::ErrorCode::Config,
+            name.empty() ? std::string("aucun modèle actif")
+                         : std::format("modèle inconnu « {} » (modèles : {})", name, names()));
+    }
+    const auto index = static_cast<std::size_t>(target - models_.data());
+    if (residency == Residency::Unload && index == active_ && agent_ != nullptr) {
+        // Vérifie d'abord que c'est possible (modèle local), puis attend la
+        // fin de la requête : la réponse en cours rechargerait le modèle.
+        if (!std::holds_alternative<core::OpenAiCompatibleConfig>(target->config) ||
+            !target->local) {
+            return core::make_error(core::ErrorCode::Config,
+                                    std::format("« {} » est un modèle distant : rien à décharger "
+                                                "sur cette machine",
+                                                target->name));
+        }
+        pending_unload_ = index;
+        return std::format("Le modèle « {} » sera déchargé à la fin de cette réponse ; il se "
+                           "rechargera à la prochaine requête.",
+                           target->name);
+    }
+    if (residency != Residency::Load) {
+        if (auto unloaded = send_residency(*target, false, stop); !unloaded) {
+            return std::unexpected(std::move(unloaded.error()));
+        }
+        if (pending_unload_ == index) {
+            pending_unload_.reset();
+        }
+    }
+    if (residency != Residency::Unload) {
+        if (auto loaded = send_residency(*target, true, stop); !loaded) {
+            return std::unexpected(std::move(loaded.error()));
+        }
+        if (pending_unload_ == index) {
+            pending_unload_.reset(); // chargé à nouveau : plus rien à décharger
+        }
+    }
+    switch (residency) {
+    case Residency::Load:
+        return std::format("Modèle « {} » chargé en mémoire.", target->name);
+    case Residency::Unload:
+        return std::format("Modèle « {} » déchargé : sa mémoire est libérée.", target->name);
+    case Residency::Reload:
+        break;
+    }
+    return std::format("Modèle « {} » rechargé.", target->name);
+}
+
+std::optional<std::string> ModelSwitcher::finish_request() {
+    if (!pending_unload_ || *pending_unload_ >= models_.size()) {
+        return std::nullopt;
+    }
+    const ModelChoice& model = models_[*pending_unload_];
+    pending_unload_.reset();
+    if (auto unloaded = send_residency(model, false, {}); !unloaded) {
+        return std::format("Déchargement de « {} » impossible : {}", model.name,
+                           unloaded.error().message);
+    }
+    return std::format("Modèle « {} » déchargé : sa mémoire est libérée.", model.name);
 }
 
 core::Result<std::unique_ptr<core::LlmProvider>>
@@ -315,6 +432,98 @@ std::string ModelSwitcher::names() const {
 
 std::shared_ptr<core::Tool> make_switch_llm_tool(ModelSwitcher& switcher) {
     return std::make_shared<SwitchLlmTool>(switcher);
+}
+
+namespace {
+
+struct ResidencyArgs {
+    std::string name;
+    bool reload = false;
+};
+NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_WITH_DEFAULT(ResidencyArgs, name, reload)
+
+class ResidencyTool final : public core::Tool {
+  public:
+    ResidencyTool(ModelSwitcher& switcher, bool load) : switcher_(&switcher), load_(load) {}
+
+    [[nodiscard]] core::ToolSpec spec() const override {
+        nlohmann::json properties{{"name",
+                                   {{"type", "string"},
+                                    {"description", "Nom du modèle (" + switcher_->names() +
+                                                        ") ; absent : le modèle "
+                                                        "actif"}}}};
+        if (load_) {
+            properties["reload"] = {
+                {"type", "boolean"},
+                {"description", "true : le décharger d'abord, puis le recharger"}};
+        }
+        return core::ToolSpec{
+            .name = load_ ? "load_llm" : "unload_llm",
+            .description =
+                load_ ? "Charge (« allume ») un modèle local en mémoire pour qu'il réponde tout de "
+                        "suite, ou le recharge. Modèles locaux servis par Ollama seulement."
+                      : "Décharge (« stoppe ») un modèle local de la mémoire, ce qui libère la "
+                        "mémoire vidéo (par exemple avant un jeu). Il se rechargera tout seul à "
+                        "la requête suivante. Modèles locaux servis par Ollama seulement.",
+            .input_schema = {{"type", "object"}, {"properties", std::move(properties)}},
+            .risk = core::RiskLevel::Reversible,
+        };
+    }
+
+    [[nodiscard]] core::ToolResult call(const nlohmann::json& arguments,
+                                        const std::stop_token& stop) const override {
+        auto args = core::parse_args<ResidencyArgs>(arguments);
+        if (!args) {
+            return std::unexpected(std::move(args.error()));
+        }
+        Residency residency = Residency::Unload;
+        if (load_) {
+            residency = args->reload ? Residency::Reload : Residency::Load;
+        }
+        auto done = switcher_->set_residency(args->name, residency, stop);
+        if (!done) {
+            return std::unexpected(core::ToolError{.kind = core::ToolErrorKind::Execution,
+                                                   .message = done.error().message});
+        }
+        return core::ToolOutput{.content = std::move(*done)};
+    }
+
+  private:
+    ModelSwitcher* switcher_;
+    bool load_;
+};
+
+} // namespace
+
+std::vector<std::shared_ptr<core::Tool>> make_residency_tools(ModelSwitcher& switcher) {
+    return {std::make_shared<ResidencyTool>(switcher, /*load=*/false),
+            std::make_shared<ResidencyTool>(switcher, /*load=*/true)};
+}
+
+core::Result<void> register_residency_rules(core::FastRouter& router) {
+    const nlohmann::json none = nlohmann::json::object();
+    const nlohmann::json reload{{"reload", true}};
+    // Le mot « modèle » (ou « llm ») est exigé, sauf pour « libère la carte graphique ».
+    constexpr auto kUnload = R"(^(?:décharge|stoppe|arrête|éteins)\s+(?:le\s+)?(?:modèle|llm))";
+    constexpr auto kLoad = R"(^(?:charge|allume|démarre|lance)\s+(?:le\s+)?(?:modèle|llm))";
+    constexpr auto kReload = R"(^recharge\s+(?:le\s+)?(?:modèle|llm))";
+    constexpr auto kNamed = R"(\s+(\S+)$)";
+    for (const auto& [pattern, tool, arg, fixed] :
+         std::to_array<std::tuple<std::string, std::string, std::string, nlohmann::json>>({
+             {std::string(kUnload) + kNamed, "unload_llm", "name", none},
+             {std::string(kUnload) + "$", "unload_llm", "", none},
+             {R"(^libère\s+la\s+(?:carte\s+graphique|mémoire\s+vidéo|vram)$)", "unload_llm", "",
+              none},
+             {std::string(kLoad) + kNamed, "load_llm", "name", none},
+             {std::string(kLoad) + "$", "load_llm", "", none},
+             {std::string(kReload) + kNamed, "load_llm", "name", reload},
+             {std::string(kReload) + "$", "load_llm", "", reload},
+         })) {
+        if (auto added = router.add_rule(pattern, tool, arg, fixed); !added) {
+            return added;
+        }
+    }
+    return {};
 }
 
 core::Result<void> register_switch_rules(core::FastRouter& router) {
