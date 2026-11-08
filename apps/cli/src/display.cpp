@@ -343,11 +343,12 @@ void Display::clear() {
     }
 }
 
-void Display::banner(std::string_view llm, std::size_t tools, std::string_view conversation) {
-    const std::size_t inner = width() - 4;
-    const std::string title = paint(std::format("Avenoir {}", core::version()), {.bold = true});
+namespace {
 
-    // Pingouin en pixel art (14×14 pixels, soit 14 colonnes sur 7 lignes).
+/// Cadre avec le pingouin en pixel art (14×14 pixels, soit 14 colonnes sur
+/// 7 lignes) et `text` à sa droite, centré verticalement ; sans couleurs, le
+/// pingouin en ASCII. `text` : 3 lignes déjà mises en forme.
+std::vector<std::string> penguin_card(const std::vector<std::string>& text) {
     // K : corps bleu nuit, W : blanc, O : orange, « . » : transparent.
     static const std::vector<std::string_view> penguin = {
         "....KKKKKK....", "...KKKKKKKK...", "..KKWWKKWWKK..", "..KKWKKKKWKK..", "..KKKKOOKKKK..",
@@ -359,19 +360,9 @@ void Display::banner(std::string_view llm, std::size_t tools, std::string_view c
         {'W', {.r = 240, .g = 240, .b = 235}},
         {'O', {.r = 245, .g = 160, .b = 40}},
     };
-
     std::vector<std::string> lines;
     const auto art = terminal::pixel_art(penguin, palette);
     if (!art.empty()) {
-        // Texte à droite du pingouin, centré verticalement.
-        const std::size_t text_width = inner > 18 ? inner - 18 : 0;
-        const std::vector<std::string> text = {
-            title,
-            paint(terminal::ellipsize(std::format("{} · {} outil(s)", llm, tools), text_width),
-                  kMuted),
-            paint(terminal::ellipsize(std::format("Conversation : {}", conversation), text_width),
-                  kMuted),
-        };
         const std::size_t first = (art.size() - text.size()) / 2;
         for (std::size_t row = 0; row < art.size(); ++row) {
             std::string line = " " + art[row] + "   ";
@@ -381,18 +372,57 @@ void Display::banner(std::string_view llm, std::size_t tools, std::string_view c
             lines.push_back(std::move(line));
         }
     } else {
-        // Sans couleurs : le pingouin en ASCII.
-        lines = {
-            " (o<   " + title,
-            " //\\   " +
-                terminal::ellipsize(std::format("{} · {} outil(s)", llm, tools), inner - 7),
-            " V_/_  " +
-                terminal::ellipsize(std::format("Conversation : {}", conversation), inner - 7),
-        };
+        static const std::vector<std::string_view> ascii = {" (o<   ", " //\\   ", " V_/_  "};
+        for (std::size_t row = 0; row < ascii.size(); ++row) {
+            lines.push_back(std::string(ascii[row]) + (row < text.size() ? text[row] : ""));
+        }
     }
+    return lines;
+}
+
+/// Largeur laissée au texte d'un cadre de `inner` colonnes : à droite du
+/// pingouin (18 colonnes) ou de l'ASCII (7 colonnes).
+std::size_t card_text_width(std::size_t inner) {
+    const std::size_t art = terminal::enabled() ? 18 : 7;
+    return inner > art ? inner - art : 0;
+}
+
+} // namespace
+
+void Display::banner(std::string_view llm, std::size_t tools, std::string_view conversation) {
+    const std::size_t text_width = card_text_width(width() - 4);
+    const std::vector<std::string> text = {
+        paint(std::format("Avenoir {}", core::version()), {.bold = true}),
+        paint(terminal::ellipsize(std::format("{} · {} outil(s)", llm, tools), text_width), kMuted),
+        paint(terminal::ellipsize(std::format("Conversation : {}", conversation), text_width),
+              kMuted),
+    };
+    const auto lines = penguin_card(text);
     const std::scoped_lock lock(mutex_);
     write("\n" + terminal::box({}, lines, Color::White, width()) + "\n");
     write(paint("  /aide pour les commandes · Ctrl+C arrête · Ctrl+D quitte", kMuted) + "\n");
+}
+
+void Display::farewell(std::string_view conversation) {
+    const std::size_t text_width = card_text_width(width() - 4);
+    const std::vector<std::string> text = {
+        paint("À bientôt !", {.bold = true}),
+        paint(terminal::ellipsize(std::format("Conversation : {}", conversation), text_width),
+              kMuted),
+        paint(terminal::ellipsize("Elle reprendra au prochain lancement.", text_width), kMuted),
+    };
+    const auto lines = penguin_card(text);
+    const std::scoped_lock lock(mutex_);
+    clear_spinner();
+    if (pinned_) {
+        pinned_ = false;
+        emit("\x1b[r"); // zone de défilement rendue à tout l'écran
+    }
+    if (terminal::enabled()) {
+        // Écran et historique du terminal vidés : on quitte sur un terminal propre.
+        emit("\x1b[2J\x1b[3J\x1b[H");
+    }
+    write("\n" + terminal::box({}, lines, Color::White, width()) + "\n\n");
 }
 
 void Display::user(std::string_view text) {

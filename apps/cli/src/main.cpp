@@ -484,7 +484,7 @@ int run(int argc, char** argv) {
             return agent.handle(request, stop);
         });
     }
-    display().info("À bientôt !");
+    display().farewell(conversations.describe_current());
     return EXIT_SUCCESS;
 }
 

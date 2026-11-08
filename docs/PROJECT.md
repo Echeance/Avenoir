@@ -305,6 +305,7 @@ La CLI doit être agréable à lire : chaque type d'élément a son style, recon
 | Confirmation | cadre jaune « ▲ Action à confirmer », badge de risque, arguments |
 | Risques | `lecture seule` vert, `réversible` jaune, `SENSIBLE` rouge (confirmations, `/outils`) |
 | Erreur | `✗ Erreur :` rouge, sur la sortie d'erreur |
+| Sortie | écran et historique du terminal vidés, puis cadre d'au revoir avec le pingouin (« À bientôt ! », conversation en cours) |
 | Messages système | gris discret |
 
 - **Bibliothèque `avenoir::terminal`** : couleurs, cadres, badges, largeur d'affichage UTF-8, retour à la ligne, rendu Markdown léger. Testée sans terminal.
