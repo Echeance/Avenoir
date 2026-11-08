@@ -54,6 +54,8 @@ class Prompt {
 
   private:
     [[nodiscard]] Input read_line(const std::string& prompt, bool remember);
+    /// Fait retaper `text` à replxx, curseur à la position `cursor` (Windows).
+    void retype(const std::string& text, int cursor);
     /// Thread de surveillance : simule une touche quand la taille change.
     void watch_size(const std::stop_token& stop);
 
@@ -64,6 +66,8 @@ class Prompt {
     std::string current_prompt_; ///< Invite de la saisie en cours.
     std::string pending_text_;   ///< Texte à rétablir après un redimensionnement.
     int pending_cursor_ = -1;
+    bool restoring_ = false; ///< Rétablissement du texte pas encore traité.
+    bool restart_ = false;   ///< Saisie à relancer après un redimensionnement (Windows).
 };
 
 } // namespace avenoir::cli

@@ -129,11 +129,34 @@ Prompt::Prompt(std::vector<std::string> commands, std::optional<std::filesystem:
     // texte ne change pas : elle garderait l'ancienne largeur. On ajoute donc
     // un instant une espace en fin de texte (invisible), puis une seconde
     // touche simulée rétablit le texte : la bordure est recalculée à la
-    // nouvelle largeur.
+    // nouvelle largeur. Sous Windows, la saisie est relancée (voir plus bas).
     replxx_.bind_key(kResizeKey, [this](char32_t /*code*/) {
+        if (restoring_) {
+            // Redimensionnement arrivé avant le rétablissement du précédent
+            // (le texte est encore celui, allongé d'une espace, du recalage) :
+            // traité après lui, dans l'ordre de la file des touches.
+            replxx_.emulate_key_press(kResizeKey);
+            return replxx::Replxx::ACTION_RESULT::CONTINUE;
+        }
+#ifdef _WIN32
+        if (restart_) {
+            return replxx::Replxx::ACTION_RESULT::CONTINUE; // Relance déjà prévue.
+        }
+#endif
         const auto state = replxx_.get_state();
         pending_text_ = state.text();
         pending_cursor_ = state.cursor_position();
+#ifdef _WIN32
+        // Sous Windows, replxx ne voit pas les redimensionnements de la
+        // console : il garderait l'ancienne largeur et placerait mal la saisie
+        // (dédoublée sur la bordure, décalée d'une ligne). La saisie est donc
+        // relancée : Entrée simulée, puis read_line rouvre une saisie neuve,
+        // à la nouvelle largeur, avec le même texte et le même curseur.
+        restart_ = true;
+        replxx_.emulate_key_press(replxx::Replxx::KEY::ENTER);
+        return replxx::Replxx::ACTION_RESULT::CONTINUE;
+#else
+        restoring_ = true;
         if (hooks_.resized) {
             const std::string before = utf8_prefix(
                 pending_text_, pending_cursor_ < 0 ? code_points(pending_text_) : pending_cursor_);
@@ -143,9 +166,11 @@ Prompt::Prompt(std::vector<std::string> commands, std::optional<std::filesystem:
         replxx_.set_state(replxx::Replxx::State(padded.c_str(), code_points(padded)));
         replxx_.emulate_key_press(kRestoreKey);
         return replxx::Replxx::ACTION_RESULT::CONTINUE; // replxx redessine ensuite
+#endif
     });
     replxx_.bind_key(kRestoreKey, [this](char32_t /*code*/) {
         replxx_.set_state(replxx::Replxx::State(pending_text_.c_str(), pending_cursor_));
+        restoring_ = false;
         return replxx::Replxx::ACTION_RESULT::CONTINUE;
     });
     if (history_file_) {
@@ -184,22 +209,76 @@ void Prompt::watch_size(const std::stop_token& stop) {
     std::mutex mutex;
     std::condition_variable_any wake;
     std::unique_lock lock(mutex);
+    bool pending = false; // Taille changée, recalage à faire une fois stable.
     while (!stop.stop_requested()) {
         // Réveil immédiat à l'arrêt, sinon vérification toutes les 100 ms.
         (void)wake.wait_for(lock, stop, 100ms, [] { return false; });
         const std::size_t new_rows = terminal::terminal_height();
         const std::size_t new_columns = terminal::terminal_width();
         if (new_rows != rows || new_columns != columns) {
+            // Une fenêtre agrandie ou ancrée passe par plusieurs tailles :
+            // on attend qu'elle soit stable avant de recaler la barre.
             rows = new_rows;
             columns = new_columns;
+            pending = true;
+            continue;
+        }
+        if (pending) {
+            pending = false;
             replxx_.emulate_key_press(kResizeKey); // sûr depuis un autre thread
         }
+    }
+}
+
+void Prompt::retype(const std::string& text, int cursor) {
+    // Le texte est retapé touche par touche : replxx l'affiche comme une
+    // frappe ordinaire (la barre grandit au fil des lignes), ce qui place la
+    // saisie sans erreur ; un texte préchargé s'afficherait décalé.
+    int count = 0;
+    char32_t code = 0;
+    for (const char c : text) {
+        const auto byte = static_cast<unsigned char>(c);
+        if ((byte & 0xC0U) == 0x80U) {
+            code = (code << 6U) | (byte & 0x3FU); // octet de continuation
+            continue;
+        }
+        if (count > 0) {
+            replxx_.emulate_key_press(code);
+        }
+        // Bits utiles de l'octet de tête : 7 (ASCII), 5, 4 ou 3.
+        if (byte < 0x80U) {
+            code = byte;
+        } else if (byte < 0xE0U) {
+            code = byte & 0x1FU;
+        } else if (byte < 0xF0U) {
+            code = byte & 0x0FU;
+        } else {
+            code = byte & 0x07U;
+        }
+        ++count;
+    }
+    if (count > 0) {
+        replxx_.emulate_key_press(code);
+    }
+    for (int left = cursor < 0 ? 0 : count - cursor; left > 0; --left) {
+        replxx_.emulate_key_press(replxx::Replxx::KEY::LEFT);
     }
 }
 
 Prompt::Input Prompt::read_line(const std::string& prompt, bool remember) {
     errno = 0;
     const char* line = replxx_.input(prompt);
+    // Saisie interrompue par un redimensionnement (Windows) : la barre est
+    // recalée, puis une saisie neuve reprend le texte et la position du curseur.
+    while (line != nullptr && restart_) {
+        restart_ = false;
+        if (hooks_.before) {
+            hooks_.before();
+        }
+        retype(pending_text_, pending_cursor_);
+        errno = 0;
+        line = replxx_.input(prompt);
+    }
     if (line == nullptr) {
         // replxx signale Ctrl+C par errno = EAGAIN, la fin de l'entrée sinon.
         return {.status = errno == EAGAIN ? Status::Interrupted : Status::EndOfInput, .text = {}};
