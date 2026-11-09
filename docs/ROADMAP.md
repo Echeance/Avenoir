@@ -183,10 +183,12 @@ L'ordre suit un principe : **chaque jalon produit un assistant utilisable**, plu
 - ✅ Voie rapide : article et accents permis (« ouvre le bloc-notes »)
 
 ### 2.3 Recherche web — P1
-- ⬜ Choisir le moteur par défaut (question ouverte de PROJECT.md § 8) : SearXNG auto-hébergé, Brave Search API ou Tavily
+- ⬜ Choisir le moteur par défaut (question ouverte de PROJECT.md § 8). Piste discutée le 8 novembre 2026, à confirmer : moteur du navigateur par défaut (préférences de Chrome / Edge / Brave, `search.json` de Firefox), interrogé par ce navigateur **sans fenêtre** avec un profil temporaire ; s'il bloque, demander un autre moteur, s'en souvenir et permettre d'en changer (commande, outil, voie rapide)
+- ⬜ À mesurer d'abord : Google en mode sans fenêtre (captcha, page de consentement) ; dépendance WebSocket (`ixwebsocket` ?) pour CDP (Chromium), WebDriver BiDi pour Firefox ensuite
 - ⬜ Outil `web_search` (read_only) → titres, URL, extraits
 - ⬜ Outil `read_webpage` (read_only) → texte principal de la page, tronqué
 - ⬜ Contenu web toujours traité comme donnée (test d'injection dédié)
+- ⬜ Plus tard : lire l'onglet ouvert dans le navigateur de l'utilisateur (extension + messagerie native ; outil `sensitive`, désactivé par défaut, onglet actif seulement)
 
 ### 2.4 Streaming des réponses — P2
 - ⬜ `LlmProvider` : variante en flux (callback par fragment)

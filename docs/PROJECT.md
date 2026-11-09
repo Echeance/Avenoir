@@ -17,6 +17,8 @@ Un assistant **résident** pour **Windows et Linux**, piloté à la **voix** ou 
 | Questions ouvertes | « explique-moi la différence entre TCP et UDP » |
 | Exécution de tâches | « range mes téléchargements par type », « fais-moi un résumé de ce PDF » |
 
+**Ambition** : offrir **tous les outils d'un agent comme Claude Code, et aussi performants** (lire et modifier des fichiers, chercher et lire le web, piloter le navigateur et les applications, enchaîner des tâches longues), mais **sur tout le système et avec une couche de sécurité en plus** : permissions par niveau de risque, confirmations dessinées par Avenoir, annulation, audit, données jamais prises pour des instructions, et le choix d'un LLM local. Une capacité ne s'ajoute jamais au prix de cette couche.
+
 Et **extensible** par des **modules** que n'importe qui peut écrire, dans n'importe quel langage : chacun apporte ses outils, ses commandes, ses fonctions de fond et, s'il le souhaite, son onglet dans l'interface (ex. un module météo qui récupère et affiche la météo, un module calendrier que l'assistant sollicite pour « déplace ma réunion de demain »).
 
 ### Principes directeurs
@@ -26,7 +28,8 @@ Et **extensible** par des **modules** que n'importe qui peut écrire, dans n'imp
 3. **Réactif** : les commandes simples ne passent pas par le LLM.
 4. **Léger** : un démon en arrière-plan doit consommer peu de ressources.
 5. **Standards plutôt que formats maison** : JSON-RPC (compatible MCP) pour les modules, JSON Schema pour les outils.
-6. **Entièrement configurable, mais sécurisé d'abord** : chaque fonction, vérifications d'identité comprises, est optionnelle et réglable dans les paramètres. Les réglages par défaut sont les plus sûrs, et un réglage qui affaiblit la sécurité n'est jamais appliqué en silence (avertissement, confirmation, journal).
+6. **Aussi capable qu'un agent de code, plus sûr** : chaque outil doit valoir son équivalent chez Claude Code (périmètre, qualité du résultat, rapidité) ; la différence est la couche de sécurité, jamais la capacité.
+7. **Entièrement configurable, mais sécurisé d'abord** : chaque fonction, vérifications d'identité comprises, est optionnelle et réglable dans les paramètres. Les réglages par défaut sont les plus sûrs, et un réglage qui affaiblit la sécurité n'est jamais appliqué en silence (avertissement, confirmation, journal).
 
 ---
 
@@ -607,6 +610,7 @@ Emplacement cible (phase 3) : `%APPDATA%\avenoir\config.toml` sous Windows, `$XD
 - Bibliothèque C++ de vue web (`saucer`, `webview`…) et intégration layer-shell sous Wayland.
 - Magasin de modules : hébergement, signature et vérification des modules.
 - Format exact des composants déclaratifs des onglets.
-- Moteur de recherche web par défaut.
+- Moteur de recherche web par défaut. Piste retenue en discussion (8 novembre 2026, à confirmer) : le moteur du navigateur par défaut, interrogé par ce navigateur lancé **sans fenêtre** (profil temporaire séparé, jamais celui de l'utilisateur), ce qui lit aussi les pages construites en JavaScript ; si le moteur bloque (Google : captcha, consentement), demander à l'utilisateur un autre moteur et s'en souvenir. À mesurer : blocage de Google en mode sans fenêtre ; dépendance WebSocket pour piloter le navigateur (CDP pour Chromium, WebDriver BiDi pour Firefox).
+- Lecture de l'onglet ouvert dans le navigateur de l'utilisateur (« résume la page que je lis ») : par une extension et la messagerie native, outil `sensitive`, désactivé par défaut, onglet actif seulement.
 - Identité et présence : bibliothèques locales de vérification du locuteur et de reconnaissance faciale (avec détection du vivant), et intégration à la connexion du système (fournisseur d'identification Windows ou Windows Hello, module PAM sous Linux).
 - Magasin de modèles : source de la liste (fichier signé publié avec Avenoir ?), installation par Ollama seulement ou aussi par fichiers GGUF.
