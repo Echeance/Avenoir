@@ -184,7 +184,13 @@ class SwitchLlmTool final : public core::Tool {
             return std::unexpected(core::ToolError{.kind = core::ToolErrorKind::Execution,
                                                    .message = switched.error().message});
         }
-        const std::string now = switcher_->active()->name; // changement réussi : non nul
+        const auto* active = switcher_->active();
+        if (active == nullptr) {
+            return std::unexpected(
+                core::ToolError{.kind = core::ToolErrorKind::Execution,
+                                .message = "aucun modèle actif après le changement"});
+        }
+        const std::string now = active->name;
         ModelSwitcher* switcher = switcher_;
         return core::ToolOutput{
             .content = std::move(*switched),
