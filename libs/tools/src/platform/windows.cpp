@@ -847,10 +847,11 @@ std::expected<CommandExit, CommandFailure> run_command(const std::vector<std::st
     // reproc attend sur le processus lui-même (WaitForSingleObject) : un
     // processus de fond qui hérite de la sortie (fichier temporaire) ne
     // bloque rien.
-    const std::unique_ptr<std::FILE, int (*)(std::FILE*)> out(std::tmpfile(), &std::fclose);
-    if (!out) {
+    std::FILE* raw = nullptr;
+    if (tmpfile_s(&raw) != 0 || raw == nullptr) {
         return std::unexpected(CommandFailure{.message = "fichier temporaire impossible"});
     }
+    const std::unique_ptr<std::FILE, int (*)(std::FILE*)> out(raw, &std::fclose);
     reproc::options options;
     options.redirect.out.type = reproc::redirect::file_;
     options.redirect.out.file = out.get();

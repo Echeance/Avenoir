@@ -119,10 +119,17 @@ std::string decode_entities(std::string_view text) {
                 continue;
             }
         } else {
-            const auto* found = std::ranges::find(
-                kNamed, name, &std::pair<std::string_view, std::string_view>::first);
-            if (found != kNamed.end()) {
-                out += found->second;
+            // Boucle simple : l'itérateur d'un std::array n'est un pointeur
+            // qu'avec certaines bibliothèques standard (pas MSVC).
+            bool decoded = false;
+            for (const auto& [entity, value] : kNamed) {
+                if (entity == name) {
+                    out += value;
+                    decoded = true;
+                    break;
+                }
+            }
+            if (decoded) {
                 i = end + 1;
                 continue;
             }
