@@ -217,6 +217,8 @@ L'ordre suit un principe : **chaque jalon produit un assistant utilisable**, plu
 
 **Fini quand :** « monte le son », « mets en pause », « cherche la météo à Lyon », « ouvre le navigateur », « passe sur le modèle léger » fonctionnent sur les deux OS.
 
+État au 11 novembre 2026 : tout fonctionne sous Linux ; sous Windows, le contrôle du système a été vérifié (VM), la recherche web, le flux et la session Claude Code sont compilés et testés par la CI mais pas encore essayés en vrai.
+
 ---
 
 ## Jalon 3 — Résident ⬜
@@ -359,4 +361,6 @@ Par ordre conseillé :
 6. ~~Conversations persistantes (1.9)~~ ✅
 7. ~~Hôte de modules v1 et module météo (1.6)~~ ✅
 8. ~~Essais avec de vrais modèles et `docs/FONCTIONNEMENT.md` (1.8)~~ ✅
-9. Jalon 2 — Assistant du quotidien (contrôle système, applications installées, recherche web, changer de LLM à tout moment)
+9. Jalon 2 — Assistant du quotidien : contrôle système, applications installées, recherche web (SearXNG local), réponses au fil de l'eau, Claude Code persistant, changer de LLM à tout moment — toutes les tâches faites ; reste la vérification sous Windows (recherche web avec SearXNG par podman ou docker, flux, session Claude Code) pour clore le jalon
+10. Jalon 3 — Résident (démon, IPC, journal structuré, permissions durables, réglages scellés)
+11. Jalon 4 — Orchestrateur multi-agents et tâches avancées

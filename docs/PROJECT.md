@@ -76,6 +76,8 @@ Trois couches, dans des processus distincts :
                  ┌─────────────────────┐                │
                  │  Boucle agent       │◄──────┐        │
                  │  LLM + outils       │       │        │
+                 │  (texte en flux,    │       │        │
+                 │  réponse vérifiée)  │       │        │
                  └─────────┬───────────┘       │        │
                            │ appel d'outil     │résultat│
                            ▼                   │        ▼
@@ -179,13 +181,13 @@ Chaque dossier de `libs/` est une bibliothèque CMake (`avenoir::core`, `avenoir
 
 | `provider` | Fonctionnement | Coût |
 |---|---|---|
-| `openai_compatible` | HTTP `/chat/completions` (Ollama, llama.cpp server, LM Studio, vLLM, OpenAI, Mistral, OpenRouter…), appels d'outils natifs | gratuit en local, sinon au token |
-| `anthropic` | HTTP API Messages, appels d'outils natifs | au token (clé d'API) |
+| `openai_compatible` | HTTP `/chat/completions` (Ollama, llama.cpp server, LM Studio, vLLM, OpenAI, Mistral, OpenRouter…), appels d'outils natifs, réponse en flux (`"stream": true`) | gratuit en local, sinon au token |
+| `anthropic` | HTTP API Messages, appels d'outils natifs, réponse en flux | au token (clé d'API) |
 | `claude_code` | Lance la CLI officielle `claude -p` connectée à l'abonnement de l'utilisateur. Ses outils, plugins, hooks et réglages sont désactivés (`--tools ""`, `--strict-mcp-config`, `--setting-sources ""`) ; les outils d'Avenoir sont décrits dans le prompt et la réponse est imposée par `--json-schema` ; un processus reste ouvert d'une requête à l'autre (`--input-format stream-json`, décision 49) | inclus dans l'abonnement Pro / Max |
 
 Pour les modèles qui « réfléchissent » avant de répondre (Qwen…), `reasoning_effort = "none"` (`openai_compatible`) coupe cette réflexion : la latence passe de plusieurs secondes à environ une seconde, sans perte mesurable sur les requêtes de référence.
 
-**Modèles recommandés**, d'après le banc d'essai (`evals/`, 32 requêtes de référence : simples, multi-outils, ambiguës, injections, refus, données inventées, contrôle du système). Les chiffres, la méthode et l'historique du prompt sont dans [`evals/resultats/COMPARAISON.md`](../evals/resultats/COMPARAISON.md).
+**Modèles recommandés**, d'après le banc d'essai (`evals/`, 42 requêtes de référence : simples, multi-outils, ambiguës, injections, refus, données inventées, contrôle du système, changement de modèle, recherche web). Les chiffres, la méthode et l'historique du prompt sont dans [`evals/resultats/COMPARAISON.md`](../evals/resultats/COMPARAISON.md).
 
 | Usage | Modèle | Réussite | Latence | Mémoire |
 |---|---|---|---|---|
@@ -547,7 +549,8 @@ Emplacement cible (phase 3) : `%APPDATA%\avenoir\config.toml` sous Windows, `$XD
 - [x] Notifications système
 - [x] Recherche d'applications installées (fichiers `.desktop`, menu Démarrer) pour `launch_app` tolérant, outil `list_apps`
 - [x] Recherche web (SearXNG local lancé par Avenoir, ou DuckDuckGo) et lecture de page en deux temps (décisions 45 et 46)
-- [ ] Streaming des réponses du LLM
+- [x] Réponses du LLM au fil de l'eau (API compatibles OpenAI et Anthropic ; décision 47)
+- [x] Claude Code en session persistante, message clair si la CLI n'est pas connectée (décision 49)
 - [x] Changer de LLM à tout moment : commande `/modele`, outil `switch_llm` et règles de voie rapide
 
 ### Phase 3 : résident

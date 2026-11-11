@@ -71,8 +71,10 @@ Avenoir agit sur une vraie machine et voit vos données : **la confidentialité 
 | `réversible` | lancer une application, ouvrir une URL, régler le son | exécuté |
 | `SENSIBLE` | supprimer, envoyer, éteindre | **toujours confirmé** — même si la configuration dit le contraire |
 
-- **Les données ne sont jamais des instructions** : une page web ou un fichier piégé ne peut pas déclencher d'action sensible sans votre accord.
-- **Arguments validés** par chaque outil, **jamais de shell** construit à partir d'un texte : 24 tentatives d'injection sont testées.
+- **Les données ne sont jamais des instructions** : une page web ou un fichier piégé ne peut pas déclencher d'action sensible sans votre accord. Une page web est lue à part, par le modèle **sans aucun outil** : une consigne cachée dans la page ne peut rien déclencher.
+- **Pas d'accès à votre réseau local depuis le web** : lire une page refuse les adresses locales et privées (`localhost`, box, imprimante…), y compris par redirection.
+- **Une action annoncée est une action faite** : si le modèle dit « j'ai lancé Firefox » sans l'avoir fait, Avenoir le relance, puis vous prévient.
+- **Arguments validés** par chaque outil, **jamais de shell** construit à partir d'un texte : plus de 40 tentatives d'injection sont testées.
 - **Vos clés d'API ne sont jamais écrites** dans la configuration : seul le *nom* de la variable d'environnement l'est.
 - **Vos conversations restent chez vous**, dans un fichier lisible par vous seul.
 - **Aucune confiance aveugle envers les modules** : manifeste vérifié avant tout lancement, module que vous installez désactivé tant que vous ne l'activez pas, environnement minimal (pas vos clés d'API), outils `SENSIBLE` par défaut, réponses bornées et nettoyées, chaque appel contrôlé et journalisé. Abaisser le risque d'un outil exige de taper « Je sais ce que je fais ».
@@ -134,13 +136,13 @@ model = "sonnet"
 
 **Changer de modèle à tout moment** : `/modele <nom>`, *« passe sur le modèle claude »*, *« bascule sur qwen »*, ou en le demandant simplement. La conversation continue avec le nouveau modèle ; passer à un modèle distant demande confirmation, et le mode « local uniquement » (`local_only = true` dans `[agent]`) l'interdit. Le modèle connaît son nom, et un changement qu'il annoncerait sans l'avoir fait est relancé, puis signalé.
 
-**Quel modèle ?** Mesuré sur nos requêtes de référence (32 requêtes, simples à piégées), sous Linux avec une RX 7900 XTX :
+**Quel modèle ?** Mesuré sur nos requêtes de référence (42 requêtes, simples à piégées), sous Linux avec une RX 7900 XTX :
 
 | Usage | Modèle conseillé | Réussite | Temps de réponse |
 |---|---|---|---|
-| Local, carte de 24 Go | `gemma4:26b-a4b` | 100 % | ~0,7 s |
-| Local léger (~10 Go) | `ministral-3:8b` | 94 % | ~0,8 s |
-| Distant | Claude (`claude_code`, `anthropic`) | 98 % | ~7 s via Claude Code |
+| Local, carte de 24 Go | `gemma4:26b-a4b` (ou `qwen3.8:27b`, 100 %, ~2,8 s) | 99 % | ~0,8 s |
+| Local léger (~10 Go) | `ministral-3:8b` (a suivi une injection une fois sur le banc : à réévaluer) | 92 % | ~1,1 s |
+| Distant | Claude (`claude_code`, `anthropic`) | 98 % | ~1 à 2 s via Claude Code, une fois la session ouverte (plusieurs secondes au premier appel) |
 
 En local, gardez `reasoning_effort = "none"` : sans lui, les modèles qui « réfléchissent » avant de répondre prennent plusieurs secondes de plus. Le détail, et les modèles à éviter : [`evals/resultats/COMPARAISON.md`](evals/resultats/COMPARAISON.md).
 
@@ -333,12 +335,13 @@ Le workflow `release` vérifie que le numéro du tag correspond à la version du
 | Jalon | Contenu | État |
 |---|---|---|
 | **0 · Conception** | vision, architecture, sécurité, choix techniques | ✅ |
-| **1 · Socle** | cœur, LLM, outils, CLI, conversations, modules v1 | 🔄 en cours |
-| **2 · Au quotidien** | volume, écran, multimédia, applications, recherche web | 🔄 en cours |
+| **1 · Socle** | cœur, LLM, outils, CLI, conversations, modules v1 | ✅ |
+| **2 · Au quotidien** | volume, écran, multimédia, applications, recherche web, réponses au fil de l'eau, changer de modèle | 🔄 vérification sous Windows |
 | **3 · Résident** | démon, journal, permissions durables, réglages scellés | ⬜ |
-| **4 · Tâches et modules** | fichiers, mémoire, appels entre modules | ⬜ |
+| **4 · Tâches et modules** | orchestrateur multi-agents, plusieurs projets en parallèle, fichiers, mémoire, appels entre modules | ⬜ |
 | **5 · Voix** | mot de réveil, reconnaissance et synthèse vocales | ⬜ |
 | **6 · Interface graphique** | widget avec le pingouin animé, application principale | ⬜ |
+| **7 · Identité et présence** | propriétaire et liste blanche, voix et visage, verrouillage automatique | ⬜ |
 
 Le détail, étape par étape : **[docs/ROADMAP.md](docs/ROADMAP.md)**.
 
