@@ -62,6 +62,8 @@ std::string_view Agent::llm_name() const {
 
 void Agent::set_llm(std::unique_ptr<LlmProvider> llm) {
     if (llm != nullptr) {
+        // L'ancien fournisseur est détruit ici : il libère ce qu'il tenait
+        // (le processus `claude` de Claude Code est arrêté).
         llm_ = std::move(llm);
     }
 }

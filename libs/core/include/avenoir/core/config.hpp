@@ -42,6 +42,9 @@ struct ClaudeCodeConfig {
     std::optional<std::string> model;
     std::string command = "claude";
     std::uint32_t timeout_secs = 180;
+    /// Garder un processus `claude` ouvert d'une requête à l'autre (beaucoup
+    /// plus rapide) ; faux : un lancement par appel.
+    bool persistent = true;
 };
 
 /// Fournisseur d'un modèle (champ `provider` de `[models.<nom>]`).

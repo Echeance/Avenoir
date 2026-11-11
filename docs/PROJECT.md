@@ -19,6 +19,8 @@ Un assistant **résident** pour **Windows et Linux**, piloté à la **voix** ou 
 
 **Ambition** : offrir **tous les outils d'un agent comme Claude Code, et aussi performants** (lire et modifier des fichiers, chercher et lire le web, piloter le navigateur et les applications, enchaîner des tâches longues), mais **sur tout le système et avec une couche de sécurité en plus** : permissions par niveau de risque, confirmations dessinées par Avenoir, annulation, audit, données jamais prises pour des instructions, et le choix d'un LLM local. Une capacité ne s'ajoute jamais au prix de cette couche.
 
+**Orchestrateur multi-agents** : Avenoir confie le travail à **des agents**, chacun avec son rôle, son modèle et ses outils, qui travaillent **en parallèle** (§ 2.11). Il répartit lui-même le travail et crée des agents à la volée, ou suit l'équipe d'agents que l'utilisateur a composée et configurée (chef de projet, développeur, relecteur…). Il mène **plusieurs projets à la fois** (un site web et une application, par exemple), chacun avec sa propre équipe, sans qu'ils interfèrent.
+
 Et **extensible** par des **modules** que n'importe qui peut écrire, dans n'importe quel langage : chacun apporte ses outils, ses commandes, ses fonctions de fond et, s'il le souhaite, son onglet dans l'interface (ex. un module météo qui récupère et affiche la météo, un module calendrier que l'assistant sollicite pour « déplace ma réunion de demain »).
 
 ### Principes directeurs
@@ -179,7 +181,7 @@ Chaque dossier de `libs/` est une bibliothèque CMake (`avenoir::core`, `avenoir
 |---|---|---|
 | `openai_compatible` | HTTP `/chat/completions` (Ollama, llama.cpp server, LM Studio, vLLM, OpenAI, Mistral, OpenRouter…), appels d'outils natifs | gratuit en local, sinon au token |
 | `anthropic` | HTTP API Messages, appels d'outils natifs | au token (clé d'API) |
-| `claude_code` | Lance la CLI officielle `claude -p` connectée à l'abonnement de l'utilisateur. Ses outils, plugins, hooks et réglages sont désactivés (`--tools ""`, `--strict-mcp-config`, `--setting-sources ""`) ; les outils d'Avenoir sont décrits dans le prompt et la réponse est imposée par `--json-schema` | inclus dans l'abonnement Pro / Max |
+| `claude_code` | Lance la CLI officielle `claude -p` connectée à l'abonnement de l'utilisateur. Ses outils, plugins, hooks et réglages sont désactivés (`--tools ""`, `--strict-mcp-config`, `--setting-sources ""`) ; les outils d'Avenoir sont décrits dans le prompt et la réponse est imposée par `--json-schema` ; un processus reste ouvert d'une requête à l'autre (`--input-format stream-json`, décision 49) | inclus dans l'abonnement Pro / Max |
 
 Pour les modèles qui « réfléchissent » avant de répondre (Qwen…), `reasoning_effort = "none"` (`openai_compatible`) coupe cette réflexion : la latence passe de plusieurs secondes à environ une seconde, sans perte mesurable sur les requêtes de référence.
 
@@ -356,6 +358,36 @@ Avenoir n'obéit qu'à son **propriétaire** et aux personnes qu'il a ajoutées 
 
 **Données biométriques** : traitées **localement uniquement** (jamais envoyées à un LLM, distant ou local, ni à un module), modèles d'empreinte chiffrés avec une clé du trousseau du système, jamais dans les journaux, effaçables à tout moment.
 
+### 2.11 Orchestrateur multi-agents (prévu)
+
+Avenoir est un **orchestrateur** : une demande est découpée en tâches confiées à des **agents**, chacun avec un **rôle**, un **modèle** (local ou distant), une **consigne** et un **jeu d'outils et de modules** à lui. Les agents sont **100 % configurables et personnalisables**, et Avenoir s'appuie sur leur configuration pour répartir le travail. Une requête simple reste traitée par un seul agent (ou la voie rapide) : l'orchestration ne coûte rien quand elle ne sert pas.
+
+**Deux façons de faire** (réglables, et combinables) :
+
+| Mode | Qui compose l'équipe | Exemple |
+|---|---|---|
+| **Automatique** | Avenoir : il découpe la demande, crée des agents à la volée (rôle, consigne, outils strictement nécessaires) et les supprime à la fin | « Compare ces trois offres d'emploi et prépare une lettre pour la meilleure » : un agent par offre, puis un rédacteur |
+| **Configuré** | L'utilisateur, depuis l'application ou la CLI : autant d'agents qu'il veut, chacun avec son rôle (chef de projet, développeur, relecteur, documentaliste…), son modèle et ses outils ou modules | Un chef de projet (modèle distant puissant, outils de planification), deux développeurs (modèle local, outils fichiers et code), un relecteur (lecture seule) |
+
+**Répartition** : un agent coordinateur (Avenoir lui-même, ou l'agent « chef de projet » de l'équipe configurée) découpe la demande en tâches, confie chacune à l'agent dont le rôle et les outils conviennent, suit l'avancement et assemble le résultat.
+
+**Parallélisme et dépendances** : les agents travaillent **en parallèle**. Une tâche peut dépendre d'autres tâches : l'agent qui en a besoin **attend leur résultat** (le relecteur attend le code du développeur, le rédacteur attend les recherches) sans bloquer les autres. Les dépendances forment un graphe de tâches suivi par le coordinateur ; une dépendance qui échoue ou qui est annulée est signalée à ceux qui l'attendent, et un cycle est refusé.
+
+**Plusieurs projets en parallèle** : l'utilisateur peut faire travailler Avenoir sur plusieurs projets à la fois (« travaille sur mon site web et sur mon application »). Chaque projet est **isolé** : sa propre instance de la configuration agentique (sa propre équipe, ses agents, leurs conversations et leur contexte), son tableau de tâches, ses dossiers autorisés, ses journaux d'audit et d'annulation. Un agent d'un projet ne voit ni ne modifie rien de l'autre. Sans configuration agentique, Avenoir **estime pour chaque projet** les rôles nécessaires (selon le projet, ses tâches, les outils qu'elles demandent) et compose l'équipe en conséquence.
+
+**Outils agentiques** : des outils réservés aux agents servent à se coordonner (confier une tâche à un agent, rendre un résultat, demander une précision au coordinateur, tableau de tâches partagé) ; ils sont attribués comme les autres outils, selon le rôle.
+
+**Configuration** (`[agents.<nom>]` en développement ; depuis l'application et la CLI ensuite) : rôle, consigne, modèle, outils et modules permis, autonomie (nombre d'étapes, de sous-agents), et le mode de répartition par défaut. Un agent peut aussi être enregistré comme modèle (« développeur C++ ») pour qu'Avenoir en crée des instances.
+
+**Sécurité** (même couche que pour un seul agent, principes n° 1 et 6) :
+
+- **Moindre privilège** : un agent n'a que les outils de son rôle ; un agent créé à la volée ne reçoit que ceux de sa tâche, jamais plus que ce que l'utilisateur a permis ; un agent ne peut ni s'attribuer un outil ni en donner un qu'il n'a pas.
+- **Permissions et confirmations inchangées** : chaque appel passe par le contrôle des permissions de l'agent qui le fait ; une action `sensitive` est toujours confirmée par l'utilisateur, jamais par un autre agent ; le journal d'audit et le journal d'annulation enregistrent l'agent qui a agi.
+- **Les messages entre agents sont des données**, comme les résultats d'outils : une consigne glissée dans le résultat d'un agent n'oblige pas les autres.
+- **Modèles** : le mode « local uniquement » vaut pour tous les agents ; donner un modèle distant à un agent se confirme comme un changement de modèle (directive 17).
+- **Isolation des projets** : les permissions, dossiers autorisés et journaux sont propres à chaque projet ; aucun outil ne franchit la frontière d'un projet.
+- **Bornes** : nombre d'agents (par projet et en tout), profondeur de délégation, étapes et durée limités et réglables ; un modèle local partagé sert les agents à tour de rôle (file d'attente) pour ne pas saturer la carte graphique ; Ctrl+C arrête l'équipe du projet en cours (ou toutes) et propose d'annuler ce qui peut l'être.
+
 ## 3. Directives de sécurité
 
 La **confidentialité** et la **sécurité** sont les aspects primordiaux d'Avenoir : ces règles priment sur toute considération de confort, de fonctionnalité ou de rapidité.
@@ -528,6 +560,7 @@ Emplacement cible (phase 3) : `%APPDATA%\avenoir\config.toml` sous Windows, `$XD
 - [ ] Magasin de modèles (CLI) : installer, désinstaller, lister les modèles avec leur score au banc
 
 ### Phase 4 : tâches et modules avancés
+- [ ] Orchestrateur multi-agents (§ 2.11) : agents configurables (rôle, consigne, modèle, outils et modules) en parallèle, avec attente des résultats dont ils dépendent ; répartition automatique ou selon l'équipe de l'utilisateur ; plusieurs projets isolés en parallèle, chacun avec son instance de la configuration agentique
 - [ ] Outils fichiers restreints à des dossiers autorisés
 - [ ] Appels entre modules via l'hôte ; fonctions de fond des modules ; journal par module
 - [ ] Gestion du contexte long (résumé de l'historique)
@@ -605,10 +638,14 @@ Emplacement cible (phase 3) : `%APPDATA%\avenoir\config.toml` sous Windows, `$XD
 | 45 | **Recherche web par simple requête HTTP** (DuckDuckGo en version HTML par défaut, ou une instance SearXNG de la configuration), sans navigateur ni extension ; **lecture d'une page en deux temps** : le texte de la page est lu à part par le modèle actif **sans outils** (`Agent::ask_aside`), seule sa réponse entre dans la conversation ; jamais d'adresse locale ou privée (adresse IP contactée vérifiée par curl à chaque requête, redirections comprises) ; moteur retenu, changeable (`/moteur`, `set_search_engine`) | Mesures du 11 novembre 2026 : Google et Brave Search (moteur du navigateur de l'auteur) bloquent les recherches automatiques, même par un navigateur sans fenêtre (captcha) ; les contourner serait de l'évasion de détection. DuckDuckGo HTML répond, mais peut demander un captcha après quelques recherches rapprochées : SearXNG est l'option fiable (décision 46). La lecture en deux temps reprend celle de Claude Code : une consigne cachée dans une page n'atteint qu'un modèle qui ne peut rien faire. Aucune nouvelle dépendance (`cpr` déjà là). Les pages construites en JavaScript ne sont pas lues (refus clair) ; pas d'extension de navigateur |
 | 46 | **SearXNG local par défaut**, géré par Avenoir : image officielle `searxng/searxng` lancée par podman (sinon docker) à la première recherche, téléchargée d'elle-même la première fois (annoncé), port publié sur 127.0.0.1 seulement, `settings.yml` généré (JSON, clé aléatoire, limiteur coupé) monté en lecture seule ; arrêtée après `searxng_idle_minutes` sans recherche (10 par défaut) et à la fermeture ; reprise si une instance laissée répond ; sans podman ni docker, ou en cas d'échec : DuckDuckGo. Réglages `[web] local_searxng`, `searxng_idle_minutes` ; une instance configurée (`searxng_url`) passe avant | Demandé par l'auteur : DuckDuckGo seul demande un captcha après quelques recherches rapprochées ; SearXNG interroge plusieurs moteurs et reste sur la machine. Rien ne tourne quand Avenoir est fermé ou inactif. Podman sans root d'abord (aucun privilège). Programmes lancés par tableau d'arguments (`platform::run_command` : `posix_spawn` et `waitpid` sous Linux, car `podman run --detach` laisse `conmon` hériter des descripteurs et reproc n'en verrait jamais la fin ; reproc sous Windows). Monter le dossier ferait changer son propriétaire par le conteneur : seul le fichier est monté |
 | 47 | **Réponses en flux** : `LlmRequest::on_text` (rappel par fragment, facultatif : sans lui, rien ne change) ; `Agent::handle` prend un `ReplyStream` (texte, puis fin de chaque réponse, « écartée » ou non) ; la CLI rend chaque ligne complète dès qu'elle arrive, un bloc de code ou un tableau une fois complet | Une réponse longue d'un modèle local s'affiche dès le premier mot au lieu d'attendre la fin ; le rappel garde les fournisseurs indépendants de l'affichage (CLI aujourd'hui, voix et interface graphique demain). Le texte est montré avant la vérification des réponses : une réponse écartée reste à l'écran mais est signalée comme écartée, plutôt que de retarder tout l'affichage |
+| 48 | **Avenoir orchestrateur multi-agents** (prévu, § 2.11) : des agents 100 % configurables (rôle, consigne, modèle, outils et modules) qui travaillent en parallèle, un agent pouvant attendre le résultat d'un autre (graphe de tâches) ; répartition par Avenoir, automatique (agents créés à la volée, rôles estimés selon le projet) ou selon l'équipe composée par l'utilisateur depuis l'application ou la CLI ; plusieurs projets en parallèle, isolés, chacun avec sa propre instance de la configuration agentique ; outils agentiques réservés aux agents ; moindre privilège, permissions et confirmations par agent | Demandé par l'auteur : les tâches longues gagnent à être découpées entre des rôles spécialisés travaillant en même temps, chacun avec le modèle et les outils qui lui conviennent ; plusieurs projets doivent pouvoir avancer ensemble sans se gêner. La couche de sécurité ne change pas : chaque agent est un agent Avenoir, avec ses permissions, dans les limites de son projet |
+| 49 | **Claude Code en session persistante** : un processus `claude -p --input-format stream-json` reste ouvert ; Avenoir retient la conversation que la session connaît et ne lui envoie que la suite ; si la requête ne la prolonge pas (autre conversation, réponse écartée par la vérification, autre prompt système ou jeu d'outils), la session est relancée avec tout l'historique ; deux sessions au plus, arrêtées en changeant de modèle (le fournisseur est détruit) et à la fermeture ; réglage `persistent` pour revenir au lancement à chaque appel | Le démarrage de la CLI coûtait l'essentiel du temps : 6,1 s au lieu de 14,8 s pour trois requêtes enchaînées. La conversation d'Avenoir reste la référence : la session n'est qu'un cache, comparé à chaque appel, jamais une source de vérité. Les mêmes protections qu'avant (aucun outil de Claude Code, réglages ignorés, dossier temporaire, clés retirées) |
 
 ---
 
 ## 8. Questions ouvertes
+
+- Orchestrateur multi-agents (§ 2.11) : format de la configuration des agents, des équipes et des projets ; protocole entre agents (messages, tableau de tâches, attente d'un résultat) ; exécution parallèle (un fil par agent, file de requêtes par modèle local pour ne pas saturer la carte graphique) ; place du démon (jalon 3) pour des projets qui continuent quand la CLI est fermée ; affichage de l'activité de chaque projet et de chaque agent dans la CLI et l'application.
 
 - Framework de l'interface web (Svelte, Solid, React…).
 - Bibliothèque C++ de vue web (`saucer`, `webview`…) et intégration layer-shell sous Wayland.

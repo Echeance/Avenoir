@@ -151,7 +151,8 @@ Result<LlmConfig> parse_llm(const toml::table& llm, std::string_view section) {
         auto model = optional_value<std::string>(llm, section, "model");
         auto command = optional_value<std::string>(llm, section, "command");
         auto timeout = optional_integer(llm, section, "timeout_secs", 1, 3600);
-        if (auto error = first_error(model, command, timeout)) {
+        auto persistent = optional_value<bool>(llm, section, "persistent");
+        if (auto error = first_error(model, command, timeout, persistent)) {
             return std::unexpected(std::move(*error));
         }
         config.model = std::move(*model);
@@ -161,6 +162,7 @@ Result<LlmConfig> parse_llm(const toml::table& llm, std::string_view section) {
         if (timeout->has_value()) {
             config.timeout_secs = static_cast<std::uint32_t>(**timeout);
         }
+        config.persistent = persistent->value_or(config.persistent);
         return config;
     }
 

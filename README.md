@@ -51,6 +51,7 @@ La liste complète, sans rien omettre : **[docs/FEATURES.md](docs/FEATURES.md)**
 
 ### Bientôt
 
+- 🤝 **Orchestrateur multi-agents** : Avenoir répartit le travail entre des agents qui avancent en parallèle (et s'attendent quand l'un a besoin du résultat d'un autre), créés à la volée ou composés par vous (chef de projet, développeur, relecteur…), chacun avec son rôle, son modèle et ses outils. Plusieurs projets peuvent avancer en même temps, chacun avec son équipe, sans interférer, toujours sous la même couche de sécurité.
 - 🧱 **Modules avancés** : onglets d'interface, fonctions de fond, appels entre modules, magasin de modules.
 - 🌙 **Assistant résident** : démon en arrière-plan, raccourci clavier global, journal des actions, et la carte graphique libérée (ou le modèle léger choisi) quand vous lancez un jeu.
 - 🎙️ **Voix** : mot de réveil, reconnaissance et synthèse vocales, en local.

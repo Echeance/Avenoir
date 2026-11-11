@@ -14,7 +14,7 @@
 | **1. Socle** | Projet CMake, CI, cœur (agent, permissions, voie rapide), LLM, premiers outils, hôte de modules v1, CLI, conversations persistantes | ✅ |
 | **2. Assistant du quotidien** | Contrôle système (volume, écran, multimédia), recherche web, applications installées, changer de LLM à tout moment | 🔄 |
 | **3. Résident** | Démon en arrière-plan, IPC, journal structuré, permissions durables et révocables, magasin de modèles | ⬜ |
-| **4. Tâches et modules** | Fichiers, mémoire, contexte long, appels entre modules, fonctions de fond | ⬜ |
+| **4. Tâches et modules** | Orchestrateur multi-agents (agents en parallèle, plusieurs projets isolés), fichiers, mémoire, contexte long, appels entre modules, fonctions de fond | ⬜ |
 | **5. Voix** | Mot de réveil, STT, TTS, confirmations vocales | ⬜ |
 | **6. Interface graphique** | Widget en haut de l'écran (pingouin animé), application principale, onglets de modules | ⬜ |
 | **7. Identité et présence** | Propriétaire et liste blanche, vérification par la voix et le visage, verrouillage et connexion automatiques | ⬜ |
@@ -196,9 +196,10 @@ L'ordre suit un principe : **chaque jalon produit un assistant utilisable**, plu
 - ✅ Affichage progressif dans la CLI (ligne par ligne, blocs de code et tableaux une fois complets ; réponse écartée par la vérification signalée)
 - ⬜ Plus tard : synthèse vocale phrase par phrase (jalon 5)
 
-### 2.5 Fournisseur `claude_code` — P2
-- ⬜ Réduire la latence : garder un processus `claude` ouvert en mode `--input-format stream-json` au lieu d'un lancement par appel
-- ⬜ Message d'erreur clair si la CLI n'est pas connectée (« lancez `claude` puis `/login` »)
+### 2.5 Fournisseur `claude_code` — P2 ✅
+- ✅ Réduire la latence : processus `claude` gardé ouvert (`--input-format stream-json`), seule la suite de la conversation envoyée, session relancée si la conversation change ; réglage `persistent` ; mesuré : 6,1 s au lieu de 14,8 s pour trois requêtes enchaînées (haiku)
+- ✅ Message d'erreur clair si la CLI n'est pas connectée (« lancez `claude` dans un terminal, puis `/login` »)
+- ⬜ Plus tard : texte au fil de l'eau (la réponse structurée arrive dans un JSON partiel)
 
 ### 2.6 Changer de LLM à tout moment — P1 ✅
 - ✅ Plusieurs modèles dans la configuration : un par section `[models.<nom>]`, le premier par défaut ; sans modèle, seule la voie rapide répond
@@ -243,6 +244,17 @@ L'ordre suit un principe : **chaque jalon produit un assistant utilisable**, plu
 
 ## Jalon 4 — Tâches et modules avancés ⬜
 
+### Orchestrateur multi-agents (PROJECT.md § 2.11, décision 48)
+- ⬜ **P1** Agent configurable : rôle, consigne, modèle, outils et modules permis, autonomie (`[agents.<nom>]`, puis application et CLI : créer, modifier, supprimer, lister)
+- ⬜ **P1** Coordinateur : découpe une demande en tâches, confie chacune à l'agent qui convient, suit l'avancement, assemble le résultat
+- ⬜ **P1** Exécution parallèle : un agent par fil, graphe de tâches avec dépendances (un agent attend le résultat d'un autre sans bloquer les autres ; échec ou annulation propagés ; cycle refusé) ; file d'attente par modèle local
+- ⬜ **P1** Plusieurs projets en parallèle, isolés : chacun son instance de la configuration agentique, ses agents, son contexte, son tableau de tâches, ses dossiers autorisés et ses journaux ; sans configuration, rôles estimés par Avenoir selon le projet et ses tâches
+- ⬜ **P1** Mode automatique : agents créés à la volée avec les seuls outils de leur tâche, supprimés à la fin ; mode configuré : équipe de l'utilisateur (chef de projet, développeur, relecteur…), modèles d'agents réutilisables
+- ⬜ **P1** Outils agentiques : confier une tâche, rendre un résultat, demander une précision, tableau de tâches partagé
+- ⬜ **P1** Sécurité : moindre privilège par agent, permissions et confirmations par agent (confirmation toujours par l'utilisateur), audit et annulation avec l'agent qui a agi, messages entre agents traités comme des données, « local uniquement » pour tous, bornes (agents, profondeur, étapes, durée), Ctrl+C pour toute l'équipe
+- ⬜ **P2** Affichage de l'activité de chaque agent (CLI, puis application) ; banc d'essai multi-agents
+
+### Autres tâches
 - ⬜ **P1** Outils fichiers (lister, lire, déplacer, renommer, ranger) **restreints à des dossiers autorisés** dans la config, chemins canonicalisés (`std::filesystem::weakly_canonical`)
 - ⬜ **P1** Suppression = `sensitive`, avec un résumé avant confirmation (« 12 fichiers dans Téléchargements »)
 - ⬜ **P2** Gestion du contexte long : résumé automatique de l'historique au-delà d'un seuil

@@ -53,6 +53,8 @@ reasoning_effort = "none"
 # model = "haiku"             # optionnel : sonnet, opus, haiku…
 # command = "claude"          # chemin complet si besoin (Windows : claude.exe)
 # timeout_secs = 180
+# persistent = true          # garder `claude` ouvert entre deux requêtes (bien plus
+#                             # rapide) ; false : un lancement par appel
 
 # ─── Agent ─────────────────────────────────────────────────────────────────
 [agent]
