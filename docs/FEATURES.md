@@ -191,7 +191,7 @@ Plateformes : **Linux** et **Windows** (sauf mention contraire).
 ## 11. Journaux
 
 - Logs sur stderr, niveau `warn` par défaut, réglable avec `AVENOIR_LOG` (`debug`, `info`…).
-- **Journal d'audit** (logger `audit`) : chaque exécution, refus, échec et annulation d'outil ; affiché avec `AVENOIR_LOG=info`.
+- **Journal d'audit** (logger `audit`) : chaque exécution, refus, échec et annulation d'outil ; toujours écrit dans `logs/audit.log` du dossier de données (dossier `0700`, chaque entrée aussitôt sur le disque, horodatée à la milliseconde ; rotation : 5 fichiers de 5 Mo au plus), quel que soit `AVENOIR_LOG` ; affiché à l'écran avec `AVENOIR_LOG=info`.
 - stderr de chaque module dans son propre fichier de log.
 
 ## 12. Banc d'essai avec de vrais modèles

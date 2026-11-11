@@ -333,7 +333,7 @@ La CLI doit être agréable à lire : chaque type d'élément a son style, recon
 - **Réponses découpées aux mots** : chaque ligne garde la barre `│`.
 - **Toutes les sorties de la CLI passent par un seul module d'affichage**, sous un verrou : la toupie (thread principal) et les actions (thread de la requête) ne s'écrivent jamais en même temps ; la toupie est suspendue pendant une confirmation.
 - **Sans terminal ou avec `NO_COLOR`** (https://no-color.org) : ni couleur ni animation, texte simple (les marqueurs Markdown sont tout de même retirés). Sous Windows, les séquences de couleur de la console sont activées.
-- **Journal d'audit** : masqué à l'écran par défaut (les lignes `»` montrent déjà les actions) ; visible avec `AVENOIR_LOG=info`. Il sera écrit dans un fichier au jalon 3.
+- **Journal d'audit** : masqué à l'écran par défaut (les lignes `»` montrent déjà les actions) ; visible avec `AVENOIR_LOG=info`. Toujours écrit dans `logs/audit.log` du dossier de données (lisible par l'utilisateur seul, rotation 5 × 5 Mo, chaque entrée aussitôt sur le disque).
 
 ---
 
@@ -554,7 +554,7 @@ Emplacement : `$XDG_CONFIG_HOME/avenoir/config.toml` (`~/.config/avenoir/config.
 - [x] Changer de LLM à tout moment : commande `/modele`, outil `switch_llm` et règles de voie rapide
 
 ### Phase 3 : résident
-- [ ] Emplacement standard de la config, rotation des logs, fichier d'audit
+- [x] Emplacement standard de la config et création guidée (décision 50), fichier d'audit avec rotation
 - [ ] Mode démon (service Windows / unité systemd utilisateur) + IPC locale pour les interfaces
 - [ ] Journal structuré : historique par conversation et global
 - [ ] Permissions durables (« toujours autoriser ») et révocables

@@ -249,7 +249,7 @@ Sous Linux, le contrôle du système s'appuie sur les programmes habituels du bu
 | <kbd>↑</kbd> / <kbd>↓</kbd> | saisies précédentes (conservées entre deux lancements) |
 | <kbd>Tab</kbd> | complète les commandes |
 
-Les conversations sont enregistrées dans `avenoir.db`, dans le dossier de données d'Avenoir (`~/.local/share/avenoir` sous Linux, `%LOCALAPPDATA%\avenoir` sous Windows), lisible par vous seul. Le journal d'audit des actions s'affiche avec `AVENOIR_LOG=info`.
+Les conversations sont enregistrées dans `avenoir.db`, dans le dossier de données d'Avenoir (`~/.local/share/avenoir` sous Linux, `%LOCALAPPDATA%\avenoir` sous Windows), lisible par vous seul. Le **journal d'audit** (chaque action exécutée, refusée, échouée ou annulée, avec ses arguments) est écrit dans `logs/audit.log` de ce même dossier, lisible par vous seul : 5 fichiers de 5 Mo au plus, le plus ancien effacé. Pour le voir aussi à l'écran : `AVENOIR_LOG=info`.
 
 ### Modules
 

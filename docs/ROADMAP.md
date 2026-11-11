@@ -232,7 +232,7 @@ L'ordre suit un principe : **chaque jalon produit un assistant utilisable**, plu
 - ⬜ **P1** Sceau HMAC-SHA256 des réglages, clé dans le trousseau du système (repli : fichier `0600`, signalé)
 - ⬜ **P1** Surveillance du fichier : sceau invalide → refus, restauration de la dernière version valide, alerte (avec le détail des changements), journal
 - ⬜ **P1** Tests : modification à la main, suppression du sceau, sceau d'une autre version → toutes rejetées et restaurées
-- ⬜ **P1** Journal d'audit dans un fichier dédié, avec rotation (`spdlog` rotating sink)
+- ✅ **P1** Journal d'audit dans un fichier dédié, avec rotation (`spdlog` rotating sink) : `logs/audit.log` du dossier de données (`0700`), toujours écrit quel que soit `AVENOIR_LOG`, chaque entrée aussitôt sur le disque, 5 × 5 Mo ; vérifié par le test de bout en bout
 - ⬜ **P1** Mode démon : unité systemd utilisateur / service Windows (ou démarrage à l'ouverture de session)
 - ⬜ **P1** IPC locale (socket Unix / named pipe) entre le démon et les interfaces (`avenoir::ipc`) ; la CLI devient un client
 - ⬜ **P1** Journal structuré (dans la base de l'étape 1.9) : actions, décisions de permission, module concerné ; historique par conversation et global ; le démon devient le seul à écrire dans la base

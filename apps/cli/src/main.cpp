@@ -37,6 +37,7 @@
 #include <vector>
 
 #include <nlohmann/json.hpp>
+#include <spdlog/sinks/rotating_file_sink.h>
 #include <spdlog/sinks/stdout_color_sinks.h>
 #include <spdlog/spdlog.h>
 
@@ -79,16 +80,56 @@ void report_fatal(const char* message) noexcept {
 }
 
 /// Logs sur stderr (stdout reste réservé au dialogue). Le journal d'audit
-/// n'est affiché que si AVENOIR_LOG est défini.
+/// n'est affiché que si AVENOIR_LOG est défini ; il est aussi écrit dans son
+/// fichier (`attach_audit_file`), quel que soit AVENOIR_LOG.
 void setup_logging() {
     const auto main_logger = spdlog::stderr_color_mt("avenoir");
     const auto audit = spdlog::stderr_color_mt("audit");
     spdlog::set_default_logger(main_logger);
     spdlog::set_pattern("%^[%n %l]%$ %v");
     spdlog::set_level(spdlog::level::warn);
-    audit->set_level(spdlog::level::off);
+    const auto& audit_screen = audit->sinks().front();
+    audit_screen->set_level(spdlog::level::off);
     if (const auto level = core::read_env("AVENOIR_LOG")) {
         spdlog::set_level(spdlog::level::from_str(*level));
+        audit_screen->set_level(spdlog::level::from_str(*level));
+    }
+    // Chaque écran ou fichier filtre lui-même : l'audit garde tout.
+    audit->set_level(spdlog::level::trace);
+}
+
+/// Journal d'audit dans un fichier du dossier de données, `logs/audit.log` :
+/// toujours écrit, chaque entrée aussitôt sur le disque ; 5 fichiers de 5 Mo
+/// au plus (le plus ancien est effacé). Dossier lisible par l'utilisateur
+/// seul : les arguments des outils peuvent être personnels.
+void attach_audit_file(const std::filesystem::path& data_directory) {
+    constexpr std::size_t kMaxBytes = std::size_t{5} * 1024 * 1024;
+    constexpr std::size_t kMaxFiles = 5;
+    const auto audit = spdlog::get("audit");
+    if (!audit) {
+        return;
+    }
+    const std::filesystem::path directory = data_directory / "logs";
+    std::error_code error;
+    std::filesystem::create_directories(directory, error);
+    if (!error) {
+        std::filesystem::permissions(directory, std::filesystem::perms::owner_all,
+                                     std::filesystem::perm_options::replace, error);
+    }
+    if (error) {
+        spdlog::warn("journal d'audit non enregistré : {} ({})", cli::utf8_path(directory),
+                     error.message());
+        return;
+    }
+    try {
+        auto sink = std::make_shared<spdlog::sinks::rotating_file_sink_mt>(
+            (directory / "audit.log").string(), kMaxBytes, kMaxFiles);
+        sink->set_pattern("%Y-%m-%d %H:%M:%S.%e [%l] %v");
+        sink->set_level(spdlog::level::info);
+        audit->sinks().push_back(std::move(sink));
+        audit->flush_on(spdlog::level::info);
+    } catch (const spdlog::spdlog_ex& e) {
+        spdlog::warn("journal d'audit non enregistré : {}", e.what());
     }
 }
 
@@ -711,6 +752,7 @@ int run(int argc, char** argv) {
     std::optional<std::filesystem::path> history_file;
     std::optional<storage::Store> store;
     if (directory) {
+        attach_audit_file(*directory);
         history_file = *directory / "cli_history.txt";
         auto opened = storage::Store::open(*directory / "avenoir.db");
         if (opened) {
