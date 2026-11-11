@@ -51,8 +51,15 @@ jobs:
       CXX: ${{ matrix.cxx }}
     steps:
       - uses: actions/checkout@v4
+      # Par apt ; si les miroirs Ubuntu sont injoignables (panne déjà vue sur
+      # les runners), par pipx (paquet PyPI « ninja »), sans apt.
       - name: Installer Ninja
-        run: sudo apt-get update -q && sudo apt-get install -y -q ninja-build
+        run: |
+          if ! { sudo apt-get update -q && sudo apt-get install -y -q ninja-build; }; then
+            echo "::warning::apt indisponible : Ninja installé par pipx"
+            pipx install ninja
+          fi
+          ninja --version
       - name: Installer Clang 20 (dépôt apt.llvm.org)
         if: startsWith(matrix.cc, 'clang')
         run: |
