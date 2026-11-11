@@ -38,6 +38,7 @@
 #include <spdlog/spdlog.h>
 
 #include "avenoir/core/agent.hpp"
+#include "avenoir/core/claims.hpp"
 #include "avenoir/core/config.hpp"
 #include "avenoir/core/env.hpp"
 #include "avenoir/core/permission.hpp"
@@ -48,7 +49,9 @@
 #include "avenoir/modules/host.hpp"
 #include "avenoir/storage/store.hpp"
 #include "avenoir/terminal/style.hpp"
+#include "avenoir/tools/searxng.hpp"
 #include "avenoir/tools/tools.hpp"
+#include "avenoir/tools/web.hpp"
 
 #include "console.hpp"
 #include "conversations.hpp"
@@ -88,20 +91,21 @@ void setup_logging() {
 /// Commandes d'Avenoir (sans « / »), alias compris : un module ne peut pas
 /// en déclarer une du même nom.
 std::vector<std::string> builtin_commands() {
-    return {"aide",  "annuler",    "charger",   "conversations", "decharger",
-            "help",  "historique", "recharger", "memoire",       "modules",
-            "model", "modele",     "nouvelle",  "ouvrir",        "outils",
-            "q",     "quit",       "quitter",   "raisonnement",  "renommer",
-            "reset", "risque",     "supprimer", "tools",         "transcription"};
+    return {"aide",       "annuler",      "charger",  "conversations", "decharger", "help",
+            "historique", "recharger",    "memoire",  "modules",       "model",     "modele",
+            "moteur",     "nouvelle",     "ouvrir",   "outils",        "q",         "quit",
+            "quitter",    "raisonnement", "renommer", "reset",         "risque",    "supprimer",
+            "tools",      "transcription"};
 }
 
 /// Commandes proposées à la complétion (Tab).
 std::vector<std::string> command_names(const cli::ModulesUi& modules) {
     std::vector<std::string> names{
         "/aide",          "/annuler",    "/charger", "/decharger", "/recharger",
-        "/conversations", "/historique", "/modele",  "/modules",   "/nouvelle",
-        "/ouvrir",        "/outils",     "/memoire", "/quitter",   "/raisonnement",
-        "/renommer",      "/reset",      "/risque",  "/supprimer", "/transcription"};
+        "/conversations", "/historique", "/modele",  "/moteur",    "/modules",
+        "/nouvelle",      "/ouvrir",     "/outils",  "/memoire",   "/quitter",
+        "/raisonnement",  "/renommer",   "/reset",   "/risque",    "/supprimer",
+        "/transcription"};
     std::ranges::copy(modules.completion_names(), std::back_inserter(names));
     return names;
 }
@@ -119,6 +123,7 @@ void print_help(const cli::ModulesUi& modules) {
     out += command("/outils", "outils disponibles et leur niveau de risque") + "\n";
     out += command("/annuler", "annuler les actions de la dernière requête (répétable)") + "\n";
     out += command("/modele [nom]", "modèles disponibles, ou changer de modèle") + "\n";
+    out += command("/moteur [nom]", "moteur de la recherche web (duckduckgo, searxng)") + "\n";
     out +=
         command("/memoire [nom]", "modèles chargés en mémoire, et la mémoire vidéo occupée") + "\n";
     out += command("/raisonnement [niveau] [modèle]",
@@ -363,6 +368,8 @@ std::string_view trim(std::string_view text) {
 constexpr std::string_view kActiveModelKey = "llm.active";
 /// Préfixe des clés où est retenu le raisonnement de chaque modèle.
 constexpr std::string_view kReasoningKeyPrefix = "llm.reasoning.";
+/// Clé de la base où est retenu le moteur de la recherche web.
+constexpr std::string_view kSearchEngineKey = "web.engine";
 
 /// Après chaque requête ou commande : déchargement différé du modèle actif
 /// (demandé pendant la requête, que sa réponse aurait rechargé).
@@ -407,7 +414,7 @@ void print_models(const llm::ModelSwitcher& switcher) {
 
 bool run_command(core::Agent& agent, cli::Prompt& prompt, cli::Conversations& conversations,
                  cli::ModulesUi& modules, const llm::ModelSwitcher& switcher,
-                 std::string_view line) {
+                 const tools::SearchEngines& engines, std::string_view line) {
     // « /commande argument libre »
     const auto space = line.find(' ');
     const std::string_view command = line.substr(0, space);
@@ -461,6 +468,24 @@ bool run_command(core::Agent& agent, cli::Prompt& prompt, cli::Conversations& co
             // revient au modèle précédent) et confirmation pour un modèle distant.
             const core::ToolCall call{
                 .id = {}, .name = "switch_llm", .arguments = {{"name", std::string(argument)}}};
+            const std::string input(line);
+            run_request(agent, prompt, [&agent, &input, &call](const std::stop_token& stop) {
+                return agent.run_tool(input, call, stop);
+            });
+        }
+    } else if (command == "/moteur") {
+        if (argument.empty()) {
+            std::string list;
+            for (const auto& name : engines.available()) {
+                list += (list.empty() ? "" : ", ") + name;
+            }
+            display().info("Recherche web : " + engines.label() + ". Moteurs : " + list + ".");
+        } else {
+            // Comme la voie rapide : permissions et journal (/annuler revient
+            // au moteur précédent).
+            const core::ToolCall call{.id = {},
+                                      .name = "set_search_engine",
+                                      .arguments = {{"name", std::string(argument)}}};
             const std::string input(line);
             run_request(agent, prompt, [&agent, &input, &call](const std::stop_token& stop) {
                 return agent.run_tool(input, call, stop);
@@ -681,6 +706,29 @@ int run(int argc, char** argv) {
             startup_warnings.push_back(core::describe(state.error()));
         }
     }
+    // Moteur de la recherche web : celui de la configuration, sauf s'il a
+    // été changé depuis Avenoir (retenu dans la base).
+    // Instance SearXNG locale (podman ou docker), lancée à la première
+    // recherche et arrêtée après inactivité ou à la fermeture : déclarée
+    // avant les moteurs et l'agent, elle est détruite après eux.
+    std::unique_ptr<tools::SearxngHost> searxng_host;
+    if (config->web.local_searxng && !config->web.searxng_url) {
+        if (const auto data = storage::data_directory()) {
+            searxng_host = std::make_unique<tools::SearxngHost>(tools::SearxngOptions{
+                .config_dir = *data / "searxng",
+                .idle = std::chrono::minutes{config->web.searxng_idle_minutes},
+                .notify = [](std::string_view message) { display().info(message); },
+                .run = {},   // lanceur réel (reproc)
+                .ready = {}, // GET /healthz
+            });
+        }
+    }
+    tools::SearchEngines engines(config->web.searxng_url, searxng_host.get(), config->web.engine);
+    if (store) {
+        if (auto state = store->state(kSearchEngineKey); state && state->has_value()) {
+            engines.restore(**state);
+        }
+    }
     // Raisonnement réglé par modèle, retenu lui aussi.
     if (store) {
         for (const auto& model : switcher.models()) {
@@ -715,11 +763,38 @@ int run(int argc, char** argv) {
         }
     }
 
+    // Recherche web et lecture de pages ; une page est lue à part par le
+    // modèle actif, sans outils (Agent::ask_aside), une fois l'agent créé.
+    core::Agent* page_reader = nullptr;
+    for (auto& tool : tools::make_web_tools(
+             engines,
+             [&page_reader](std::string_view instructions, std::string text,
+                            const std::stop_token& stop) -> core::Result<std::string> {
+                 if (page_reader == nullptr) {
+                     return core::make_error(core::ErrorCode::Config, "lecteur indisponible");
+                 }
+                 return page_reader->ask_aside(instructions, std::move(text), stop);
+             })) {
+        if (auto added = tools.add(std::move(tool)); !added) {
+            display().error(core::describe(added.error()));
+            return EXIT_FAILURE;
+        }
+    }
+    if (options.router) {
+        if (auto rules = tools::register_web_rules(*options.router); !rules) {
+            display().error(core::describe(rules.error()));
+            return EXIT_FAILURE;
+        }
+    }
+
     core::Agent agent(std::move(*llm), std::move(tools), std::make_unique<CliConfirmation>(prompt),
                       std::move(options));
+    page_reader = &agent;
     switcher.attach(agent);
     if (config->agent.verify_replies) {
         agent.add_reply_check(llm::make_model_claim_check(switcher));
+        agent.add_reply_check(core::make_claim_check(tools::action_claim_rules(
+            [&agent](std::string_view name) { return agent.tools().find(name) != nullptr; })));
     }
 
     cli::Conversations conversations(std::move(store), agent, prompt);
@@ -729,6 +804,13 @@ int run(int argc, char** argv) {
             if (auto saved = base->set_state(std::string(kReasoningKeyPrefix) + model.name, effort);
                 !saved) {
                 spdlog::warn("raisonnement non retenu : {}", core::describe(saved.error()));
+            }
+        }
+    });
+    engines.on_change([&conversations](const std::string& engine) {
+        if (auto* base = conversations.store()) {
+            if (auto saved = base->set_state(kSearchEngineKey, engine); !saved) {
+                spdlog::warn("moteur de recherche non retenu : {}", core::describe(saved.error()));
             }
         }
     });
@@ -791,7 +873,7 @@ int run(int argc, char** argv) {
             continue;
         }
         if (line.starts_with('/')) {
-            if (!run_command(agent, prompt, conversations, modules_ui, switcher, line)) {
+            if (!run_command(agent, prompt, conversations, modules_ui, switcher, engines, line)) {
                 break;
             }
             finish_request(switcher, load_watch);

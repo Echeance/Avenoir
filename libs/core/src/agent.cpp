@@ -202,6 +202,27 @@ Result<std::string> Agent::handle(std::string_view input, const std::stop_token&
     return make_error(ErrorCode::MaxStepsReached, std::to_string(options_.max_steps) + " étape(s)");
 }
 
+Result<std::string> Agent::ask_aside(std::string_view system, std::string text,
+                                     const std::stop_token& stop) {
+    if (llm_ == nullptr) {
+        return make_error(ErrorCode::Config, "aucun modèle configuré");
+    }
+    const std::vector<Message> messages{UserMessage{.content = std::move(text)}};
+    auto response = llm_->complete(LlmRequest{
+        .system = system,
+        .messages = messages,
+        .tools = {},
+        .stop = stop,
+    });
+    if (!response) {
+        return std::unexpected(std::move(response.error()));
+    }
+    if (response->text.empty()) {
+        return make_error(ErrorCode::Llm, "le modèle n'a renvoyé aucune réponse");
+    }
+    return std::move(response->text);
+}
+
 std::optional<ReplyIssue> Agent::check_reply(std::string_view reply,
                                              std::span<const ToolCall> calls) const {
     for (const auto& check : reply_checks_) {

@@ -173,7 +173,7 @@ L'ordre suit un principe : **chaque jalon produit un assistant utilisable**, plu
 - ✅ Règles de voie rapide associées (« monte le son », « coupe le son », « pause », « verrouille l'ordinateur », « mode sombre »…) ; extinction et redémarrage jamais par la voie rapide
 - ✅ Un outil indisponible sur un OS ou une machine n'est pas enregistré (PROJECT.md § 4.3) : pas de sortie audio, pas d'écran réglable, programme absent
 - ✅ Banc d'essai : 6 cas de plus (contrôle, refus d'extinction, injection par un titre de morceau), prompt v5 (evals/resultats/COMPARAISON.md, série 6)
-- ✅ Banc d'essai : outils de modèle et 5 cas « modeles » (bascule, chargement, « quel modèle es-tu ? », bascule après des réponses sans outil) (COMPARAISON.md, série 7)
+- ✅ Banc d'essai : outils de modèle et 5 cas « modeles » (bascule, chargement, « quel modèle es-tu ? », bascule après des réponses sans outil) (COMPARAISON.md, séries 7 et 8)
 - ✅ Vérifié sous Windows (VM) : mode sombre, multimédia, notification émise, volume absent sans sortie audio
 - ℹ️ La notification n'a pas pu être vue à l'écran dans la VM (notifications coupées, la bulle de référence .NET non plus) : à vérifier sur un vrai poste Windows
 
@@ -183,13 +183,13 @@ L'ordre suit un principe : **chaque jalon produit un assistant utilisable**, plu
 - ✅ Outil `list_apps` (read_only) pour que le LLM puisse chercher
 - ✅ Voie rapide : article et accents permis (« ouvre le bloc-notes »)
 
-### 2.3 Recherche web — P1
-- ⬜ Choisir le moteur par défaut (question ouverte de PROJECT.md § 8). Piste discutée le 8 novembre 2026, à confirmer : moteur du navigateur par défaut (préférences de Chrome / Edge / Brave, `search.json` de Firefox), interrogé par ce navigateur **sans fenêtre** avec un profil temporaire ; s'il bloque, demander un autre moteur, s'en souvenir et permettre d'en changer (commande, outil, voie rapide)
-- ⬜ À mesurer d'abord : Google en mode sans fenêtre (captcha, page de consentement) ; dépendance WebSocket (`ixwebsocket` ?) pour CDP (Chromium), WebDriver BiDi pour Firefox ensuite
-- ⬜ Outil `web_search` (read_only) → titres, URL, extraits
-- ⬜ Outil `read_webpage` (read_only) → texte principal de la page, tronqué
-- ⬜ Contenu web toujours traité comme donnée (test d'injection dédié)
-- ⬜ Plus tard : lire l'onglet ouvert dans le navigateur de l'utilisateur (extension + messagerie native ; outil `sensitive`, désactivé par défaut, onglet actif seulement)
+### 2.3 Recherche web — P1 ✅
+- ✅ Moteur : **SearXNG local par défaut**, lancé par Avenoir avec podman ou docker à la première recherche (image téléchargée d'elle-même), sur 127.0.0.1 seulement, arrêté après 10 min sans recherche ou à la fermeture (décision 46) ; ou une instance SearXNG configurée (`[web] searxng_url`) ; DuckDuckGo (version HTML) sinon ; moteur retenu et changeable (`/moteur`, outil `set_search_engine` annulable, voie rapide « utilise searxng pour chercher ») ; mesuré : Google et Brave Search bloquent les recherches automatiques, même sans fenêtre (décision 45)
+- ✅ Outil `web_search` (read_only) → titres, URL, extraits ; voie rapide « cherche sur le web X »
+- ✅ Outil `read_webpage` (read_only) : page téléchargée (HTTP, 3 Mo, 15 s, 5 redirections), réduite à son texte, **lue à part par le modèle sans outils** ; seule sa réponse entre dans la conversation
+- ✅ Adresses locales et privées refusées, y compris par redirection ou nom qui s'y résout (adresse IP vérifiée à chaque requête)
+- ✅ Contenu web toujours traité comme donnée : cas `injection-recherche` au banc, consigne du lecteur, texte nettoyé (contrôles, marques bidirectionnelles)
+- ⬜ Pages construites en JavaScript : refusées aujourd'hui ; lecture par le navigateur sans fenêtre (`--dump-dom`, profil jetable) si le besoin se confirme
 
 ### 2.4 Streaming des réponses — P2
 - ⬜ `LlmProvider` : variante en flux (callback par fragment)
@@ -210,7 +210,7 @@ L'ordre suit un principe : **chaque jalon produit un assistant utilisable**, plu
 - ✅ Modèles chargés ou déchargés hors d'Avenoir annoncés pendant la saisie ; état des modèles : `/memoire`, outil `llm_status`, voie rapide
 - ✅ Changer le raisonnement à chaud, sans recharger le modèle : `/raisonnement`, outil `set_reasoning`, voie rapide ; retenu par modèle
 - ✅ Charger, décharger, recharger un modèle local (Ollama) : `/charger`, `/decharger`, `/recharger`, outils `load_llm` / `unload_llm`, voie rapide (« décharge le modèle », « libère la carte graphique », « allume le modèle gemma ») ; déchargement du modèle actif différé à la fin de la réponse
-- ✅ Le modèle connaît son nom (modèle actif ajouté au prompt système) ; voie rapide par nom seul (« bascule sur qwen », « charge qwen », « tu es quel modèle ? ») ; un changement ou un chargement annoncé sans appel d'outil relance le modèle une fois, puis est signalé ; outils de modèle et cas « modeles » au banc
+- ✅ Le modèle connaît son nom (modèle actif ajouté au prompt système) ; voie rapide par nom seul (« bascule sur qwen », « charge qwen », « tu es quel modèle ? ») ; un changement ou un chargement annoncé sans appel d'outil relance le modèle une fois, puis est signalé (étendu aux actions des outils natifs : lancer, son, lecture, mode sombre, verrouillage, alimentation, notification ; désactivable : `verify_replies`) ; outils de modèle et cas « modeles » au banc
 - ✅ Mode « local uniquement » (`[agent] local_only`) : un modèle distant n'est jamais utilisé, ni au lancement (premier modèle local à la place, sinon voie rapide seule), ni par un changement (refusé sans confirmation possible)
 
 **Fini quand :** « monte le son », « mets en pause », « cherche la météo à Lyon », « ouvre le navigateur », « passe sur le modèle léger » fonctionnent sur les deux OS.

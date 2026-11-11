@@ -3,10 +3,13 @@
 // Chaînes en UTF-8 partout, converties en UTF-16 uniquement ici.
 
 #include <algorithm>
+#include <array>
 #include <atomic>
 #include <chrono>
 #include <cmath>
 #include <condition_variable>
+#include <cstddef>
+#include <cstdio>
 #include <cwchar>
 #include <expected>
 #include <filesystem>
@@ -37,6 +40,8 @@
 
 #include <winrt/Windows.Foundation.h>
 #include <winrt/Windows.Media.Control.h>
+
+#include <reproc++/reproc.hpp>
 // clang-format on
 
 #include "avenoir/core/env.hpp"
@@ -828,6 +833,72 @@ std::optional<std::string> distribution() {
 
 std::optional<std::string> hostname() {
     return core::read_env("COMPUTERNAME");
+}
+
+// ─── Programmes ──────────────────────────────────────────────────────────────
+
+std::expected<CommandExit, CommandFailure> run_command(const std::vector<std::string>& arguments,
+                                                       std::chrono::milliseconds timeout,
+                                                       const std::stop_token& stop,
+                                                       std::size_t max_output) {
+    if (arguments.empty()) {
+        return std::unexpected(CommandFailure{.message = "aucun programme"});
+    }
+    // reproc attend sur le processus lui-même (WaitForSingleObject) : un
+    // processus de fond qui hérite de la sortie (fichier temporaire) ne
+    // bloque rien.
+    const std::unique_ptr<std::FILE, int (*)(std::FILE*)> out(std::tmpfile(), &std::fclose);
+    if (!out) {
+        return std::unexpected(CommandFailure{.message = "fichier temporaire impossible"});
+    }
+    reproc::options options;
+    options.redirect.out.type = reproc::redirect::file_;
+    options.redirect.out.file = out.get();
+    options.redirect.err.type = reproc::redirect::discard;
+    options.redirect.in.type = reproc::redirect::discard;
+    const reproc::stop_actions halt{
+        .first = {.action = reproc::stop::terminate, .timeout = reproc::milliseconds(2000)},
+        .second = {.action = reproc::stop::kill, .timeout = reproc::milliseconds(1000)},
+        .third = {.action = reproc::stop::noop, .timeout = reproc::milliseconds(0)},
+    };
+    options.stop = halt;
+    reproc::process process;
+    if (process.start(arguments, options)) {
+        return std::unexpected(
+            CommandFailure{.message = "lancement de " + arguments.front() + " impossible"});
+    }
+    const auto end = std::chrono::steady_clock::now() + timeout;
+    int status = -1;
+    while (true) {
+        const auto [code, error] = process.wait(reproc::milliseconds(100));
+        if (!error) {
+            status = code;
+            break;
+        }
+        if (error != std::errc::timed_out) {
+            return std::unexpected(
+                CommandFailure{.message = arguments.front() + " : " + error.message()});
+        }
+        if (stop.stop_requested()) {
+            const auto halted = process.stop(halt);
+            (void)halted;
+            return std::unexpected(CommandFailure{.message = {}, .cancelled = true});
+        }
+        if (std::chrono::steady_clock::now() >= end) {
+            const auto halted = process.stop(halt);
+            (void)halted;
+            return std::unexpected(
+                CommandFailure{.message = arguments.front() + " : délai dépassé"});
+        }
+    }
+    // Une seule lecture, bornée : seules quelques lignes servent.
+    std::string output(max_output, '\0');
+    std::size_t read = 0;
+    if (std::fseek(out.get(), 0, SEEK_SET) == 0) {
+        read = std::fread(output.data(), 1, output.size(), out.get());
+    }
+    output.resize(read);
+    return CommandExit{.exit_code = status, .output = std::move(output)};
 }
 
 } // namespace avenoir::tools::platform

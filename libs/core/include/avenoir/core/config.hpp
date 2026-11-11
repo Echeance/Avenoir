@@ -84,12 +84,29 @@ struct ModuleSettings {
     std::map<std::string, RiskLevel, std::less<>> risk;
 };
 
+/// Recherche web (`[web]`).
+struct WebConfig {
+    /// Instance SearXNG (`http(s)://…`, locale permise : choisie par
+    /// l'utilisateur) ; absente : instance locale lancée par Avenoir.
+    std::optional<std::string> searxng_url;
+    /// Lancer une instance SearXNG locale (podman ou docker) à la première
+    /// recherche, si aucune n'est configurée.
+    bool local_searxng = true;
+    /// Arrêt de l'instance locale après ce nombre de minutes sans recherche.
+    int searxng_idle_minutes = 10;
+    /// Moteur de départ : « searxng » ou « duckduckgo ». Absent : SearXNG
+    /// s'il est disponible, sinon DuckDuckGo. Un moteur choisi depuis Avenoir
+    /// est retenu et l'emporte.
+    std::optional<std::string> engine;
+};
+
 struct AppConfig {
     /// Modèles (`[models.<nom>]`), dans l'ordre du fichier : le premier sert
     /// par défaut. Aucun : pas de LLM, seule la voie rapide répond.
     std::vector<NamedLlm> models;
     AgentConfig agent;
     PermissionPolicy permissions;
+    WebConfig web;
     /// Par identifiant de module.
     std::map<std::string, ModuleSettings, std::less<>> modules;
 };

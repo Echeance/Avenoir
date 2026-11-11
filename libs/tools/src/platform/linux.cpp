@@ -7,8 +7,10 @@
 #include <charconv>
 #include <chrono>
 #include <cmath>
+#include <csignal>
 #include <cstddef>
 #include <cstdint>
+#include <cstdio>
 #include <expected>
 #include <filesystem>
 #include <format>
@@ -16,14 +18,19 @@
 #include <ios>
 #include <memory>
 #include <optional>
+#include <stop_token>
 #include <string>
 #include <string_view>
 #include <system_error>
+#include <thread>
 #include <utility>
 #include <vector>
 
+#include <fcntl.h>
 #include <reproc++/drain.hpp>
 #include <reproc++/reproc.hpp>
+#include <spawn.h>
+#include <sys/wait.h>
 #include <unistd.h>
 
 #include "avenoir/core/env.hpp"
@@ -598,6 +605,90 @@ std::optional<std::string> hostname() {
     }
     std::string name(buffer.data());
     return name.empty() ? std::nullopt : std::optional<std::string>(std::move(name));
+}
+
+// ─── Programmes ──────────────────────────────────────────────────────────────
+
+std::expected<CommandExit, CommandFailure> run_command(const std::vector<std::string>& arguments,
+                                                       std::chrono::milliseconds timeout,
+                                                       const std::stop_token& stop,
+                                                       std::size_t max_output) {
+    if (arguments.empty()) {
+        return std::unexpected(CommandFailure{.message = "aucun programme"});
+    }
+    // Sortie dans un fichier temporaire : un processus de fond laissé par le
+    // programme peut en hériter sans rien bloquer.
+    const std::unique_ptr<std::FILE, int (*)(std::FILE*)> out(std::tmpfile(), &std::fclose);
+    if (!out) {
+        return std::unexpected(CommandFailure{.message = "fichier temporaire impossible"});
+    }
+    posix_spawn_file_actions_t actions;
+    posix_spawn_file_actions_init(&actions);
+    posix_spawn_file_actions_addopen(&actions, STDIN_FILENO, "/dev/null", O_RDONLY, 0);
+    posix_spawn_file_actions_adddup2(&actions, fileno(out.get()), STDOUT_FILENO);
+    posix_spawn_file_actions_addopen(&actions, STDERR_FILENO, "/dev/null", O_WRONLY, 0);
+    std::vector<std::string> copies = arguments;
+    std::vector<char*> argv;
+    argv.reserve(copies.size() + 1);
+    for (auto& argument : copies) {
+        argv.push_back(argument.data());
+    }
+    argv.push_back(nullptr);
+    pid_t pid = 0;
+    const int spawned = posix_spawnp(&pid, argv.front(), &actions, nullptr, argv.data(), environ);
+    posix_spawn_file_actions_destroy(&actions);
+    if (spawned != 0) {
+        return std::unexpected(
+            CommandFailure{.message = "lancement de " + arguments.front() + " impossible"});
+    }
+
+    // Attente du programme lui-même (waitpid), par tranches : Ctrl+C et le
+    // délai l'arrêtent (SIGTERM, puis SIGKILL).
+    const auto halt = [pid] {
+        kill(pid, SIGTERM);
+        for (int i = 0; i < 40; ++i) {
+            int ignored = 0;
+            if (waitpid(pid, &ignored, WNOHANG) == pid) {
+                return;
+            }
+            std::this_thread::sleep_for(std::chrono::milliseconds(50));
+        }
+        kill(pid, SIGKILL);
+        int ignored = 0;
+        waitpid(pid, &ignored, 0);
+    };
+    const auto end = std::chrono::steady_clock::now() + timeout;
+    int status = 0;
+    while (true) {
+        const pid_t done = waitpid(pid, &status, WNOHANG);
+        if (done == pid) {
+            break;
+        }
+        if (done < 0) {
+            return std::unexpected(
+                CommandFailure{.message = "attente de " + arguments.front() + " impossible"});
+        }
+        if (stop.stop_requested()) {
+            halt();
+            return std::unexpected(CommandFailure{.message = {}, .cancelled = true});
+        }
+        if (std::chrono::steady_clock::now() >= end) {
+            halt();
+            return std::unexpected(
+                CommandFailure{.message = arguments.front() + " : délai dépassé"});
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(50));
+    }
+
+    // Une seule lecture, bornée : seules quelques lignes servent.
+    std::string output(max_output, '\0');
+    std::size_t read = 0;
+    if (std::fseek(out.get(), 0, SEEK_SET) == 0) {
+        read = std::fread(output.data(), 1, output.size(), out.get());
+    }
+    output.resize(read);
+    const int code = WIFEXITED(status) ? WEXITSTATUS(status) : -1;
+    return CommandExit{.exit_code = code, .output = std::move(output)};
 }
 
 } // namespace avenoir::tools::platform

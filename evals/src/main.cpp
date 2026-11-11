@@ -27,6 +27,7 @@
 #include <spdlog/spdlog.h>
 
 #include "avenoir/core/agent.hpp"
+#include "avenoir/core/claims.hpp"
 #include "avenoir/core/config.hpp"
 #include "avenoir/core/env.hpp"
 #include "avenoir/llm/factory.hpp"
@@ -34,6 +35,7 @@
 #include "avenoir/modules/discovery.hpp"
 #include "avenoir/modules/host.hpp"
 #include "avenoir/tools/tools.hpp"
+#include "avenoir/tools/web.hpp"
 
 #include "cases.hpp"
 #include "report.hpp"
@@ -213,6 +215,18 @@ core::Result<std::vector<core::ToolSpec>> real_specs(const core::AppConfig& conf
             std::println(std::cerr, "{}", warning);
         }
     }
+    // Outils web : DuckDuckGo et une instance SearXNG fictive, pour que
+    // `set_search_engine` ait le choix ; rien n'est lancé ni appelé
+    // (doublures).
+    tools::SearchEngines engines("http://localhost:8888", nullptr, "duckduckgo");
+    for (auto& tool : tools::make_web_tools(
+             engines,
+             [](std::string_view, const std::string&,
+                const std::stop_token&) -> core::Result<std::string> { return std::string{}; })) {
+        if (auto added = registry.add(std::move(tool)); !added) {
+            return std::unexpected(std::move(added.error()));
+        }
+    }
     // Outils de modèle (bascule, chargement…) décrits pour une liste de
     // modèles fixe : les cas du banc ne dépendent pas de la configuration.
     llm::ModelSwitcher switcher(bench_models(), nullptr);
@@ -352,6 +366,13 @@ int run(std::span<char*> argv) {
     if (!specs) {
         std::println(std::cerr, "{}", core::describe(specs.error()));
         return EXIT_FAILURE;
+    }
+    if (config->agent.verify_replies) {
+        options.reply_checks.push_back(
+            core::make_claim_check(tools::action_claim_rules([&specs](std::string_view name) {
+                return std::ranges::any_of(
+                    *specs, [name](const core::ToolSpec& spec) { return spec.name == name; });
+            })));
     }
 
     const std::string label = model_label(model_config);

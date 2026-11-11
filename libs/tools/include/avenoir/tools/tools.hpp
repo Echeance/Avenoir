@@ -3,10 +3,13 @@
 #include <chrono>
 #include <cstddef>
 #include <expected>
+#include <functional>
 #include <optional>
 #include <string>
 #include <string_view>
+#include <vector>
 
+#include "avenoir/core/claims.hpp"
 #include "avenoir/core/error.hpp"
 #include "avenoir/core/router.hpp"
 #include "avenoir/core/tool.hpp"
@@ -24,6 +27,13 @@ namespace avenoir::tools {
 /// « verrouille l'ordinateur »…). Une règle vers un outil absent sur cet OS
 /// est sans effet : la requête part alors au LLM.
 [[nodiscard]] core::Result<void> register_system_rules(core::FastRouter& router);
+
+/// Règles des actions annoncées mais non faites (`core::make_claim_check`)
+/// pour les outils natifs dont `available(nom)` est vrai : « j'ai lancé
+/// Firefox » sans `launch_app` ni `open_url`, « l'outil va éteindre
+/// l'ordinateur » sans `power`…
+[[nodiscard]] std::vector<core::ClaimRule>
+action_claim_rules(const std::function<bool(std::string_view)>& available);
 
 namespace detail {
 

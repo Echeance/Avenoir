@@ -355,6 +355,44 @@ Result<std::map<std::string, ModuleSettings, std::less<>>> parse_modules(const t
     return modules;
 }
 
+Result<WebConfig> parse_web(const toml::table& web) {
+    constexpr std::string_view kSection = "web";
+    auto searxng = optional_value<std::string>(web, kSection, "searxng_url");
+    auto engine = optional_value<std::string>(web, kSection, "engine");
+    auto local = optional_value<bool>(web, kSection, "local_searxng");
+    auto idle = optional_integer(web, kSection, "searxng_idle_minutes", 1, 1440);
+    if (auto error = first_error(searxng, engine, local, idle)) {
+        return std::unexpected(std::move(*error));
+    }
+    WebConfig config;
+    if (searxng->has_value()) {
+        const std::string& url = **searxng;
+        const bool http = url.starts_with("http://") || url.starts_with("https://");
+        const bool clean = std::ranges::none_of(url, [](char c) {
+            return static_cast<unsigned char>(c) <= 0x20U || c == 0x7F || c == '@';
+        });
+        if (!http || !clean || url.size() < 10 || url.size() > 300) {
+            return config_error("web.searxng_url", "adresse http(s) attendue, sans identifiants");
+        }
+        config.searxng_url = url;
+    }
+    config.local_searxng = local->value_or(config.local_searxng);
+    if (idle->has_value()) {
+        config.searxng_idle_minutes = static_cast<int>(**idle);
+    }
+    if (engine->has_value()) {
+        if (**engine != "duckduckgo" && **engine != "searxng") {
+            return config_error("web.engine", "« duckduckgo » ou « searxng » attendu");
+        }
+        if (**engine == "searxng" && !config.searxng_url && !config.local_searxng) {
+            return config_error("web.engine",
+                                "« searxng » demande web.searxng_url ou web.local_searxng");
+        }
+        config.engine = **engine;
+    }
+    return config;
+}
+
 } // namespace
 
 Result<AppConfig> parse_config(std::string_view toml_text) {
@@ -374,7 +412,8 @@ Result<AppConfig> parse_config(std::string_view toml_text) {
     }
     auto agent_table = optional_table(root, "agent");
     auto permissions_table = optional_table(root, "permissions");
-    if (auto error = first_error(agent_table, permissions_table)) {
+    auto web_table = optional_table(root, "web");
+    if (auto error = first_error(agent_table, permissions_table, web_table)) {
         return std::unexpected(std::move(*error));
     }
     AppConfig config;
@@ -397,6 +436,13 @@ Result<AppConfig> parse_config(std::string_view toml_text) {
             return std::unexpected(std::move(permissions.error()));
         }
         config.permissions = *permissions;
+    }
+    if (*web_table != nullptr) {
+        auto web = parse_web(**web_table);
+        if (!web) {
+            return std::unexpected(std::move(web.error()));
+        }
+        config.web = std::move(*web);
     }
     auto modules = parse_modules(root);
     if (!modules) {

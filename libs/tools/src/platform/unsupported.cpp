@@ -1,8 +1,11 @@
 // Repli pour les plateformes non prises en charge : les outils qui en
 // dépendent ne sont pas enregistrés (supports_launching() renvoie faux).
 
+#include <chrono>
+#include <cstddef>
 #include <expected>
 #include <optional>
+#include <stop_token>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -109,6 +112,13 @@ std::optional<std::string> distribution() {
 
 std::optional<std::string> hostname() {
     return std::nullopt;
+}
+
+std::expected<CommandExit, CommandFailure>
+run_command(const std::vector<std::string>& /*arguments*/, std::chrono::milliseconds /*timeout*/,
+            const std::stop_token& /*stop*/, std::size_t /*max_output*/) {
+    return std::unexpected(
+        CommandFailure{.message = "action non prise en charge sur cette plateforme"});
 }
 
 } // namespace avenoir::tools::platform

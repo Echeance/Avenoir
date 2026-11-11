@@ -149,6 +149,13 @@ class Agent {
     /// gardée, suivie de l'avertissement : rien n'est passé sous silence.
     void add_reply_check(ReplyCheck check) { reply_checks_.push_back(std::move(check)); }
 
+    /// Demande ponctuelle au modèle actif, **sans outils ni historique** :
+    /// `text` est lu avec la consigne `system`, et seule la réponse revient
+    /// (lecture d'une page web en deux temps). Hors de l'historique ; appelable
+    /// depuis un outil pendant une requête.
+    [[nodiscard]] Result<std::string> ask_aside(std::string_view system, std::string text,
+                                                const std::stop_token& stop = {});
+
     /// Oublie la conversation en cours (et les journaux d'annulation).
     void reset() noexcept {
         history_.clear();

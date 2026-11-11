@@ -4,6 +4,7 @@
 avenoir_add_library(core
     SOURCES
         src/agent.cpp
+        src/claims.cpp
         src/config.cpp
         src/env.cpp
         src/error.cpp
@@ -25,6 +26,7 @@ target_compile_definitions(avenoir_core PRIVATE
 avenoir_add_tests(core
     SOURCES
         tests/agent_test.cpp
+        tests/claims_test.cpp
         tests/config_test.cpp
         tests/permission_test.cpp
         tests/router_test.cpp

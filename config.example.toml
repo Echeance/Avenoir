@@ -68,6 +68,19 @@ verify_replies = true # une action que le modèle annonce sans l'avoir faite
                       # relancer, puis est signalée ; false : réponses non vérifiées
 # system_prompt = "…" # remplace le prompt par défaut
 
+# ─── Recherche web ─────────────────────────────────────────────────────────
+# Par défaut, SearXNG en local : Avenoir lance son image officielle avec
+# podman (ou docker) à la première recherche (téléchargée la première fois,
+# environ 270 Mo), accessible seulement depuis cette machine, et l'arrête
+# après une période sans recherche ou à sa fermeture. Sans podman ni docker :
+# DuckDuckGo (version HTML, sans compte ni clé).
+[web]
+local_searxng = true      # false : jamais de conteneur lancé par Avenoir
+searxng_idle_minutes = 10 # arrêt de l'instance locale après cette inactivité
+# searxng_url = "http://localhost:8888"  # votre propre instance (format JSON
+#                                        # activé) : remplace l'instance locale
+# engine = "duckduckgo"   # moteur de départ ; /moteur le change (retenu)
+
 # ─── Permissions par niveau de risque : "allow" | "confirm" | "deny" ───────
 # `sensitive` ne peut jamais être "allow" (forcé à "confirm").
 [permissions]

@@ -37,6 +37,7 @@ Sûr par défaut, extensible par des modules, avec le LLM de votre choix — loc
 
 - 💬 **Dialogue en langage naturel** avec le LLM de votre choix : modèle local (Ollama, llama.cpp…), API distante (OpenAI, Mistral, Anthropic…) ou **votre abonnement Claude** via Claude Code, sans clé d'API.
 - 🛠️ **Des actions réelles** sur votre machine : lancer une application par son nom (« ouvre le bloc-notes », « lance le navigateur »), ouvrir une page web, donner l'heure ou des informations sur le système.
+- 🔎 **Recherche web et lecture de pages** : SearXNG lancé en local par Avenoir (podman ou docker, arrêté quand il ne sert plus), sinon DuckDuckGo, sans compte ni clé ; une page est lue à part par le modèle, sans outils, pour qu'une consigne cachée dans la page ne puisse rien déclencher.
 - 🔊 **Contrôle du système** : volume, multimédia (pause, morceau suivant, ce qui passe), luminosité, mode sombre, verrouillage, notifications, mise en veille ; ce qui peut l'être s'annule.
 - ⚡ **Voie rapide** : les commandes simples (« lance firefox », « baisse le son », « pause », « quelle heure est-il ? ») sont exécutées instantanément, sans LLM, même hors ligne.
 - 🛡️ **Sûr par défaut** : chaque outil a un niveau de risque ; les actions sensibles demandent toujours votre accord.
@@ -51,7 +52,6 @@ La liste complète, sans rien omettre : **[docs/FEATURES.md](docs/FEATURES.md)**
 ### Bientôt
 
 - 🧱 **Modules avancés** : onglets d'interface, fonctions de fond, appels entre modules, magasin de modules.
-- 🔎 **Recherche web** et lecture de pages, avec le moteur de votre choix.
 - 🌙 **Assistant résident** : démon en arrière-plan, raccourci clavier global, journal des actions, et la carte graphique libérée (ou le modèle léger choisi) quand vous lancez un jeu.
 - 🎙️ **Voix** : mot de réveil, reconnaissance et synthèse vocales, en local.
 - 🖥️ **Interface graphique** : un widget discret en haut de l'écran (avec le pingouin animé) et une application de réglages.
@@ -202,7 +202,7 @@ avenoir chemin/config.toml
 
 Écrivez simplement ce que vous voulez : *« quelle heure est-il ? »*, *« lance firefox »*, *« baisse le son »*, *« mets en pause »*, *« passe en mode sombre »*, *« va-t-il pleuvoir demain ? »*, *« décris mon ordinateur »*…
 
-Sous Linux, le contrôle du système s'appuie sur les programmes habituels du bureau : `wpctl` (ou `pactl`), `playerctl`, `brightnessctl`, `gsettings`, `loginctl`, `notify-send`. Un outil dont le programme manque n'est simplement pas proposé.
+Sous Linux, le contrôle du système s'appuie sur les programmes habituels du bureau : `wpctl` (ou `pactl`), `playerctl`, `brightnessctl`, `gsettings`, `loginctl`, `notify-send`. Un outil dont le programme manque n'est simplement pas proposé. Pour la recherche web, **podman** (ou docker) permet à Avenoir de lancer SearXNG en local ; sans lui, la recherche passe par DuckDuckGo.
 
 ### Commandes
 
@@ -212,6 +212,7 @@ Sous Linux, le contrôle du système s'appuie sur les programmes habituels du bu
 | `/outils` | outils disponibles et leur niveau de risque |
 | `/annuler` | annuler les actions de la dernière requête (répétable) |
 | `/modele [nom]` | modèles configurés, ou passer à un autre (aussi : *« passe sur le modèle leger »*) ; un modèle distant demande confirmation |
+| `/moteur [nom]` | moteur de la recherche web : `searxng` (par défaut : instance locale lancée par Avenoir, ou celle de `[web] searxng_url`) ou `duckduckgo` ; retenu (aussi : *« utilise duckduckgo pour chercher »*) |
 | `/raisonnement [niveau] [modèle]` | effort de réflexion du modèle : `aucun` (le plus rapide), `faible`, `moyen`, `élevé`, `défaut` ; appliqué tout de suite, sans recharger le modèle, et retenu (aussi : *« mets le raisonnement à élevé »*, *« désactive le raisonnement »*) |
 | `/memoire [nom]` | modèles chargés en mémoire et mémoire vidéo occupée (aussi : *« quels modèles sont chargés ? »*) ; un modèle chargé ou déchargé hors d'Avenoir (Ollama le décharge après 5 min d'inactivité) est annoncé, même pendant la saisie |
 | `/charger [nom]` · `/decharger [nom]` · `/recharger [nom]` | charger un modèle local en mémoire, le décharger (libère la mémoire vidéo, par exemple avant un jeu) ou le recharger ; le modèle actif par défaut (aussi : *« décharge le modèle »*, *« libère la carte graphique »*, *« allume le modèle gemma »*) |

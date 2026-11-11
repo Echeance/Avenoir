@@ -3,9 +3,12 @@
 // Interface du code propre à chaque OS (src/platform/<os>.cpp). Les arguments
 // reçus ont déjà été validés par les outils (voir validation.cpp).
 
+#include <chrono>
+#include <cstddef>
 #include <cstdint>
 #include <expected>
 #include <optional>
+#include <stop_token>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -77,6 +80,27 @@ enum class MediaCommand : std::uint8_t { PlayPause, Play, Pause, Next, Previous,
 enum class PowerAction : std::uint8_t { Suspend, Shutdown, Reboot };
 [[nodiscard]] bool supports_power();
 [[nodiscard]] std::expected<void, std::string> power(PowerAction action);
+
+// ─── Programmes (SearXNG local : podman, docker) ────────────────────────────
+
+/// Fin d'un programme lancé par `run_command`.
+struct CommandExit {
+    int exit_code = -1;
+    std::string output; ///< Sortie standard, bornée à `max_output` octets.
+};
+
+/// Lance `arguments` (tableau d'arguments, jamais de shell), entrée et
+/// erreurs ignorées, et attend **la fin du programme lui-même** : un
+/// processus de fond qu'il laisse derrière lui (`conmon` de podman) ne la
+/// retarde pas. Arrêté (puis tué) si `timeout` passe ou si `stop` est
+/// demandé ; `cancelled` dit alors lequel.
+struct CommandFailure {
+    std::string message;
+    bool cancelled = false;
+};
+[[nodiscard]] std::expected<CommandExit, CommandFailure>
+run_command(const std::vector<std::string>& arguments, std::chrono::milliseconds timeout,
+            const std::stop_token& stop, std::size_t max_output);
 
 [[nodiscard]] std::string_view os_name() noexcept;
 [[nodiscard]] std::optional<std::string> distribution();
