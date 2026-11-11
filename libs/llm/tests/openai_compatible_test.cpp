@@ -1,4 +1,5 @@
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include <catch2/catch_test_macros.hpp>
@@ -99,4 +100,65 @@ TEST_CASE("openai : appels d'outils (arguments en chaîne ou en objet)", "[opena
 TEST_CASE("openai : réponse mal formée", "[openai]") {
     CHECK_FALSE(llm::detail::parse_openai_response(json::object()).has_value());
     CHECK_FALSE(llm::detail::parse_openai_response(json{{"choices", json::array()}}).has_value());
+}
+
+TEST_CASE("openai : réponse en flux, texte au fil de l'eau", "[openai]") {
+    llm::detail::OpenAiStream stream;
+    std::vector<std::string> fragments;
+    const core::TextSink sink = [&fragments](std::string_view text) {
+        fragments.emplace_back(text);
+    };
+    for (const char* data : {
+             R"({"choices":[{"delta":{"role":"assistant","content":""}}]})",
+             R"({"choices":[{"delta":{"content":"Bon"}}]})",
+             R"({"choices":[{"delta":{"content":"jour !"}}]})",
+             R"({"choices":[{"delta":{},"finish_reason":"stop"}]})",
+             R"({"choices":[],"usage":{"prompt_tokens":12,"completion_tokens":3}})",
+             "[DONE]",
+         }) {
+        REQUIRE(stream.feed(data, sink).has_value());
+    }
+    CHECK(fragments == std::vector<std::string>{"Bon", "jour !"});
+    const auto response = stream.finish();
+    REQUIRE(response.has_value());
+    CHECK(response->text == "Bonjour !");
+    CHECK(response->tool_calls.empty());
+    REQUIRE(response->usage.has_value());
+    if (response->usage) {
+        CHECK(response->usage->input_tokens == 12);
+        CHECK(response->usage->output_tokens == 3);
+    }
+}
+
+TEST_CASE("openai : appels d'outils reçus par morceaux", "[openai]") {
+    llm::detail::OpenAiStream stream;
+    for (
+        const char* data : {
+            R"({"choices":[{"delta":{"tool_calls":[{"index":0,"id":"c1","type":"function","function":{"name":"launch_app","arguments":""}}]}}]})",
+            R"({"choices":[{"delta":{"tool_calls":[{"index":0,"function":{"arguments":"{\"name\":"}}]}}]})",
+            R"({"choices":[{"delta":{"tool_calls":[{"index":0,"function":{"arguments":"\"firefox\"}"}}]}}]})",
+            R"({"choices":[{"delta":{"tool_calls":[{"index":1,"id":"c2","function":{"name":"current_time","arguments":{}}}]}}]})",
+            "[DONE]",
+        }) {
+        REQUIRE(stream.feed(data, {}).has_value());
+    }
+    const auto response = stream.finish();
+    REQUIRE(response.has_value());
+    REQUIRE(response->tool_calls.size() == 2);
+    CHECK(response->tool_calls[0].id == "c1");
+    CHECK(response->tool_calls[0].name == "launch_app");
+    CHECK(response->tool_calls[0].arguments == json{{"name", "firefox"}});
+    CHECK(response->tool_calls[1].name == "current_time");
+    CHECK(response->tool_calls[1].arguments == json::object());
+}
+
+TEST_CASE("openai : flux en erreur ou vide", "[openai]") {
+    llm::detail::OpenAiStream failing;
+    const auto error = failing.feed(R"({"error":{"message":"modèle introuvable"}})", {});
+    REQUIRE_FALSE(error.has_value());
+    CHECK(error.error().message == "modèle introuvable");
+    llm::detail::OpenAiStream broken;
+    CHECK_FALSE(broken.feed("{pas du json", {}).has_value());
+    llm::detail::OpenAiStream empty;
+    CHECK_FALSE(empty.finish().has_value());
 }

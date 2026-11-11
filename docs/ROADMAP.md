@@ -191,9 +191,10 @@ L'ordre suit un principe : **chaque jalon produit un assistant utilisable**, plu
 - ✅ Contenu web toujours traité comme donnée : cas `injection-recherche` au banc, consigne du lecteur, texte nettoyé (contrôles, marques bidirectionnelles)
 - ⬜ Pages construites en JavaScript : refusées aujourd'hui ; lecture par le navigateur sans fenêtre (`--dump-dom`, profil jetable) si le besoin se confirme
 
-### 2.4 Streaming des réponses — P2
-- ⬜ `LlmProvider` : variante en flux (callback par fragment)
-- ⬜ Affichage progressif dans la CLI (et plus tard TTS phrase par phrase)
+### 2.4 Streaming des réponses — P2 ✅
+- ✅ `LlmProvider` : variante en flux (`LlmRequest::on_text`, un rappel par fragment) pour `openai_compatible` et `anthropic` (Server-Sent Events) ; appels d'outils reçus en flux ; `claude_code` en 2.5
+- ✅ Affichage progressif dans la CLI (ligne par ligne, blocs de code et tableaux une fois complets ; réponse écartée par la vérification signalée)
+- ⬜ Plus tard : synthèse vocale phrase par phrase (jalon 5)
 
 ### 2.5 Fournisseur `claude_code` — P2
 - ⬜ Réduire la latence : garder un processus `claude` ouvert en mode `--input-format stream-json` au lieu d'un lancement par appel

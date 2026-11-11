@@ -44,7 +44,7 @@ Sûr par défaut, extensible par des modules, avec le LLM de votre choix — loc
 - ↩️ **Ctrl+C arrête, sans quitter**, puis propose d'**annuler** ce qui peut l'être ; `/annuler` remonte les requêtes précédentes.
 - 🗂️ **Conversations conservées** entre deux lancements, reprises et réaffichées automatiquement.
 - 🧩 **Modules** : Avenoir s'étend par des programmes séparés, écrits dans n'importe quel langage (outils, commandes, phrases de la voie rapide), y compris les serveurs **MCP** existants. Un module **météo** est fourni : *« quel temps fait-il à Lyon ? »*, `/meteo`, prévisions sur 7 jours.
-- 🎨 **Une CLI soignée** : barre de saisie fixe en bas du terminal, réponses en Markdown, actions affichées en direct, toupie pendant la réflexion — et respect de `NO_COLOR`.
+- 🎨 **Une CLI soignée** : barre de saisie fixe en bas du terminal, réponses en Markdown affichées au fil de l'eau, actions affichées en direct, toupie pendant la réflexion — et respect de `NO_COLOR`.
 - 🐧 **Linux et Windows**, compilés et testés à chaque modification.
 
 La liste complète, sans rien omettre : **[docs/FEATURES.md](docs/FEATURES.md)**.

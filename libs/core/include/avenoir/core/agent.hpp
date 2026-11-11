@@ -98,6 +98,14 @@ struct ReplyIssue {
 using ReplyCheck = std::function<std::optional<ReplyIssue>(std::string_view reply,
                                                            std::span<const ToolCall> calls)>;
 
+/// Réponse du modèle affichée au fil de l'eau (`Agent::handle`).
+struct ReplyStream {
+    TextSink text; ///< Fragment de texte du modèle (ou avertissement d'Avenoir).
+    /// Fin d'une réponse du modèle qui a donné du texte. `kept` faux : elle
+    /// est écartée (action annoncée mais non faite) et une autre va suivre.
+    std::function<void(bool kept)> end;
+};
+
 struct AgentOptions {
     PermissionPolicy policy;
     std::string system_prompt{kDefaultSystemPrompt};
@@ -117,8 +125,11 @@ class Agent {
 
     /// Traite une requête de l'utilisateur et renvoie la réponse à afficher
     /// (ou à dire). Bloquant ; `stop` permet d'annuler entre deux étapes.
+    /// Avec `stream`, le texte du modèle est aussi donné au fil de l'eau (la
+    /// voie rapide, elle, ne passe que par la valeur renvoyée).
     [[nodiscard]] Result<std::string> handle(std::string_view input,
-                                             const std::stop_token& stop = {});
+                                             const std::stop_token& stop = {},
+                                             const ReplyStream& stream = {});
 
     /// Exécute directement un outil, sans LLM mais sous contrôle des
     /// permissions et avec journal d'annulation, comme la voie rapide. Sert

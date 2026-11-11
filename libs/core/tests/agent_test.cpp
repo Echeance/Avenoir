@@ -39,6 +39,12 @@ class ScriptedLlm final : public LlmProvider {
         }
         auto next = std::move(script_.front());
         script_.pop_front();
+        // En flux : le texte part en deux fragments, comme un vrai serveur.
+        if (request.on_text && next && !next->text.empty()) {
+            const std::string_view text = next->text;
+            request.on_text(text.substr(0, text.size() / 2));
+            request.on_text(text.substr(text.size() / 2));
+        }
         return next;
     }
 
@@ -682,4 +688,71 @@ TEST_CASE("le modèle actif est donné à la fin du prompt système", "[agent]")
     CHECK(f.systems->at(0) == "PROMPT");
     CHECK(f.systems->at(1) ==
           "PROMPT\n\nModèle actif (celui qui te fait fonctionner) : qwen : qwen3.8:27b, local.");
+}
+
+namespace {
+
+/// Ce que l'agent a envoyé au flux : texte reçu et fins de réponse.
+struct StreamLog {
+    std::string text;
+    std::vector<bool> ends;
+
+    [[nodiscard]] ReplyStream stream() {
+        return ReplyStream{
+            .text = [this](std::string_view fragment) { text += fragment; },
+            .end = [this](bool kept) { ends.push_back(kept); },
+        };
+    }
+};
+
+} // namespace
+
+TEST_CASE("réponse au fil de l'eau", "[agent]") {
+    const Fixture f;
+    auto agent =
+        f.make_agent({answer("Il est midi.")}, RiskLevel::ReadOnly, std::make_unique<AutoReject>());
+    StreamLog log;
+    const auto reply = agent.handle("heure ?", {}, log.stream());
+    REQUIRE(reply.has_value());
+    CHECK(*reply == "Il est midi.");
+    CHECK(log.text == "Il est midi.");
+    CHECK(log.ends == std::vector<bool>{true});
+}
+
+TEST_CASE("flux : texte d'accompagnement, puis outil, puis réponse", "[agent]") {
+    const Fixture f;
+    LlmResponse with_call = call_tool("flag");
+    with_call.text = "Je regarde.";
+    auto agent = f.make_agent({with_call, answer("C'est fait.")}, RiskLevel::ReadOnly,
+                              std::make_unique<AutoReject>());
+    StreamLog log;
+    REQUIRE(agent.handle("vas-y", {}, log.stream()).has_value());
+    CHECK(log.text == "Je regarde.C'est fait.");
+    CHECK(log.ends == std::vector<bool>{true, true});
+    CHECK(*f.tool_calls == 1);
+}
+
+TEST_CASE("flux : réponse écartée puis relance", "[agent]") {
+    const Fixture f;
+    auto agent = f.make_agent({answer("je bascule sur qwen"), answer("je bascule, promis")},
+                              RiskLevel::ReadOnly, std::make_unique<AutoReject>());
+    agent.add_reply_check(claim_check());
+    StreamLog log;
+    const auto reply = agent.handle("bascule sur qwen", {}, log.stream());
+    REQUIRE(reply.has_value());
+    // Première réponse écartée (fin « false »), seconde gardée avec
+    // l'avertissement, envoyé aussi au flux.
+    CHECK(log.ends == std::vector<bool>{false, true});
+    CHECK(log.text.ends_with("(rien n'a été fait)"));
+    CHECK(*reply == "je bascule, promis\n\n(rien n'a été fait)");
+}
+
+TEST_CASE("sans flux : rien n'est envoyé", "[agent]") {
+    const Fixture f;
+    auto agent = f.make_agent({answer("ok")}, RiskLevel::ReadOnly, std::make_unique<AutoReject>());
+    StreamLog log;
+    ReplyStream ends_only = log.stream();
+    ends_only.text = {};
+    REQUIRE(agent.handle("x", {}, ends_only).has_value());
+    CHECK(log.ends.empty());
 }

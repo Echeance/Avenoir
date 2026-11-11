@@ -105,7 +105,8 @@ Result<std::string> Agent::run_tool(std::string_view input, ToolCall call,
     return run_direct(input, call, stop);
 }
 
-Result<std::string> Agent::handle(std::string_view input, const std::stop_token& stop) {
+Result<std::string> Agent::handle(std::string_view input, const std::stop_token& stop,
+                                  const ReplyStream& stream) {
     begin_journal(input);
 
     // 1. Voie rapide (sans LLM), si une règle correspond à un outil existant.
@@ -142,13 +143,31 @@ Result<std::string> Agent::handle(std::string_view input, const std::stop_token&
         if (stop.stop_requested()) {
             return std::unexpected(cancelled());
         }
+        // Flux : on retient si cette réponse a déjà montré du texte.
+        bool streamed = false;
+        TextSink on_text;
+        if (stream.text) {
+            on_text = [&stream, &streamed](std::string_view fragment) {
+                if (!fragment.empty()) {
+                    streamed = true;
+                    stream.text(fragment);
+                }
+            };
+        }
+        const auto finish = [&stream, &streamed](bool kept) {
+            if (streamed && stream.end) {
+                stream.end(kept);
+            }
+        };
         auto response = llm_->complete(LlmRequest{
             .system = system,
             .messages = history_,
             .tools = specs,
             .stop = stop,
+            .on_text = std::move(on_text),
         });
         if (!response) {
+            finish(true);
             return std::unexpected(std::move(response.error()));
         }
         spdlog::debug("étape {} : {} appel(s) d'outil", step, response->tool_calls.size());
@@ -172,15 +191,21 @@ Result<std::string> Agent::handle(std::string_view input, const std::stop_token&
                                  response->text);
                     reminded = true;
                     system += "\n\n" + issue->reminder;
+                    finish(false);
                     continue;
                 }
                 response->text += "\n\n" + issue->warning;
+                if (streamed) {
+                    stream.text("\n\n" + issue->warning);
+                }
             }
+            finish(true);
             append(AssistantMessage{
                 .text = response->text, .tool_calls = {}, .usage = response->usage});
             return std::move(response->text);
         }
 
+        finish(true); // texte d'accompagnement des appels d'outils
         const std::vector<ToolCall> calls = response->tool_calls;
         request_calls.insert(request_calls.end(), calls.begin(), calls.end());
         append(AssistantMessage{.text = std::move(response->text),

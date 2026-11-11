@@ -2,6 +2,7 @@
 
 #include <chrono>
 #include <cstddef>
+#include <functional>
 #include <stop_token>
 #include <string>
 #include <string_view>
@@ -26,6 +27,15 @@ struct HttpRequest {
 /// Les en-têtes ne sont jamais recopiés dans les erreurs ni les logs.
 [[nodiscard]] core::Result<nlohmann::json> post_json(const HttpRequest& request,
                                                      const std::stop_token& stop);
+
+/// POST en flux (Server-Sent Events) : chaque ligne `data: …` reçue est
+/// donnée à `on_data`, sans le préfixe, dès son arrivée ; `on_data` renvoie
+/// une erreur pour tout arrêter. Statut non 2xx : erreur lisible, comme
+/// `post_json`. Interrompu si `stop` est demandé.
+[[nodiscard]] core::Result<void>
+post_stream(const HttpRequest& request,
+            const std::function<core::Result<void>(std::string_view data)>& on_data,
+            const std::stop_token& stop);
 
 /// GET JSON, court délai (questions rapides à un serveur local, comme la
 /// liste des modèles chargés). Mêmes règles d'erreur que `post_json`.

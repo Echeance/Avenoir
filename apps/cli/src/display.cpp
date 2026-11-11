@@ -432,12 +432,16 @@ void Display::user(std::string_view text) {
     write(line);
 }
 
-void Display::assistant(std::string_view markdown) {
-    std::string out = "\n" + paint("◆ Avenoir", {.color = Color::White, .bold = true}) + "\n";
+std::string Display::render_reply(std::string_view markdown) {
     const std::string bar = paint("│", {.color = Color::White, .dim = true});
     // Lignes découpées aux mots pour que chaque ligne garde la barre « │ ».
     const std::size_t columns = std::max<std::size_t>(terminal::terminal_width(), 20) - 3;
-    for (const auto& line : terminal::render_markdown(markdown)) {
+    std::string out;
+    const auto lines = terminal::render_markdown(markdown);
+    if (lines.empty()) {
+        return bar + "\n"; // ligne vide entre deux paragraphes
+    }
+    for (const auto& line : lines) {
         for (const auto& piece : terminal::wrap(line, columns)) {
             out += bar;
             out += ' ';
@@ -445,8 +449,96 @@ void Display::assistant(std::string_view markdown) {
             out += '\n';
         }
     }
+    return out;
+}
+
+void Display::assistant(std::string_view markdown) {
+    const std::string out = "\n" + paint("◆ Avenoir", {.color = Color::White, .bold = true}) +
+                            "\n" + render_reply(markdown);
     const std::scoped_lock lock(mutex_);
     write(out);
+}
+
+void Display::stream_text(std::string_view fragment) {
+    const std::scoped_lock lock(mutex_);
+    if (!streaming_) {
+        streaming_ = true;
+        streamed_ = true;
+        suspended_ = true; // pas de toupie pendant que le texte arrive
+        in_fence_ = false;
+        stream_pending_.clear();
+        stream_held_.clear();
+        write("\n" + paint("◆ Avenoir", {.color = Color::White, .bold = true}) + "\n");
+    }
+    stream_pending_.append(fragment);
+    std::size_t start = 0;
+    for (auto end = stream_pending_.find('\n'); end != std::string::npos;
+         end = stream_pending_.find('\n', start)) {
+        stream_line(std::string_view(stream_pending_).substr(start, end - start));
+        start = end + 1;
+    }
+    stream_pending_.erase(0, start);
+}
+
+void Display::stream_line(std::string_view line) {
+    // Appelé verrou pris. Un bloc de code (```) ou un tableau (lignes « | »)
+    // n'est rendu qu'une fois complet : rendu ligne à ligne, il serait faux.
+    const bool fence = line.starts_with("```");
+    const bool table = line.starts_with('|');
+    if (in_fence_ || fence) {
+        stream_held_ += std::string(line) + "\n";
+        if (fence) {
+            in_fence_ = !in_fence_;
+            if (!in_fence_) {
+                write(render_reply(stream_held_));
+                stream_held_.clear();
+            }
+        }
+        return;
+    }
+    if (table) {
+        stream_held_ += std::string(line) + "\n";
+        return;
+    }
+    if (!stream_held_.empty()) { // fin d'un tableau
+        write(render_reply(stream_held_));
+        stream_held_.clear();
+    }
+    write(render_reply(line));
+}
+
+void Display::stream_flush() {
+    // Appelé verrou pris : fin de ligne et bloc retenus rendus tels quels.
+    if (!stream_pending_.empty()) {
+        stream_held_ += stream_pending_;
+        stream_pending_.clear();
+    }
+    if (!stream_held_.empty()) {
+        write(render_reply(stream_held_));
+        stream_held_.clear();
+    }
+    in_fence_ = false;
+}
+
+void Display::stream_end(bool kept) {
+    const std::scoped_lock lock(mutex_);
+    if (!streaming_) {
+        return;
+    }
+    stream_flush();
+    if (!kept) {
+        write(paint("  ↻ Réponse écartée : elle annonçait une action qui n'a pas été faite. "
+                    "Nouvelle tentative…",
+                    kMuted) +
+              "\n");
+    }
+    streaming_ = false;
+    suspended_ = false; // la toupie reprend jusqu'à la réponse suivante
+}
+
+bool Display::streamed() {
+    const std::scoped_lock lock(mutex_);
+    return streamed_;
 }
 
 void Display::tool_calls(std::span<const core::ToolCall> calls) {
@@ -542,6 +634,7 @@ void Display::start_thinking() {
     const std::scoped_lock lock(mutex_);
     thinking_ = terminal::enabled(); // Pas d'animation hors d'un terminal.
     suspended_ = false;
+    streamed_ = false;
     activity_ = "Réflexion";
     since_ = std::chrono::steady_clock::now();
     last_frame_ = {};
@@ -554,6 +647,10 @@ void Display::set_activity(std::string_view activity) {
 
 void Display::stop_thinking() {
     const std::scoped_lock lock(mutex_);
+    if (streaming_) { // réponse en flux interrompue (Ctrl+C, erreur)
+        stream_flush();
+        streaming_ = false;
+    }
     clear_spinner();
     thinking_ = false;
     (void)std::fflush(stdout);

@@ -100,6 +100,19 @@ class Display {
     void suspend_thinking();
     void resume_thinking();
 
+    /// Réponse au fil de l'eau (fil de la requête) : fragment de texte du
+    /// modèle. Le premier efface la toupie et ouvre « ◆ Avenoir » ; chaque
+    /// ligne complète est rendue aussitôt (Markdown), un bloc de code ou un
+    /// tableau une fois complet.
+    void stream_text(std::string_view fragment);
+    /// Fin d'une réponse en flux : la fin de ligne en attente est rendue.
+    /// `kept` faux : la réponse est écartée (action annoncée mais non faite),
+    /// ce qui est signalé ; la toupie reprend.
+    void stream_end(bool kept);
+    /// Vrai si une réponse a été montrée au fil de l'eau depuis
+    /// `start_thinking` (elle n'est alors pas réaffichée en entier).
+    [[nodiscard]] bool streamed();
+
     /// Invite de saisie : « › » coloré, ou « > » sans couleurs.
     [[nodiscard]] static std::string prompt_marker();
 
@@ -113,6 +126,10 @@ class Display {
     [[nodiscard]] std::size_t prompt_row() const;
     [[nodiscard]] std::size_t needed_input_rows() const;
     [[nodiscard]] static std::size_t width();
+    /// Rend une ligne (ou un bloc) de réponse, préfixée de la barre « │ ».
+    [[nodiscard]] static std::string render_reply(std::string_view markdown);
+    void stream_line(std::string_view line);
+    void stream_flush();
 
     std::mutex mutex_;
     bool thinking_ = false;
@@ -131,6 +148,11 @@ class Display {
     std::chrono::steady_clock::time_point since_;
     std::chrono::steady_clock::time_point last_frame_;
     std::vector<core::ToolCall> pending_;
+    bool streaming_ = false;     ///< Une réponse en flux est ouverte.
+    bool streamed_ = false;      ///< Une réponse a été montrée en flux (depuis start_thinking).
+    bool in_fence_ = false;      ///< Dans un bloc de code ``` en cours.
+    std::string stream_pending_; ///< Fin de ligne reçue, pas encore rendue.
+    std::string stream_held_;    ///< Bloc de code ou tableau retenu jusqu'à sa fin.
 };
 
 /// Affichage partagé par toute la CLI.

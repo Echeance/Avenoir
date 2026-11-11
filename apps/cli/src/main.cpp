@@ -259,7 +259,10 @@ void run_request(core::Agent& agent, cli::Prompt& prompt, const Work& work,
         return;
     }
     if (*result) {
-        display().assistant(**result);
+        // Déjà montrée au fil de l'eau : pas réaffichée.
+        if (!display().streamed()) {
+            display().assistant(**result);
+        }
         return;
     }
     if (result->error().code != core::ErrorCode::Cancelled) {
@@ -882,7 +885,14 @@ int run(int argc, char** argv) {
         const std::string request(line);
         run_request(
             agent, prompt,
-            [&agent, &request](const std::stop_token& stop) { return agent.handle(request, stop); },
+            [&agent, &request](const std::stop_token& stop) {
+                return agent.handle(
+                    request, stop,
+                    core::ReplyStream{
+                        .text = [](std::string_view fragment) { display().stream_text(fragment); },
+                        .end = [](bool kept) { display().stream_end(kept); },
+                    });
+            },
             model_activity(switcher));
         finish_request(switcher, load_watch);
     }

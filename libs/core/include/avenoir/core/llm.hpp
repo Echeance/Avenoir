@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <functional>
 #include <optional>
 #include <span>
 #include <stop_token>
@@ -14,12 +15,22 @@
 
 namespace avenoir::core {
 
+/// Reçoit le texte de la réponse au fur et à mesure (affichage au fil de
+/// l'eau), fragment par fragment, depuis le fil de la requête.
+using TextSink = std::function<void(std::string_view fragment)>;
+
 /// Requête envoyée au LLM. Les vues restent valides pendant tout l'appel.
 struct LlmRequest {
     std::string_view system;
     std::span<const Message> messages;
     std::span<const ToolSpec> tools;
     std::stop_token stop; ///< Annulation demandée par l'utilisateur.
+    /// Si présent et si le fournisseur sait le faire, la réponse arrive en
+    /// flux : chaque fragment de texte lui est donné dès sa réception (la
+    /// réponse complète est renvoyée à la fin, comme sans flux).
+    // Initialiseur gardé : sans lui, GCC signale le champ manquant
+    // (-Wmissing-field-initializers) partout où il n'est pas donné.
+    TextSink on_text = {}; // NOLINT(readability-redundant-member-init)
 };
 
 struct LlmResponse {

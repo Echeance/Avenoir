@@ -61,19 +61,23 @@ saisie (Prompt, replxx)
 run_request : thread de travail (std::jthread) ; le thread principal anime la
   │           toupie et transforme Ctrl+C en request_stop()
   ▼
-Agent::handle(texte, stop_token)
+Agent::handle(texte, stop_token, ReplyStream)
   │  1. nouveau journal d'annulation pour la requête
   │  2. voie rapide : FastRouter::route → règle trouvée et outil existant ?
   │        oui → execute(appel) → réponse = résultat de l'outil (pas de LLM)
   │  3. sinon, boucle agent (max_steps étapes) :
-  │        LlmProvider::complete(prompt système, historique, outils)
+  │        LlmProvider::complete(prompt système, historique, outils, on_text)
+  │          (en flux : chaque fragment de texte → ReplyStream::text →
+  │           display().stream_text, rendu ligne par ligne ; fin de chaque
+  │           réponse → ReplyStream::end, « écartée » si la vérification la refuse)
   │          ├─ réponse sans appel d'outil → vérifications (add_reply_check) :
   │          │     action annoncée mais non faite → réponse écartée, relance une
   │          │     fois avec un rappel ; sinon (ou à la 2e fois, avec un
   │          │     avertissement) → réponse finale
   │          └─ appels d'outils → execute(chacun) → résultats dans l'historique → étape suivante
   ▼
-display().assistant(réponse)   (Markdown rendu, découpé aux mots)
+display().assistant(réponse)   (seulement si rien n'a été montré en flux : voie rapide,
+                               fournisseur sans flux ; Markdown rendu, découpé aux mots)
 ```
 
 **`Agent::execute`** est le seul chemin vers un outil, quelle que soit l'origine de l'appel (LLM, voie rapide ou commande de module) :
@@ -94,7 +98,7 @@ Les **messages** (`core::Message`) sont indépendants du fournisseur : `UserMess
 | `anthropic` | HTTP, API Messages | Les messages consécutifs de même rôle sont fusionnés (exigence de l'API). |
 | `claude_code` | Processus `claude -p` (`reproc`, sans shell) | Les outils de Claude Code sont désactivés. Les outils d'Avenoir et la conversation sont décrits dans le prompt, et la réponse est imposée par `--json-schema` (`text`, `tool_calls`). Le prompt passe par stdin. Les clés d'API sont retirées de l'environnement. |
 
-Les trois respectent le `stop_token` (requête HTTP interrompue, processus arrêté) et remontent la consommation (`Usage`).
+Les trois respectent le `stop_token` (requête HTTP interrompue, processus arrêté) et remontent la consommation (`Usage`). **Flux** : si `LlmRequest::on_text` est donné, `openai_compatible` (`"stream": true`, avec la consommation dans le dernier fragment) et `anthropic` (`"stream": true`) lisent la réponse en Server-Sent Events (`detail::post_stream`, une ligne `data:` à la fois) ; `OpenAiStream` et `AnthropicStream` passent le texte au fur et à mesure et assemblent les appels d'outils, dont les arguments arrivent par morceaux. `claude_code` ne lit pas encore en flux (jalon 2.5) : sa réponse est montrée en entier.
 
 **Changement de modèle** (`models.cpp`) : `models_from` lit les `[models.<nom>]` (dans l'ordre du fichier : toml++ les range par ordre alphabétique, la ligne de chaque section rétablit l'ordre) ; `ModelSwitcher` crée le fournisseur choisi (`make_provider`) et le donne à l'agent (`Agent::set_llm`), qui garde l'historique. Un modèle est local si son adresse est celle de la machine (ou `local = true`) ; sinon le passage se confirme par le `ConfirmationHandler` de la CLI, avec le risque `sensitive`. L'outil `switch_llm` et ses règles de voie rapide ne sont enregistrés que s'il y a au moins deux modèles ; son annulation revient au modèle précédent si le modèle actif n'a pas changé entre-temps. Chaque changement réussi est retenu dans la base (`Store::set_state`), pour le lancement suivant. `set_reasoning` change l'effort de raisonnement d'un modèle ; pour le modèle actif, un nouveau fournisseur est créé avec la nouvelle configuration et donné à l'agent, le serveur gardant le modèle en mémoire. En changeant de modèle, l'ancien est mis en attente de déchargement s'il est local, sur le même serveur (`server_root`) et différent ; revenir sur lui l'en retire. `is_loaded` interroge `/api/ps` d'Ollama (500 ms au plus) : la CLI s'en sert pour la toupie « Chargement du modèle… » (interrogée toutes les 500 ms pendant la requête), pour `LoadWatch`, qui compare l'état des modèles locaux toutes les 3 s pendant la saisie (`Prompt::Hooks::poll`, dans un autre thread) et fait montrer les changements par la boucle de replxx (`Hooks::notify`, touche simulée, `Display::notify`), et pour `/memoire` (`status`). `set_residency` charge ou décharge un modèle local par l'API d'Ollama (`POST /api/generate`, `keep_alive = 0` pour décharger) ; décharger le modèle actif est mis en attente et fait par `finish_request`, que la CLI appelle après chaque requête et chaque commande. `make_model_tools` et `register_model_rules` donnent les outils de modèle et leurs règles selon les modèles configurés (même liste pour la CLI et le banc) ; les règles par nom seul sont construites avec les noms de la configuration. `attach` et chaque changement donnent à l'agent le nom du modèle actif (`Agent::set_model_identity`, ajouté au prompt système). `make_model_claim_check` est une vérification de réponse (`Agent::add_reply_check`) : un autre modèle nommé avec un verbe de changement (« je bascule », « je passe ») sans appel de `switch_llm`, ou de chargement sans `load_llm` / `unload_llm`, est une action annoncée mais non faite. Pour les autres actions, `core::make_claim_check` (`claims.cpp`) applique des règles `ClaimRule` (outils qui font l'action, phrases qui l'annoncent, réponse normalisée par `normalize_reply`) ; celles des outils natifs viennent de `tools::action_claim_rules` (`libs/tools/src/claims.cpp`), filtrées sur les outils présents. La CLI et le banc ajoutent ces vérifications si `[agent] verify_replies` est vrai.
 

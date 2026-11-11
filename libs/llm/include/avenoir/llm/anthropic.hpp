@@ -2,6 +2,7 @@
 
 #include <string>
 #include <string_view>
+#include <vector>
 
 #include <nlohmann/json.hpp>
 
@@ -32,6 +33,27 @@ namespace detail {
                                                     const core::LlmRequest& request);
 /// Lecture de la réponse (exposée pour les tests).
 [[nodiscard]] core::Result<core::LlmResponse> parse_anthropic_response(const nlohmann::json& body);
+
+/// Réponse reçue en flux (`"stream": true`, évènements `message_start`,
+/// `content_block_start`, `content_block_delta`, `message_delta`…) : le
+/// texte passe à `sink` au fil de l'eau, les entrées des outils (JSON reçu
+/// par morceaux) sont assemblées ; `finish` rend la réponse complète.
+class AnthropicStream {
+  public:
+    [[nodiscard]] core::Result<void> feed(std::string_view data, const core::TextSink& sink);
+    [[nodiscard]] core::Result<core::LlmResponse> finish();
+
+  private:
+    struct Block {
+        bool tool = false;
+        std::string id;
+        std::string name;
+        std::string input; ///< JSON partiel des arguments.
+    };
+    core::LlmResponse response_;
+    std::vector<Block> blocks_;
+    bool received_ = false;
+};
 
 } // namespace detail
 

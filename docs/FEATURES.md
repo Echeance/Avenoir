@@ -24,6 +24,7 @@ Plateformes : **Linux** et **Windows** (sauf mention contraire).
 
 - Dialogue en langage naturel, en français, avec réponses brèves (prévues pour être lues à voix haute plus tard).
 - **Boucle agent** : le LLM choisit des outils, Avenoir les exécute après contrôle des permissions, renvoie les résultats, et recommence jusqu'à la réponse finale ; nombre d'allers-retours limité (`max_steps`, 10 par défaut).
+- **Réponses au fil de l'eau** (API compatibles OpenAI, dont Ollama, et API Anthropic) : le texte s'affiche pendant que le modèle l'écrit, ligne par ligne, Markdown rendu ; un bloc de code ou un tableau s'affiche une fois complet ; les appels d'outils arrivent aussi en flux ; une réponse écartée par la vérification (action annoncée mais non faite) est signalée (« ↻ Réponse écartée… Nouvelle tentative… ») avant la suivante ; Ctrl+C arrête aussi une réponse en cours d'écriture. Claude Code montre encore sa réponse en entier.
 - Plusieurs appels d'outils dans une même réponse ; suite de conversation (« et demain ? ») grâce à l'historique.
 - Résultats d'outils tronqués à 20 000 caractères avant d'être renvoyés au LLM (sans couper un caractère UTF-8).
 - Réponse vide du modèle signalée par une erreur explicite (la question peut être reposée telle quelle).
@@ -166,7 +167,7 @@ Plateformes : **Linux** et **Windows** (sauf mention contraire).
   - à la sortie, écran et historique du terminal vidés, puis cadre d'au revoir avec le pingouin (« À bientôt ! », conversation qui reprendra au prochain lancement) ;
   - cadre d'accueil avec le pingouin en pixel art (ASCII sans couleurs) ;
   - styles distincts pour la requête (›), la réponse (◆ Avenoir), les actions (» … ✓ / ✗ en direct), les avertissements (▲) — symboles d'une colonne présents dans les polices de console courantes, Windows compris, les confirmations encadrées, les badges de risque et les erreurs ;
-  - réponses en Markdown rendu, découpées aux mots ; toupie « Réflexion… » ;
+  - réponses en Markdown rendu, découpées aux mots, affichées au fil de l'eau ; toupie « Réflexion… » jusqu'au premier mot ;
   - couleurs désactivées hors terminal et avec `NO_COLOR`.
 - Avertissements de démarrage (modules ignorés ou en échec) affichés après l'accueil.
 

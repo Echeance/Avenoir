@@ -1,3 +1,5 @@
+#include <string>
+#include <string_view>
 #include <vector>
 
 #include <catch2/catch_test_macros.hpp>
@@ -59,4 +61,50 @@ TEST_CASE("anthropic : lecture des blocs texte et tool_use", "[anthropic]") {
 
 TEST_CASE("anthropic : réponse mal formée", "[anthropic]") {
     CHECK_FALSE(llm::detail::parse_anthropic_response(json::object()).has_value());
+}
+
+TEST_CASE("anthropic : réponse en flux, texte et outil", "[anthropic]") {
+    llm::detail::AnthropicStream stream;
+    std::vector<std::string> fragments;
+    const core::TextSink sink = [&fragments](std::string_view text) {
+        fragments.emplace_back(text);
+    };
+    for (
+        const char* data : {
+            R"({"type":"message_start","message":{"usage":{"input_tokens":20,"output_tokens":1}}})",
+            R"({"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}})",
+            R"({"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"Je lance "}})",
+            R"({"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"Firefox."}})",
+            R"({"type":"content_block_stop","index":0})",
+            R"({"type":"content_block_start","index":1,"content_block":{"type":"tool_use","id":"t1","name":"launch_app","input":{}}})",
+            R"({"type":"content_block_delta","index":1,"delta":{"type":"input_json_delta","partial_json":"{\"name\": \"fire"}})",
+            R"({"type":"content_block_delta","index":1,"delta":{"type":"input_json_delta","partial_json":"fox\"}"}})",
+            R"({"type":"content_block_stop","index":1})",
+            R"({"type":"message_delta","delta":{"stop_reason":"tool_use"},"usage":{"output_tokens":15}})",
+            R"({"type":"message_stop"})",
+        }) {
+        REQUIRE(stream.feed(data, sink).has_value());
+    }
+    CHECK(fragments == std::vector<std::string>{"Je lance ", "Firefox."});
+    const auto response = stream.finish();
+    REQUIRE(response.has_value());
+    CHECK(response->text == "Je lance Firefox.");
+    REQUIRE(response->tool_calls.size() == 1);
+    CHECK(response->tool_calls[0].id == "t1");
+    CHECK(response->tool_calls[0].arguments == json{{"name", "firefox"}});
+    REQUIRE(response->usage.has_value());
+    if (response->usage) {
+        CHECK(response->usage->input_tokens == 20);
+        CHECK(response->usage->output_tokens == 15);
+    }
+}
+
+TEST_CASE("anthropic : flux en erreur", "[anthropic]") {
+    llm::detail::AnthropicStream stream;
+    const auto error = stream.feed(
+        R"({"type":"error","error":{"type":"overloaded_error","message":"Overloaded"}})", {});
+    REQUIRE_FALSE(error.has_value());
+    CHECK(error.error().message == "Overloaded");
+    llm::detail::AnthropicStream empty;
+    CHECK_FALSE(empty.finish().has_value());
 }
