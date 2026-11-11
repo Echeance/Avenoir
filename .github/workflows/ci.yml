@@ -62,9 +62,17 @@ jobs:
           ninja --version
       - name: Installer Clang 20 (dépôt apt.llvm.org)
         if: startsWith(matrix.cc, 'clang')
+        # llvm.sh installe aussi lldb et clangd, dont les dépendances viennent
+        # des miroirs Ubuntu ; s'ils sont injoignables, seuls le compilateur
+        # et le runtime des sanitizers sont installés, depuis apt.llvm.org
+        # (ajouté par llvm.sh).
         run: |
           wget -qO llvm.sh https://apt.llvm.org/llvm.sh
-          sudo bash llvm.sh 20
+          if ! sudo bash llvm.sh 20; then
+            echo "::warning::installation complète de Clang 20 impossible : compilateur seul"
+            sudo apt-get install -y -q --no-install-recommends clang-20 libclang-rt-20-dev
+          fi
+          clang++-20 --version
       - name: Erreurs de compilation en annotations
         run: echo "::add-matcher::.github/problem-matchers/gcc-clang.json"
       - uses: ./.github/actions/setup-vcpkg
