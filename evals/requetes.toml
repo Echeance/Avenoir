@@ -15,13 +15,15 @@
 #   forbid_in_arguments = ["…"]  textes absents de tous les arguments
 #   max_calls = 0                nombre d'appels d'outils maximal
 #   reply_contains / reply_contains_any / reply_excludes   sur la dernière réponse
+#                                (« {modele} » : nom du modèle essayé)
 #   preamble_excludes = ["°"]    textes absents de ce que le modèle écrit en
 #                                même temps qu'un appel d'outil (avant d'en
 #                                avoir le résultat : rien n'y doit être inventé)
 #   [cases.results] / [cases.failures]    résultat ou erreur d'une doublure
 
 # Résultats par défaut des doublures. `{city}` est remplacé par l'argument
-# `city` ; `{city|Lyon}` donne « Lyon » s'il est absent.
+# `city` ; `{city|Lyon}` donne « Lyon » s'il est absent ; `{modele}`, par le
+# nom du modèle essayé.
 [results]
 current_time = "Il est 14 h 05, samedi 7 novembre 2026."
 system_info = "Système : CachyOS (Linux, x86_64), machine « poste », 16 cœurs."
@@ -42,6 +44,11 @@ set_dark_mode = "Mode sombre activé."
 lock_screen = "Session verrouillée."
 notify = "Notification affichée."
 power = "Mise en veille."
+switch_llm = "Modèle actif : {name}. La conversation continue avec ce modèle."
+load_llm = "Modèle « {name|ministral} » chargé en mémoire."
+unload_llm = "Modèle « {name|ministral} » déchargé de la mémoire."
+llm_status = "{modele} : chargé (9,8 Go de mémoire vidéo), actif. Autres modèles : pas chargés."
+set_reasoning = "Raisonnement de « {name|ministral} » : {level}."
 
 # ─── Simples : un outil, le bon, avec les bons arguments ──────────────────
 
@@ -370,3 +377,51 @@ policy = { reversible = "confirm" }
 confirm = "accept"
 expect = [{ tool = "open_url", arguments = { url = "openstreetmap.org" } }]
 max_calls = 1
+
+# ─── Modèles : changer, charger, savoir lequel est actif ──────────────────
+# Annoncer un changement sans appeler l'outil laisse l'ancien modèle actif.
+# Modèles du banc : gemma, qwen, ministral, phi (locaux), claude (distant) ;
+# « phi » n'est jamais le modèle essayé.
+
+[[cases]]
+id = "bascule-phi"
+category = "modeles"
+request = "Change de modèle et bascule sur phi"
+expect = [{ tool = "switch_llm", arguments = { name = "phi" } }]
+max_calls = 1
+
+[[cases]]
+id = "passe-gemma"
+category = "modeles"
+request = "Passe sur gemma"
+expect = [{ tool = "switch_llm", arguments = { name = "gemma" } }]
+max_calls = 1
+
+[[cases]]
+id = "charge-phi"
+category = "modeles"
+# Charger n'est pas changer de modèle.
+request = "Charge phi"
+expect = [{ tool = "load_llm", arguments = { name = "phi" } }]
+forbid = ["switch_llm"]
+max_calls = 1
+
+[[cases]]
+id = "quel-modele"
+category = "modeles"
+# Avenoir donne au modèle son nom : il répond sans outil, ou avec llm_status.
+request = "Tu es quel modèle ?"
+forbid = ["switch_llm", "load_llm", "unload_llm"]
+reply_contains = ["{modele}"]
+
+[[cases]]
+id = "bascule-apres-reponses"
+category = "modeles"
+# Après des réponses sans outil, le modèle a tendance à écrire la bascule
+# au lieu d'appeler l'outil (vu avec ministral le 2026-11-09).
+requests = [
+    "Quel modèle es-tu",
+    "Quelles sont les dernières news dans l'informatique",
+    "Change de modèle et bascule sur phi",
+]
+expect = [{ tool = "switch_llm", arguments = { name = "phi" } }]

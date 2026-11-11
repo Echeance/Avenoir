@@ -30,6 +30,12 @@ TEST_CASE("config.example.toml se charge", "[config]") {
     REQUIRE(keep.has_value());
     CHECK_FALSE(keep->agent.unload_on_switch);
     CHECK_FALSE(parse_config("[agent]\nunload_on_switch = \"non\"\n").has_value());
+
+    CHECK(config->agent.verify_replies);
+    const auto trusting = parse_config("[agent]\nverify_replies = false\n");
+    REQUIRE(trusting.has_value());
+    CHECK_FALSE(trusting->agent.verify_replies);
+    CHECK_FALSE(parse_config("[agent]\nverify_replies = \"oui\"\n").has_value());
 }
 
 TEST_CASE("valeurs par défaut et fournisseur claude_code", "[config]") {

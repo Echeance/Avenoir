@@ -81,8 +81,9 @@ class ModelSwitcher {
     [[nodiscard]] core::Result<std::unique_ptr<core::LlmProvider>>
     start(std::optional<std::string_view> preferred);
 
-    /// L'agent dont changer le modèle (à appeler une fois l'agent créé).
-    void attach(core::Agent& agent) noexcept { agent_ = &agent; }
+    /// L'agent dont changer le modèle (à appeler une fois l'agent créé) ;
+    /// il apprend le nom du modèle actif, puis de chaque nouveau modèle.
+    void attach(core::Agent& agent);
 
     /// En changeant de modèle, décharger l'ancien s'il est local, servi par
     /// le **même serveur** que le nouveau et différent de lui (vrai par
@@ -219,5 +220,21 @@ make_residency_tools(ModelSwitcher& switcher);
 /// Règles de voie rapide : « passe sur le modèle léger », « utilise le modèle
 /// claude »… (le mot « modèle » ou « llm » est exigé : règles strictes).
 [[nodiscard]] core::Result<void> register_switch_rules(core::FastRouter& router);
+
+/// Outils de modèle selon les modèles de `switcher` (qui doit leur survivre) :
+/// `llm_status`, `load_llm` et `unload_llm` s'il y a un modèle local,
+/// `set_reasoning` s'il y a un modèle `openai_compatible`, `switch_llm` s'il
+/// y a plus d'un modèle. Même liste pour la CLI et le banc d'essai.
+[[nodiscard]] std::vector<std::shared_ptr<core::Tool>> make_model_tools(ModelSwitcher& switcher);
+
+/// Vérification des réponses (`Agent::add_reply_check`) : une réponse qui
+/// annonce un changement de modèle (« je bascule sur qwen ») sans appel de
+/// `switch_llm`, ou un chargement sans `load_llm` / `unload_llm`, est une
+/// action non faite. `switcher` doit lui survivre.
+[[nodiscard]] core::ReplyCheck make_model_claim_check(const ModelSwitcher& switcher);
+
+/// Règles de voie rapide des outils de `make_model_tools`, aux mêmes conditions.
+[[nodiscard]] core::Result<void> register_model_rules(core::FastRouter& router,
+                                                      const ModelSwitcher& switcher);
 
 } // namespace avenoir::llm

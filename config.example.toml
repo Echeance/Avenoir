@@ -63,6 +63,9 @@ local_only = false    # true : mode « local uniquement », aucun modèle distan
 unload_on_switch = true # en changeant de modèle, décharger l'ancien s'il est sur le
                         # même serveur (libère sa mémoire vidéo) ; false : le garder
                         # chargé pour alterner vite entre deux petits modèles
+verify_replies = true # une action que le modèle annonce sans l'avoir faite
+                      # (« je bascule sur qwen » sans changer de modèle) le fait
+                      # relancer, puis est signalée ; false : réponses non vérifiées
 # system_prompt = "…" # remplace le prompt par défaut
 
 # ─── Permissions par niveau de risque : "allow" | "confirm" | "deny" ───────

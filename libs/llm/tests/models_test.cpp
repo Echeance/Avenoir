@@ -602,3 +602,54 @@ TEST_CASE("mode local uniquement : aucun modèle distant", "[models][securite]")
     CHECK(*provider == nullptr);
     CHECK(none.active() == nullptr);
 }
+
+TEST_CASE("voie rapide : un modèle nommé sans le mot « modèle »", "[models]") {
+    const llm::ModelSwitcher switcher(sample_models(), nullptr, fake_factory());
+    core::FastRouter router;
+    REQUIRE(llm::register_model_rules(router, switcher).has_value());
+    const auto route = [&router](std::string_view input) {
+        return router.route(input).value_or(core::FastRoute{.tool = "", .arguments = {}});
+    };
+    const auto name = nlohmann::json{{"name", "leger"}};
+
+    CHECK(route("Change de modèle et bascule sur leger") ==
+          core::FastRoute{.tool = "switch_llm", .arguments = name});
+    CHECK(route("passe à leger") == core::FastRoute{.tool = "switch_llm", .arguments = name});
+    CHECK(route("bascule sur claude").arguments == nlohmann::json{{"name", "claude"}});
+    CHECK(route("charge leger") == core::FastRoute{.tool = "load_llm", .arguments = name});
+    CHECK(route("décharge gemma") ==
+          core::FastRoute{.tool = "unload_llm", .arguments = {{"name", "gemma"}}});
+    CHECK(route("Tu es quel modèle ?").tool == "llm_status");
+    CHECK(route("quel modèle es-tu").tool == "llm_status");
+
+    // Seuls les noms de la configuration : le reste part au LLM.
+    CHECK(route("passe à la suite").tool.empty());
+    CHECK(route("bascule sur firefox").tool.empty());
+    CHECK(route("charge mon téléphone").tool.empty());
+    CHECK(route("bascule sur leger et lance firefox").tool.empty());
+    CHECK(route("quel modèle de voiture choisir ?").tool.empty());
+}
+
+TEST_CASE("annonce d'un changement de modèle sans l'outil", "[models]") {
+    llm::ModelSwitcher switcher(sample_models(), nullptr, fake_factory());
+    REQUIRE(switcher.start("gemma").has_value());
+    const auto check = llm::make_model_claim_check(switcher);
+    const auto call = [](std::string name) {
+        return core::ToolCall{.id = "1", .name = std::move(name), .arguments = {}};
+    };
+    const std::vector<core::ToolCall> none;
+
+    // Annonces sans appel : relevées (par nom ou par identifiant du modèle).
+    CHECK(check("Je bascule sur **ministral-3:8b**. Dis-moi si tu veux revenir !", none));
+    CHECK(check("Je passe à Leger.", none));
+    CHECK(check("Je charge leger en mémoire.", none));
+    // Avec l'outil appelé : rien à redire.
+    const std::vector switched{call("switch_llm")};
+    CHECK_FALSE(check("Je bascule sur leger.", switched));
+    const std::vector loaded{call("load_llm")};
+    CHECK_FALSE(check("Je charge leger en mémoire.", loaded));
+    // Le modèle actif, ou aucun modèle nommé : pas d'annonce de changement.
+    CHECK_FALSE(check("Je suis gemma, le modèle actif.", none));
+    CHECK_FALSE(check("Je passe la main : que veux-tu faire ?", none));
+    CHECK_FALSE(check("Il fait 12 °C à Lyon.", none));
+}

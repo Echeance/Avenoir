@@ -1,10 +1,15 @@
+#include <algorithm>
 #include <cstddef>
 #include <deque>
 #include <memory>
+#include <optional>
+#include <span>
 #include <stop_token>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <variant>
+#include <vector>
 
 #include <catch2/catch_test_macros.hpp>
 #include <nlohmann/json.hpp>
@@ -18,13 +23,17 @@ using namespace avenoir::core;
 /// LLM factice qui renvoie des réponses préparées, dans l'ordre.
 class ScriptedLlm final : public LlmProvider {
   public:
-    explicit ScriptedLlm(std::deque<Result<LlmResponse>> script, std::shared_ptr<int> calls)
-        : script_(std::move(script)), calls_(std::move(calls)) {}
+    explicit ScriptedLlm(std::deque<Result<LlmResponse>> script, std::shared_ptr<int> calls,
+                         std::shared_ptr<std::vector<std::string>> systems = {})
+        : script_(std::move(script)), calls_(std::move(calls)), systems_(std::move(systems)) {}
 
     [[nodiscard]] std::string_view name() const override { return "scripted"; }
 
-    [[nodiscard]] Result<LlmResponse> complete(const LlmRequest& /*request*/) override {
+    [[nodiscard]] Result<LlmResponse> complete(const LlmRequest& request) override {
         ++*calls_;
+        if (systems_) {
+            systems_->emplace_back(request.system);
+        }
         if (script_.empty()) {
             return make_error(ErrorCode::Llm, "script épuisé");
         }
@@ -36,6 +45,7 @@ class ScriptedLlm final : public LlmProvider {
   private:
     std::deque<Result<LlmResponse>> script_;
     std::shared_ptr<int> calls_;
+    std::shared_ptr<std::vector<std::string>> systems_; ///< Prompts système reçus, si non nul.
 };
 
 /// Outil qui compte ses appels et renvoie un texte fixe.
@@ -87,6 +97,8 @@ LlmResponse answer(std::string text) {
 struct Fixture {
     std::shared_ptr<int> llm_calls = std::make_shared<int>(0);
     std::shared_ptr<int> tool_calls = std::make_shared<int>(0);
+    std::shared_ptr<std::vector<std::string>> systems =
+        std::make_shared<std::vector<std::string>>();
 
     [[nodiscard]] Agent make_agent(std::deque<Result<LlmResponse>> script, RiskLevel risk,
                                    std::unique_ptr<ConfirmationHandler> confirmer,
@@ -97,8 +109,8 @@ struct Fixture {
         ToolRegistry tools;
         const auto added = tools.add(std::move(tool));
         REQUIRE(added.has_value());
-        return {std::make_unique<ScriptedLlm>(std::move(script), llm_calls), std::move(tools),
-                std::move(confirmer), std::move(options)};
+        return {std::make_unique<ScriptedLlm>(std::move(script), llm_calls, systems),
+                std::move(tools), std::move(confirmer), std::move(options)};
     }
 };
 
@@ -590,4 +602,84 @@ TEST_CASE("changer de LLM garde la conversation", "[agent]") {
 
     agent.set_llm(nullptr); // ignoré : le fournisseur reste valide
     CHECK_FALSE(agent.llm_name().empty());
+}
+
+namespace {
+
+/// Vérification de test : « je bascule » sans appel de l'outil `flag`.
+ReplyCheck claim_check() {
+    return [](std::string_view reply,
+              std::span<const ToolCall> calls) -> std::optional<ReplyIssue> {
+        const bool flagged =
+            std::ranges::any_of(calls, [](const ToolCall& call) { return call.name == "flag"; });
+        if (!flagged && reply.contains("je bascule")) {
+            return ReplyIssue{.reminder = "RAPPEL", .warning = "(rien n'a été fait)"};
+        }
+        return std::nullopt;
+    };
+}
+
+} // namespace
+
+TEST_CASE("une réponse annonçant une action non faite relance le modèle", "[agent]") {
+    const Fixture f;
+    auto agent = f.make_agent({answer("je bascule sur qwen"), call_tool("flag"), answer("fait")},
+                              RiskLevel::ReadOnly, std::make_unique<AutoReject>());
+    agent.add_reply_check(claim_check());
+
+    const auto reply = agent.handle("bascule sur qwen");
+    REQUIRE(reply.has_value());
+    CHECK(*reply == "fait");
+    CHECK(*f.tool_calls == 1);
+    // Rappel ajouté au prompt système à partir de la relance.
+    REQUIRE(f.systems->size() == 3);
+    CHECK_FALSE(f.systems->at(0).contains("RAPPEL"));
+    CHECK(f.systems->at(1).ends_with("RAPPEL"));
+    // La réponse écartée n'entre pas dans l'historique.
+    REQUIRE(agent.history().size() == 4);
+    for (const auto& message : agent.history()) {
+        const auto* assistant = std::get_if<AssistantMessage>(&message);
+        CHECK((assistant == nullptr || !assistant->text.contains("je bascule")));
+    }
+}
+
+TEST_CASE("une annonce répétée est gardée, avec l'avertissement", "[agent]") {
+    const Fixture f;
+    auto agent = f.make_agent({answer("je bascule sur qwen"), answer("je bascule, promis")},
+                              RiskLevel::ReadOnly, std::make_unique<AutoReject>());
+    agent.add_reply_check(claim_check());
+
+    const auto reply = agent.handle("bascule sur qwen");
+    REQUIRE(reply.has_value());
+    CHECK(*reply == "je bascule, promis\n\n(rien n'a été fait)");
+    CHECK(*f.llm_calls == 2);
+    CHECK(*f.tool_calls == 0);
+}
+
+TEST_CASE("une réponse après l'appel de l'outil n'est pas relancée", "[agent]") {
+    const Fixture f;
+    auto agent = f.make_agent({call_tool("flag"), answer("je bascule sur qwen")},
+                              RiskLevel::ReadOnly, std::make_unique<AutoReject>());
+    agent.add_reply_check(claim_check());
+
+    const auto reply = agent.handle("bascule sur qwen");
+    REQUIRE(reply.has_value());
+    CHECK(*reply == "je bascule sur qwen");
+    CHECK(*f.llm_calls == 2);
+}
+
+TEST_CASE("le modèle actif est donné à la fin du prompt système", "[agent]") {
+    const Fixture f;
+    AgentOptions options;
+    options.system_prompt = "PROMPT";
+    auto agent = f.make_agent({answer("a"), answer("b")}, RiskLevel::ReadOnly,
+                              std::make_unique<AutoReject>(), std::move(options));
+    REQUIRE(agent.handle("x").has_value());
+    agent.set_model_identity("qwen : qwen3.8:27b, local");
+    REQUIRE(agent.handle("y").has_value());
+
+    REQUIRE(f.systems->size() == 2);
+    CHECK(f.systems->at(0) == "PROMPT");
+    CHECK(f.systems->at(1) ==
+          "PROMPT\n\nModèle actif (celui qui te fait fonctionner) : qwen : qwen3.8:27b, local.");
 }

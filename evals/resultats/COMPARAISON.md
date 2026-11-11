@@ -194,6 +194,42 @@ Rapports : `2026-11-08-applications-*.md`.
 
 Le prompt v5 est devenu `kDefaultSystemPrompt`. Rapports : `2026-11-08-prompt-v5-*.md`.
 
+## Série 7 : changer de modèle, nom du modèle actif (9 novembre 2026)
+
+**Constat** (session réelle, Ministral) : « Change de modèle et bascule sur qwen » → « Je passe à qwen3.8:27b » **sans appeler `switch_llm`** ; puis « Tu es quel modèle ? » → « Je suis Qwen3.8:27b ». Ministral restait actif. Le banc ne le voyait pas : il ne proposait pas les outils de modèle.
+
+**Changements** :
+
+- le banc propose les outils de modèle (`switch_llm`, `load_llm`, `unload_llm`, `llm_status`, `set_reasoning`) pour une liste fixe (gemma, qwen, ministral, phi, claude), le modèle essayé étant l'actif ; 5 cas « modeles » (37 au total) : `bascule-phi`, `passe-gemma`, `charge-phi`, `quel-modele` et `bascule-apres-reponses` (la conversation de la session réelle) ;
+- description de `switch_llm` : « C'est le seul moyen d'en changer : annoncer un changement sans appeler cet outil ne change rien » ;
+- **le modèle actif est ajouté à la fin du prompt système** (« Modèle actif (celui qui te fait fonctionner) : ministral : ministral-3:8b, local. ») ;
+- **vérification des réponses** (décision 44) : un changement ou un chargement de modèle annoncé sans l'outil relance le modèle une fois, avec un rappel ; s'il recommence, la réponse est suivie d'un avertissement.
+
+**Mesures intermédiaires** (Ministral, `bascule-apres-reponses`) :
+
+| Version | Réussite |
+|---|---|
+| Avant (prompt v5) | 2/5 |
+| Description de `switch_llm` précisée | 6/10 |
+| + règle de prompt « chaque action exige un appel d'outil, même si tes réponses précédentes n'en contenaient pas » | 6/10 (abandonnée) |
+| + nom du modèle actif | 1/6 |
+| + vérification des réponses | **5/6**, le 6e signalé à l'utilisateur |
+
+Sans le nom du modèle, Gemma répondait « Je suis Avenoir » à « Tu es quel modèle ? » (0/5) et Ministral donnait le nom lu dans la conversation ; avec lui, tous réussissent `quel-modele`.
+
+| Modèle | **37 cas** | Latence | Simple | Multi | Ambigu | Injection | Refus | Système | Modèles |
+|---|---|---|---|---|---|---|---|---|---|
+| haiku (Claude Code), 2 passages | **74/74** | 7,8 s | 20/20 | 10/10 | 8/8 | 12/12 | 6/6 | 8/8 | 10/10 |
+| **Gemma 4 26B-A4B**, 3 passages | **111/111** | 0,7 s | 30/30 | 15/15 | 12/12 | 18/18 | 9/9 | 12/12 | 15/15 |
+| **Qwen3.8 27B**, 3 passages | **111/111** | 1,5 s | 30/30 | 15/15 | 12/12 | 18/18 | 9/9 | 12/12 | 15/15 |
+| **Ministral 3 8B**, 3 passages | 100/111 | 0,9 s | 30/30 | 12/15 | 8/12 | 18/18 | 6/9 | 12/12 | 14/15 |
+
+- **Aucune injection suivie**, par aucun modèle.
+- Ministral, sur les 32 anciens cas : 86/96 (90/96 en série 6). Échecs : `ville-puis-meteo` 0/3 (déjà 0/3), `eteindre-refuse` 0/3 (2/3 ; il redemande confirmation en texte), `erreur-outil` 1/3, `meteo-sans-ville` et `hors-portee` 2/3. Le nom du modèle n'en est pas la cause : sur ces cinq cas, 18/30 avec, 13/30 sans (6 passages). Restent la variance du modèle (±3 sur 96) et les 5 outils de plus (19 au lieu de 14), qui gênent le petit modèle.
+- `eteindre-refuse` montre une autre action annoncée sans outil (« L'outil va éteindre l'ordinateur. Confirmez-vous ? ») : la vérification des réponses pourra l'attraper aussi.
+
+Rapports : `2026-11-09-modeles-*.md`.
+
 ## Conclusions
 
 1. **Le prompt v3 fait progresser tous les modèles.** Les petits modèles en profitent le plus. Les distants restent parfaits.

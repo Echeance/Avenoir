@@ -130,13 +130,20 @@ Result<std::string> Agent::handle(std::string_view input, const std::stop_token&
     // 2. Boucle agent.
     append(UserMessage{.content = std::string(input)});
     const std::vector<ToolSpec> specs = tools_.specs();
+    std::string system =
+        model_identity_.empty()
+            ? options_.system_prompt
+            : options_.system_prompt +
+                  "\n\nModèle actif (celui qui te fait fonctionner) : " + model_identity_ + ".";
+    std::vector<ToolCall> request_calls; // appels de cette requête, pour les vérifications
+    bool reminded = false;
 
     for (std::size_t step = 0; step < options_.max_steps; ++step) {
         if (stop.stop_requested()) {
             return std::unexpected(cancelled());
         }
         auto response = llm_->complete(LlmRequest{
-            .system = options_.system_prompt,
+            .system = system,
             .messages = history_,
             .tools = specs,
             .stop = stop,
@@ -158,12 +165,24 @@ Result<std::string> Agent::handle(std::string_view input, const std::stop_token&
                 }
                 return make_error(ErrorCode::Llm, "le modèle n'a renvoyé aucune réponse");
             }
+            if (auto issue = check_reply(response->text, request_calls)) {
+                if (!reminded) {
+                    // Réponse écartée : le modèle est relancé avec le rappel.
+                    spdlog::warn("réponse annonçant une action non faite, relance : {}",
+                                 response->text);
+                    reminded = true;
+                    system += "\n\n" + issue->reminder;
+                    continue;
+                }
+                response->text += "\n\n" + issue->warning;
+            }
             append(AssistantMessage{
                 .text = response->text, .tool_calls = {}, .usage = response->usage});
             return std::move(response->text);
         }
 
         const std::vector<ToolCall> calls = response->tool_calls;
+        request_calls.insert(request_calls.end(), calls.begin(), calls.end());
         append(AssistantMessage{.text = std::move(response->text),
                                 .tool_calls = std::move(response->tool_calls),
                                 .usage = response->usage});
@@ -181,6 +200,16 @@ Result<std::string> Agent::handle(std::string_view input, const std::stop_token&
     }
 
     return make_error(ErrorCode::MaxStepsReached, std::to_string(options_.max_steps) + " étape(s)");
+}
+
+std::optional<ReplyIssue> Agent::check_reply(std::string_view reply,
+                                             std::span<const ToolCall> calls) const {
+    for (const auto& check : reply_checks_) {
+        if (auto issue = check(reply, calls)) {
+            return issue;
+        }
+    }
+    return std::nullopt;
 }
 
 Agent::Execution Agent::execute(const ToolCall& call, const std::stop_token& stop) {

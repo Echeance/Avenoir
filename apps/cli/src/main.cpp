@@ -700,59 +700,27 @@ int run(int argc, char** argv) {
         startup_warnings.emplace_back(
             "mode « local uniquement » : aucun modèle local, seule la voie rapide répond");
     }
-    // Charger / décharger : seulement s'il y a un modèle local.
-    if (std::ranges::any_of(switcher.models(), &llm::ModelChoice::local)) {
-        if (auto added = tools.add(llm::make_status_tool(switcher)); !added) {
+    // Outils de modèle (charger, décharger, raisonnement, bascule) selon les
+    // modèles configurés, et leurs règles de voie rapide.
+    for (auto& tool : llm::make_model_tools(switcher)) {
+        if (auto added = tools.add(std::move(tool)); !added) {
             display().error(core::describe(added.error()));
             return EXIT_FAILURE;
-        }
-        for (auto& tool : llm::make_residency_tools(switcher)) {
-            if (auto added = tools.add(std::move(tool)); !added) {
-                display().error(core::describe(added.error()));
-                return EXIT_FAILURE;
-            }
-        }
-        if (options.router) {
-            if (auto rules = llm::register_status_rules(*options.router); !rules) {
-                display().error(core::describe(rules.error()));
-                return EXIT_FAILURE;
-            }
-            if (auto rules = llm::register_residency_rules(*options.router); !rules) {
-                display().error(core::describe(rules.error()));
-                return EXIT_FAILURE;
-            }
         }
     }
-    if (std::ranges::any_of(switcher.models(), [](const llm::ModelChoice& model) {
-            return std::holds_alternative<core::OpenAiCompatibleConfig>(model.config);
-        })) {
-        if (auto added = tools.add(llm::make_reasoning_tool(switcher)); !added) {
-            display().error(core::describe(added.error()));
+    if (options.router) {
+        if (auto rules = llm::register_model_rules(*options.router, switcher); !rules) {
+            display().error(core::describe(rules.error()));
             return EXIT_FAILURE;
-        }
-        if (options.router) {
-            if (auto rules = llm::register_reasoning_rules(*options.router); !rules) {
-                display().error(core::describe(rules.error()));
-                return EXIT_FAILURE;
-            }
-        }
-    }
-    if (switcher.models().size() > 1) {
-        if (auto added = tools.add(llm::make_switch_llm_tool(switcher)); !added) {
-            display().error(core::describe(added.error()));
-            return EXIT_FAILURE;
-        }
-        if (options.router) {
-            if (auto rules = llm::register_switch_rules(*options.router); !rules) {
-                display().error(core::describe(rules.error()));
-                return EXIT_FAILURE;
-            }
         }
     }
 
     core::Agent agent(std::move(*llm), std::move(tools), std::make_unique<CliConfirmation>(prompt),
                       std::move(options));
     switcher.attach(agent);
+    if (config->agent.verify_replies) {
+        agent.add_reply_check(llm::make_model_claim_check(switcher));
+    }
 
     cli::Conversations conversations(std::move(store), agent, prompt);
     switcher.on_reasoning([&conversations](const llm::ModelChoice& model) {

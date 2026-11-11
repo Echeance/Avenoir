@@ -67,6 +67,9 @@ struct AgentConfig {
     /// Mode « local uniquement » (directive de sécurité n° 10) : aucun modèle
     /// distant n'est utilisé, ni au lancement ni par un changement de modèle.
     bool local_only = false;
+    /// Vérifier les réponses du modèle : une action annoncée sans l'appel
+    /// d'outil correspondant relance le modèle, puis est signalée.
+    bool verify_replies = true;
 };
 
 /// Réglages de l'utilisateur pour un module (`[modules.<id>]`). Le module

@@ -173,6 +173,7 @@ L'ordre suit un principe : **chaque jalon produit un assistant utilisable**, plu
 - ✅ Règles de voie rapide associées (« monte le son », « coupe le son », « pause », « verrouille l'ordinateur », « mode sombre »…) ; extinction et redémarrage jamais par la voie rapide
 - ✅ Un outil indisponible sur un OS ou une machine n'est pas enregistré (PROJECT.md § 4.3) : pas de sortie audio, pas d'écran réglable, programme absent
 - ✅ Banc d'essai : 6 cas de plus (contrôle, refus d'extinction, injection par un titre de morceau), prompt v5 (evals/resultats/COMPARAISON.md, série 6)
+- ✅ Banc d'essai : outils de modèle et 5 cas « modeles » (bascule, chargement, « quel modèle es-tu ? », bascule après des réponses sans outil) (COMPARAISON.md, série 7)
 - ✅ Vérifié sous Windows (VM) : mode sombre, multimédia, notification émise, volume absent sans sortie audio
 - ℹ️ La notification n'a pas pu être vue à l'écran dans la VM (notifications coupées, la bulle de référence .NET non plus) : à vérifier sur un vrai poste Windows
 
@@ -209,6 +210,7 @@ L'ordre suit un principe : **chaque jalon produit un assistant utilisable**, plu
 - ✅ Modèles chargés ou déchargés hors d'Avenoir annoncés pendant la saisie ; état des modèles : `/memoire`, outil `llm_status`, voie rapide
 - ✅ Changer le raisonnement à chaud, sans recharger le modèle : `/raisonnement`, outil `set_reasoning`, voie rapide ; retenu par modèle
 - ✅ Charger, décharger, recharger un modèle local (Ollama) : `/charger`, `/decharger`, `/recharger`, outils `load_llm` / `unload_llm`, voie rapide (« décharge le modèle », « libère la carte graphique », « allume le modèle gemma ») ; déchargement du modèle actif différé à la fin de la réponse
+- ✅ Le modèle connaît son nom (modèle actif ajouté au prompt système) ; voie rapide par nom seul (« bascule sur qwen », « charge qwen », « tu es quel modèle ? ») ; un changement ou un chargement annoncé sans appel d'outil relance le modèle une fois, puis est signalé ; outils de modèle et cas « modeles » au banc
 - ✅ Mode « local uniquement » (`[agent] local_only`) : un modèle distant n'est jamais utilisé, ni au lancement (premier modèle local à la place, sinon voie rapide seule), ni par un changement (refusé sans confirmation possible)
 
 **Fini quand :** « monte le son », « mets en pause », « cherche la météo à Lyon », « ouvre le navigateur », « passe sur le modèle léger » fonctionnent sur les deux OS.

@@ -86,6 +86,18 @@ struct HistoryObserver {
     std::function<void()> removed_last;           ///< Le dernier message a été retiré.
 };
 
+/// Problème d'une réponse finale : elle annonce une action qu'aucun outil
+/// appelé pendant la requête n'a faite (« je bascule sur qwen » sans
+/// `switch_llm`).
+struct ReplyIssue {
+    std::string reminder; ///< Ajouté au prompt système pour relancer le modèle une fois.
+    std::string warning;  ///< Ajouté à la réponse si le modèle recommence.
+};
+
+/// Vérifie une réponse finale, avec les appels d'outils de la requête.
+using ReplyCheck = std::function<std::optional<ReplyIssue>(std::string_view reply,
+                                                           std::span<const ToolCall> calls)>;
+
 struct AgentOptions {
     PermissionPolicy policy;
     std::string system_prompt{kDefaultSystemPrompt};
@@ -125,6 +137,18 @@ class Agent {
     /// ne doit pas être nul.
     void set_llm(std::unique_ptr<LlmProvider> llm);
 
+    /// Modèle actif tel que l'utilisateur le nomme (« ministral :
+    /// ministral-3:8b, local »), ajouté à la fin du prompt système : le
+    /// modèle connaît ainsi son nom, et ne le déduit pas de la conversation.
+    /// Vide : rien n'est ajouté.
+    void set_model_identity(std::string identity) { model_identity_ = std::move(identity); }
+
+    /// Ajoute une vérification des réponses finales. Une réponse qui annonce
+    /// une action non faite est écartée (hors historique) et le modèle est
+    /// relancé une fois, avec le rappel ; s'il recommence, sa réponse est
+    /// gardée, suivie de l'avertissement : rien n'est passé sous silence.
+    void add_reply_check(ReplyCheck check) { reply_checks_.push_back(std::move(check)); }
+
     /// Oublie la conversation en cours (et les journaux d'annulation).
     void reset() noexcept {
         history_.clear();
@@ -159,6 +183,11 @@ class Agent {
     [[nodiscard]] std::vector<UndoOutcome> undo_last();
 
   private:
+    /// Premier problème trouvé par les vérifications de réponse, ou rien.
+    [[nodiscard]] std::optional<ReplyIssue> check_reply(std::string_view reply,
+                                                        std::span<const ToolCall> calls) const;
+    std::string model_identity_;
+    std::vector<ReplyCheck> reply_checks_;
     struct Execution {
         std::string content;
         bool is_error = false;

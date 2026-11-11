@@ -226,7 +226,11 @@ TEST_CASE("passage d'un cas avec un LLM scripté et des doublures", "[evals]") {
         test, suite, all,
         std::make_unique<ScriptedLlm>(std::deque{call("meteo__current", {{"city", "Brest"}}),
                                                  answer("Il fait 12 °C à Brest.")}),
-        RunOptions{.system_prompt = "test", .max_steps = 5, .policy = {}});
+        RunOptions{.system_prompt = "test",
+                   .max_steps = 5,
+                   .policy = {},
+                   .model_identity = {},
+                   .reply_checks = {}});
     CHECK_FALSE(transcript.error.has_value());
     CHECK(ScriptedLlm::last_result == "À Brest : 12 °C.");
     CHECK(transcript.reply == "Il fait 12 °C à Brest.");
@@ -241,7 +245,11 @@ TEST_CASE("passage d'un cas avec un LLM scripté et des doublures", "[evals]") {
     transcript = run_case(
         test, suite, all,
         std::make_unique<ScriptedLlm>(std::deque{with_text, answer("Il fait 12 °C à Brest.")}),
-        RunOptions{.system_prompt = "test", .max_steps = 5, .policy = {}});
+        RunOptions{.system_prompt = "test",
+                   .max_steps = 5,
+                   .policy = {},
+                   .model_identity = {},
+                   .reply_checks = {}});
     CHECK(transcript.preambles == std::vector<std::string>{"Il doit faire 15 °C, je vérifie."});
 
     // Refus de la confirmation : l'appel est noté, l'outil n'est pas exécuté.
@@ -255,7 +263,11 @@ TEST_CASE("passage d'un cas avec un LLM scripté et des doublures", "[evals]") {
         run_case(refused, suite, all,
                  std::make_unique<ScriptedLlm>(std::deque{call("launch_app", {{"name", "firefox"}}),
                                                           answer("D'accord, je ne le lance pas.")}),
-                 RunOptions{.system_prompt = "test", .max_steps = 5, .policy = {}});
+                 RunOptions{.system_prompt = "test",
+                            .max_steps = 5,
+                            .policy = {},
+                            .model_identity = {},
+                            .reply_checks = {}});
     CHECK(transcript.confirmations == std::vector<std::string>{"launch_app"});
     REQUIRE(transcript.calls.size() == 1);
     CHECK_FALSE(ScriptedLlm::last_result.contains("lancée"));
@@ -269,7 +281,11 @@ TEST_CASE("passage d'un cas avec un LLM scripté et des doublures", "[evals]") {
         run_case(failing, suite, all,
                  std::make_unique<ScriptedLlm>(std::deque{call("meteo__current", {{"city", "Xyz"}}),
                                                           answer("Ville introuvable.")}),
-                 RunOptions{.system_prompt = "test", .max_steps = 5, .policy = {}});
+                 RunOptions{.system_prompt = "test",
+                            .max_steps = 5,
+                            .policy = {},
+                            .model_identity = {},
+                            .reply_checks = {}});
     CHECK(ScriptedLlm::last_result.contains("ville introuvable"));
     REQUIRE(transcript.error.has_value());
     CHECK(transcript.error.value_or("").contains("script épuisé"));

@@ -131,7 +131,7 @@ provider = "claude_code"
 model = "sonnet"
 ```
 
-**Changer de modèle à tout moment** : `/modele <nom>`, *« passe sur le modèle claude »*, ou en le demandant simplement. La conversation continue avec le nouveau modèle ; passer à un modèle distant demande confirmation, et le mode « local uniquement » (`local_only = true` dans `[agent]`) l'interdit.
+**Changer de modèle à tout moment** : `/modele <nom>`, *« passe sur le modèle claude »*, *« bascule sur qwen »*, ou en le demandant simplement. La conversation continue avec le nouveau modèle ; passer à un modèle distant demande confirmation, et le mode « local uniquement » (`local_only = true` dans `[agent]`) l'interdit. Le modèle connaît son nom, et un changement qu'il annoncerait sans l'avoir fait est relancé, puis signalé.
 
 **Quel modèle ?** Mesuré sur nos requêtes de référence (32 requêtes, simples à piégées), sous Linux avec une RX 7900 XTX :
 

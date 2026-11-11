@@ -76,6 +76,10 @@ Transcript run_case(const Case& test, const Suite& suite, std::span<const core::
         std::move(llm), std::move(tools),
         std::make_unique<ScriptedConfirmation>(test.confirmation, transcript.confirmations),
         std::move(agent_options));
+    agent.set_model_identity(options.model_identity);
+    for (const auto& check : options.reply_checks) {
+        agent.add_reply_check(check);
+    }
 
     const auto start = std::chrono::steady_clock::now();
     for (const auto& request : test.requests) {

@@ -5,6 +5,7 @@
 //   fichier]
 //                 [--only id,id] [--repeat N] [--prompt fichier] [--report fichier]
 
+#include <algorithm>
 #include <chrono>
 #include <cstdio>
 #include <cstdlib>
@@ -13,7 +14,9 @@
 #include <format>
 #include <fstream>
 #include <iostream>
+#include <optional>
 #include <print>
+#include <ranges>
 #include <span>
 #include <sstream>
 #include <string>
@@ -27,6 +30,7 @@
 #include "avenoir/core/config.hpp"
 #include "avenoir/core/env.hpp"
 #include "avenoir/llm/factory.hpp"
+#include "avenoir/llm/models.hpp"
 #include "avenoir/modules/discovery.hpp"
 #include "avenoir/modules/host.hpp"
 #include "avenoir/tools/tools.hpp"
@@ -167,6 +171,25 @@ std::string file_safe(std::string_view text) {
     return out;
 }
 
+/// Modèles entre lesquels basculer dans le banc : trois locaux, un distant.
+std::vector<llm::ModelChoice> bench_models() {
+    const auto local = [](std::string name, std::string model) {
+        return llm::ModelChoice{
+            .name = std::move(name),
+            .config = core::OpenAiCompatibleConfig{.base_url = "http://localhost:11434/v1",
+                                                   .model = std::move(model),
+                                                   .api_key_env = std::nullopt,
+                                                   .temperature = std::nullopt,
+                                                   .reasoning_effort = std::nullopt},
+            .local = true};
+    };
+    return {local("gemma", "gemma4:26b-a4b"), local("qwen", "qwen3.8:27b"),
+            local("ministral", "ministral-3:8b"), local("phi", "phi4-mini"),
+            llm::ModelChoice{.name = "claude",
+                             .config = core::ClaudeCodeConfig{.model = "haiku"},
+                             .local = false}};
+}
+
 /// Descriptions des vrais outils : natifs, puis ceux des modules fournis
 /// (lancés le temps de lire leur liste d'outils, puis arrêtés).
 core::Result<std::vector<core::ToolSpec>> real_specs(const core::AppConfig& config,
@@ -188,6 +211,14 @@ core::Result<std::vector<core::ToolSpec>> real_specs(const core::AppConfig& conf
         host.register_tools(registry);
         for (const auto& warning : host.take_warnings()) {
             std::println(std::cerr, "{}", warning);
+        }
+    }
+    // Outils de modèle (bascule, chargement…) décrits pour une liste de
+    // modèles fixe : les cas du banc ne dépendent pas de la configuration.
+    llm::ModelSwitcher switcher(bench_models(), nullptr);
+    for (auto& tool : llm::make_model_tools(switcher)) {
+        if (auto added = registry.add(std::move(tool)); !added) {
+            return std::unexpected(std::move(added.error()));
         }
     }
     return registry.specs();
@@ -257,6 +288,22 @@ int run(std::span<char*> argv) {
         return EXIT_FAILURE;
     }
 
+    // « {modele} » dans les résultats des doublures et les réponses
+    // attendues : le nom du modèle essayé.
+    const auto put_model = [&chosen](std::string& text) {
+        constexpr std::string_view kKey = "{modele}";
+        for (auto at = text.find(kKey); at != std::string::npos; at = text.find(kKey, at)) {
+            text.replace(at, kKey.size(), chosen->name);
+        }
+    };
+    std::ranges::for_each(suite->results | std::views::values, put_model);
+    for (auto& test : suite->cases) {
+        std::ranges::for_each(test.results | std::views::values, put_model);
+        for (auto* texts : {&test.reply_contains, &test.reply_contains_any, &test.reply_excludes}) {
+            std::ranges::for_each(*texts, put_model);
+        }
+    }
+
     std::vector<const evals::Case*> selected;
     for (const auto& test : suite->cases) {
         if (args->only.empty() || std::ranges::contains(args->only, test.id)) {
@@ -273,6 +320,20 @@ int run(std::span<char*> argv) {
     evals::RunOptions options;
     options.policy = config->permissions;
     options.max_steps = config->agent.max_steps;
+    // Mêmes vérifications des réponses que la CLI, avec le modèle essayé
+    // comme modèle actif parmi ceux du banc.
+    llm::ModelSwitcher bench_switcher(bench_models(), nullptr);
+    if (auto started = bench_switcher.start(chosen->name); !started) {
+        std::println(std::cerr, "{}", core::describe(started.error()));
+        return EXIT_FAILURE;
+    }
+    if (config->agent.verify_replies) {
+        options.reply_checks.push_back(llm::make_model_claim_check(bench_switcher));
+    }
+    options.model_identity =
+        llm::describe(llm::ModelChoice{.name = chosen->name,
+                                       .config = model_config,
+                                       .local = llm::is_local(model_config, chosen->local)});
     options.system_prompt =
         config->agent.system_prompt.value_or(std::string(core::kDefaultSystemPrompt));
     std::string prompt_label =

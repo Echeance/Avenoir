@@ -5,8 +5,11 @@
 #include <chrono>
 #include <cstddef>
 #include <format>
+#include <initializer_list>
+#include <iterator>
 #include <memory>
 #include <optional>
+#include <span>
 #include <stop_token>
 #include <string>
 #include <string_view>
@@ -147,7 +150,8 @@ class SwitchLlmTool final : public core::Tool {
         }
         description_ = "Change le modèle de langage (LLM) qui fait fonctionner l'assistant, y "
                        "compris pour revenir à un modèle déjà utilisé. La conversation continue "
-                       "avec le nouveau modèle. Noms acceptés : " +
+                       "avec le nouveau modèle. C'est le seul moyen d'en changer : annoncer un "
+                       "changement sans appeler cet outil ne change rien. Noms acceptés : " +
                        switcher.names() + ". Détail (nom : modèle, local ou distant) : " + list +
                        ".";
     }
@@ -584,6 +588,13 @@ std::optional<std::string> ModelSwitcher::finish_request() {
     return notes;
 }
 
+void ModelSwitcher::attach(core::Agent& agent) {
+    agent_ = &agent;
+    if (const auto* model = active()) {
+        agent.set_model_identity(describe(*model));
+    }
+}
+
 core::Result<std::unique_ptr<core::LlmProvider>>
 ModelSwitcher::start(std::optional<std::string_view> preferred) {
     if (models_.empty()) {
@@ -664,6 +675,7 @@ core::Result<std::string> ModelSwitcher::switch_to(std::string_view name) {
     const std::size_t previous = active_;
     active_ = static_cast<std::size_t>(target - models_.data());
     cancel_unload(active_); // il sert de nouveau : surtout ne pas le décharger
+    agent_->set_model_identity(describe(*target));
     if (on_switch_) {
         on_switch_(*target);
     }
@@ -970,6 +982,145 @@ core::Result<void> register_switch_rules(core::FastRouter& router) {
         }
     }
     return {};
+}
+
+namespace {
+
+bool any_local(const ModelSwitcher& switcher) {
+    return std::ranges::any_of(switcher.models(), &ModelChoice::local);
+}
+
+bool any_reasoning(const ModelSwitcher& switcher) {
+    return std::ranges::any_of(switcher.models(), [](const ModelChoice& model) {
+        return std::holds_alternative<core::OpenAiCompatibleConfig>(model.config);
+    });
+}
+
+} // namespace
+
+std::vector<std::shared_ptr<core::Tool>> make_model_tools(ModelSwitcher& switcher) {
+    std::vector<std::shared_ptr<core::Tool>> tools;
+    if (any_local(switcher)) {
+        tools.push_back(make_status_tool(switcher));
+        std::ranges::move(make_residency_tools(switcher), std::back_inserter(tools));
+    }
+    if (any_reasoning(switcher)) {
+        tools.push_back(make_reasoning_tool(switcher));
+    }
+    if (switcher.models().size() > 1) {
+        tools.push_back(make_switch_llm_tool(switcher));
+    }
+    return tools;
+}
+
+core::Result<void> register_model_rules(core::FastRouter& router, const ModelSwitcher& switcher) {
+    if (any_local(switcher)) {
+        if (auto rules = register_status_rules(router); !rules) {
+            return rules;
+        }
+        if (auto rules = register_residency_rules(router); !rules) {
+            return rules;
+        }
+    }
+    if (any_reasoning(switcher)) {
+        if (auto rules = register_reasoning_rules(router); !rules) {
+            return rules;
+        }
+    }
+    if (switcher.models().size() > 1) {
+        if (auto rules = register_switch_rules(router); !rules) {
+            return rules;
+        }
+    }
+    // Un modèle nommé sans le mot « modèle » (« bascule sur qwen », « charge
+    // gemma ») : seuls les noms de la configuration sont reconnus. Ils ne
+    // contiennent que des minuscules, chiffres, « - » et « _ » (vérifié à la
+    // lecture de la configuration, et ici) : aucun caractère spécial
+    // d'expression régulière.
+    std::string names;
+    for (const auto& model : switcher.models()) {
+        const bool plain = !model.name.empty() && std::ranges::all_of(model.name, [](char c) {
+            return (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '-' || c == '_';
+        });
+        if (plain) { // par prudence si la liste ne vient pas de la configuration
+            names += (names.empty() ? "" : "|") + model.name;
+        }
+    }
+    if (names.empty()) {
+        return {};
+    }
+    const std::string named = R"(\s+(?:le\s+)?(?:modèle\s+|llm\s+)?()" + names + ")$";
+    const nlohmann::json none = nlohmann::json::object();
+    std::vector<std::tuple<std::string, std::string, std::string>> rules;
+    if (switcher.models().size() > 1) {
+        rules.emplace_back(
+            R"(^(?:change\s+de\s+modèle\s+(?:et\s+)?)?(?:passe|bascule|change)\s+(?:sur|à|au|vers|pour))" +
+                named,
+            std::string(kToolName), "name");
+    }
+    if (any_local(switcher)) {
+        rules.emplace_back(R"(^charge)" + named, "load_llm", "name");
+        rules.emplace_back(R"(^(?:décharge|stoppe))" + named, "unload_llm", "name");
+        rules.emplace_back(
+            R"(^(?:(?:tu\s+es|t'es|c'est)\s+quel\s+modèle|quel\s+modèle\s+(?:es-tu|es\s+tu|utilises-tu|est\s+actif|tourne))\s*\??$)",
+            "llm_status", "");
+    }
+    for (const auto& [pattern, tool, arg] : rules) {
+        if (auto added = router.add_rule(pattern, tool, arg, none); !added) {
+            return added;
+        }
+    }
+    return {};
+}
+
+core::ReplyCheck make_model_claim_check(const ModelSwitcher& switcher) {
+    return [&switcher](std::string_view reply,
+                       std::span<const core::ToolCall> calls) -> std::optional<core::ReplyIssue> {
+        const std::string text = fold(reply);
+        const auto has_any = [&text](std::initializer_list<std::string_view> parts) {
+            return std::ranges::any_of(
+                parts, [&text](std::string_view part) { return text.contains(part); });
+        };
+        const auto called = [&calls](std::initializer_list<std::string_view> names) {
+            return std::ranges::any_of(calls, [&names](const core::ToolCall& call) {
+                return std::ranges::contains(names, std::string_view(call.name));
+            });
+        };
+        // Un autre modèle que l'actif est nommé (par son nom ou son identifiant).
+        const auto* active = switcher.active();
+        const bool other_named =
+            std::ranges::any_of(switcher.models(), [&](const ModelChoice& model) {
+                return &model != active && (text.contains(fold(model.name)) ||
+                                            text.contains(fold(model_id(model.config))));
+            });
+        if (!other_named) {
+            return std::nullopt;
+        }
+        if (switcher.models().size() > 1 && !called({kToolName}) &&
+            has_any({"bascul", "je passe", "je change", "passage sur", "passage a",
+                     "maintenant sur", "desormais sur"})) {
+            return core::ReplyIssue{
+                .reminder = std::format(
+                    "Attention : ta réponse précédente annonçait un changement de modèle, mais "
+                    "l'outil {} n'a pas été appelé : rien n'a changé. Si l'utilisateur demande "
+                    "ce changement, appelle {} maintenant ; sinon, réponds sans l'annoncer.",
+                    kToolName, kToolName),
+                .warning = "(Avenoir : aucun changement de modèle n'a été fait. Utilise "
+                           "`/modele <nom>` pour changer de modèle.)"};
+        }
+        if (!called({"load_llm", "unload_llm"}) &&
+            has_any({"je charge", "je decharge", "chargement de", "dechargement de",
+                     "chargement du", "dechargement du"})) {
+            return core::ReplyIssue{
+                .reminder = "Attention : ta réponse précédente annonçait un chargement ou un "
+                            "déchargement de modèle, mais ni load_llm ni unload_llm n'a été "
+                            "appelé : rien n'a changé. Si l'utilisateur le demande, appelle "
+                            "l'outil maintenant ; sinon, réponds sans l'annoncer.",
+                .warning = "(Avenoir : aucun modèle n'a été chargé ni déchargé. Utilise "
+                           "`/charger <nom>` ou `/decharger <nom>`.)"};
+        }
+        return std::nullopt;
+    };
 }
 
 } // namespace avenoir::llm

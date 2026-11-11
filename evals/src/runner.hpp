@@ -9,6 +9,7 @@
 #include <string>
 #include <vector>
 
+#include "avenoir/core/agent.hpp"
 #include "avenoir/core/llm.hpp"
 #include "avenoir/core/permission.hpp"
 #include "avenoir/core/tool.hpp"
@@ -38,7 +39,9 @@ class DoubleTool final : public core::Tool {
 struct RunOptions {
     std::string system_prompt;
     std::size_t max_steps = 10;
-    core::PermissionPolicy policy; ///< Remplacée par celle du cas s'il en a une.
+    core::PermissionPolicy policy;              ///< Remplacée par celle du cas s'il en a une.
+    std::string model_identity;                 ///< Modèle essayé, comme Avenoir le donne au LLM.
+    std::vector<core::ReplyCheck> reply_checks; ///< Comme dans la CLI.
 };
 
 /// Passe un cas avec ce fournisseur (neuf, sans historique) et les outils
