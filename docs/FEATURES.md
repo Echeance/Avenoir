@@ -175,6 +175,13 @@ Plateformes : **Linux** et **Windows** (sauf mention contraire).
 
 - Fichier `config.toml` (exemple commenté : `config.example.toml`) ; une clé inconnue ou de mauvais type est une erreur qui cite la clé.
 - Emplacement : `~/.config/avenoir/config.toml` (ou `$XDG_CONFIG_HOME/avenoir/`), `%APPDATA%\avenoir\config.toml` sous Windows ; un autre fichier en argument ; le dossier courant n'est jamais lu. Sans terminal et sans configuration : erreur qui donne l'emplacement attendu.
+- **Réglages scellés** (configuration à l'emplacement standard) :
+  - sceau `config.toml.seal` : HMAC-SHA256 (libsodium) du contenu et copie de la version scellée ; clé de 32 octets aléatoires, propre à chaque fichier, dans le trousseau du système (Gestionnaire d'identification sous Windows ; Secret Service par `/usr/bin/secret-tool` sous Linux, secret passé par l'entrée) ; repli : fichier `0600` dans `secrets/` du dossier de données, signalé à chaque lancement ;
+  - dernier sceau émis gardé aussi au trousseau : un ancien couple fichier + sceau remis en place est refusé (rejeu) ;
+  - vérification à chaque lancement, avant toute lecture : fichier modifié ou supprimé hors d'Avenoir → version scellée remise, lignes changées affichées (`-` / `+`, caractères de contrôle écartés, 40 au plus) ; sceau supprimé, falsifié, illisible ou rejoué → fichier mis de côté (`config.toml.rejected`), création guidée ; trousseau muet → chargé, signalé « non vérifié » ; configuration jamais scellée → scellée (avec un message) ; erreur de lecture → Avenoir ne démarre pas ;
+  - écritures d'Avenoir (création guidée, `/configurer`) scellées : sceau, trousseau puis fichier, `0600`, atomiques ;
+  - chaque événement noté au journal d'audit (`réglages : …`), même si Avenoir s'arrête ensuite ;
+  - fichier donné en argument : non scellé (mode développement), signalé au lancement.
 - **Création guidée** au premier lancement (terminal, aucune configuration) :
   - recherche des serveurs compatibles OpenAI de la machine sur les ports par défaut (Ollama 11434, LM Studio 1234, llama.cpp server 8080) ;
   - sur demande seulement, recherche sur le réseau local (sous-réseau privé /24 de la machine, jamais une adresse publique ; en parallèle, quelques secondes, Ctrl+C pour arrêter) ; chaque serveur trouvé n'est retenu que si l'utilisateur déclare que la machine est à lui (`local = true`) ;

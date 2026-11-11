@@ -52,10 +52,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       # Par apt ; si les miroirs Ubuntu sont injoignables (panne déjà vue sur
-      # les runners), par pipx (paquet PyPI « ninja »), sans apt.
-      - name: Installer Ninja
+      # les runners), Ninja par pipx (paquet PyPI « ninja »), sans apt.
+      # Autotools : vcpkg compile libsodium avec (autoconf-archive manque à
+      # l'image des runners).
+      - name: Installer Ninja et les autotools
         run: |
-          if ! { sudo apt-get update -q && sudo apt-get install -y -q ninja-build; }; then
+          if ! { sudo apt-get update -q && sudo apt-get install -y -q ninja-build autoconf autoconf-archive automake libtool; }; then
             echo "::warning::apt indisponible : Ninja installé par pipx"
             pipx install ninja
           fi

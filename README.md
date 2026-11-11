@@ -94,7 +94,7 @@ Téléchargez la dernière version pour **Linux** (`avenoir-linux-x64.tar.gz`) o
 
 ### Depuis les sources
 
-**Prérequis** : un compilateur C++23 (GCC ≥ 14, Clang ≥ 19 ou MSVC 2022 17.10+), CMake ≥ 3.28, Ninja et [vcpkg](https://github.com/microsoft/vcpkg).
+**Prérequis** : un compilateur C++23 (GCC ≥ 14, Clang ≥ 19 ou MSVC 2022 17.10+), CMake ≥ 3.28, Ninja et [vcpkg](https://github.com/microsoft/vcpkg). Sous Linux, vcpkg compile libsodium avec les autotools : `autoconf`, `autoconf-archive`, `automake` et `libtool` (Arch : `sudo pacman -S --needed autoconf autoconf-archive automake libtool` ; Debian, Ubuntu : `sudo apt install autoconf autoconf-archive automake libtool`).
 
 ```sh
 git clone https://github.com/microsoft/vcpkg ~/vcpkg
@@ -121,6 +121,15 @@ Pour refaire ce choix plus tard (après avoir installé Ollama, par exemple) : `
 Un serveur trouvé sur le réseau n'est retenu que si vous déclarez que la machine est à vous : vos conversations y seront envoyées.
 
 La configuration est enregistrée dans `~/.config/avenoir/config.toml` (ou `$XDG_CONFIG_HOME/avenoir/`), `%APPDATA%\avenoir\config.toml` sous Windows, lisible par vous seul. Avenoir ne lit **jamais** un `config.toml` du dossier courant : un fichier déposé dans un dossier quelconque ne peut pas le détourner. Pour une autre configuration : `avenoir chemin/config.toml` (réglages commentés : `config.example.toml`).
+
+**Les réglages ne se modifient que par Avenoir.** La configuration est **scellée** : Avenoir garde à côté (`config.toml.seal`) son empreinte HMAC-SHA256 et une copie, avec une clé rangée dans le **trousseau du système** (Gestionnaire d'identification sous Windows ; Secret Service sous Linux, par `secret-tool` : KWallet, GNOME Keyring, KeePassXC…). À chaque lancement :
+- un fichier modifié ou supprimé hors d'Avenoir est **refusé** : la version scellée est remise et les lignes changées vous sont montrées ;
+- un sceau supprimé, falsifié ou plus ancien que le dernier émis : le fichier est mis de côté (`config.toml.rejected`) et la création guidée reprend ;
+- tout est noté au journal d'audit.
+
+Une configuration existante est scellée au premier lancement. Sans trousseau, la clé est gardée dans un fichier lisible par vous seul : protection plus faible, signalée à chaque lancement. Un fichier donné en argument (`avenoir chemin/config.toml`) n'est pas scellé : c'est le mode développement, signalé lui aussi. Aujourd'hui, seuls les modèles se changent depuis Avenoir (`/configurer`).
+
+> Le sceau est une **preuve de falsification** : il arrête les éditions à la main, les scripts et les programmes sans accès à votre trousseau, pas un logiciel malveillant qui tourne sous votre compte et peut le lire.
 
 Les modèles sont décrits un par section `[models.<nom>]`. Le premier sert au premier lancement ; ensuite, Avenoir reprend le **dernier modèle utilisé**. Sans aucun modèle, seule la voie rapide répond.
 

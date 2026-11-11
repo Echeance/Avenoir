@@ -7,6 +7,7 @@
   "dependencies": [
     "catch2",
     "cpr",
+    "libsodium",
     "nlohmann-json",
     "replxx",
     "reproc",

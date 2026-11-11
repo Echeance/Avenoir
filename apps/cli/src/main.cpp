@@ -51,6 +51,8 @@
 #include "avenoir/llm/models.hpp"
 #include "avenoir/modules/discovery.hpp"
 #include "avenoir/modules/host.hpp"
+#include "avenoir/storage/secrets.hpp"
+#include "avenoir/storage/settings.hpp"
 #include "avenoir/storage/store.hpp"
 #include "avenoir/terminal/style.hpp"
 #include "avenoir/tools/searxng.hpp"
@@ -465,6 +467,7 @@ void print_models(const llm::ModelSwitcher& switcher) {
 struct ConfigFile {
     std::filesystem::path path;
     core::AppConfig config;
+    cli::SaveSettings save; ///< Écriture scellée, ou simple en mode développement.
 };
 
 /// /configurer : création guidée des modèles, questions posées dans la barre
@@ -490,7 +493,7 @@ void configure(cli::Prompt& prompt, ConfigFile& file) {
         }
         return std::move(input.text);
     };
-    const auto result = cli::run_setup(file.path, file.config, ask);
+    const auto result = cli::run_setup(file.path, file.config, ask, file.save);
     if (!result) {
         display().info("Configuration inchangée.");
         return;
@@ -685,8 +688,8 @@ std::optional<std::filesystem::path> config_location(std::span<char*> args) {
 /// Lit la configuration de `path` ; au premier lancement (emplacement
 /// standard absent) dans un terminal, création guidée. Rien en cas d'échec
 /// (message déjà affiché).
-std::optional<core::AppConfig> load_or_create_config(const std::filesystem::path& path,
-                                                     bool given) {
+std::optional<core::AppConfig> load_or_create_config(const std::filesystem::path& path, bool given,
+                                                     const cli::SaveSettings& save) {
     std::error_code error;
     if (given || std::filesystem::exists(path, error)) {
         auto config = core::load_config(path);
@@ -703,7 +706,83 @@ std::optional<core::AppConfig> load_or_create_config(const std::filesystem::path
                         "chemin, « avenoir chemin/config.toml ».");
         return std::nullopt;
     }
-    return cli::run_first_setup(path);
+    return cli::run_first_setup(path, save);
+}
+
+/// Messages de la vérification des réglages, montrés après l'accueil et
+/// notés au journal d'audit.
+struct SettingsNotices {
+    std::vector<std::string> warnings;
+    std::vector<std::string> notes;
+    std::vector<std::string> changes; ///< Lignes changées hors d'Avenoir.
+    bool shown = false;               ///< Déjà montrés (avant la création guidée).
+
+    /// Note les messages au journal d'audit.
+    void audit() const {
+        const auto logger = spdlog::get("audit");
+        if (!logger) {
+            return;
+        }
+        for (const auto& message : warnings) {
+            logger->warn("réglages : {}", message);
+        }
+        for (const auto& message : notes) {
+            logger->info("réglages : {}", message);
+        }
+        for (const auto& change : changes) {
+            logger->warn("réglages : {}", change);
+        }
+    }
+
+    /// Montre les messages maintenant (une seule fois).
+    void show() {
+        if (shown) {
+            return;
+        }
+        shown = true;
+        for (const auto& warning : warnings) {
+            display().warning(warning);
+        }
+        for (const auto& change : changes) {
+            display().info("  " + change);
+        }
+        for (const auto& note : notes) {
+            display().info(note);
+        }
+    }
+};
+
+/// Réglages à l'emplacement standard : vérifie le sceau avant toute lecture
+/// (docs/PROJECT.md § 5.1). Faux si Avenoir ne doit pas démarrer.
+bool verify_settings(storage::SealedSettings& settings, const storage::SecretStore& secrets,
+                     SettingsNotices& notices) {
+    using Status = storage::SealReport::Status;
+    auto report = settings.verify();
+    if (!report) {
+        notices.warnings.push_back(core::describe(report.error()) +
+                                   " — réglages non vérifiables, Avenoir ne démarre pas.");
+        return false;
+    }
+    switch (report->status) {
+    case Status::Valid:
+    case Status::NoSettings:
+        break;
+    case Status::Adopted:
+        notices.notes.push_back(report->message + " Pour les modèles : /configurer.");
+        break;
+    case Status::Restored:
+    case Status::Rejected:
+    case Status::Unverified:
+        notices.warnings.push_back(report->message);
+        break;
+    }
+    notices.changes = std::move(report->changes);
+    if (!secrets.is_system_keychain()) {
+        notices.warnings.push_back("Trousseau du système indisponible : clé du sceau des "
+                                   "réglages gardée dans un " +
+                                   secrets.description() + " (protection plus faible).");
+    }
+    return true;
 }
 
 int run(int argc, char** argv) {
@@ -712,15 +791,56 @@ int run(int argc, char** argv) {
     terminal::set_enabled(terminal::detect_color_support());
 
     const std::span<char*> args(argv, static_cast<std::size_t>(argc));
+    // Journal d'audit dans son fichier dès le départ : la vérification des
+    // réglages y est notée, même si Avenoir s'arrête ensuite.
+    if (const auto data = storage::data_directory()) {
+        attach_audit_file(*data);
+    }
     const auto config_path = config_location(args);
     if (!config_path) {
         return EXIT_FAILURE;
     }
-    auto config = load_or_create_config(*config_path, args.size() > 1);
+    // Réglages scellés à l'emplacement standard ; un fichier donné en
+    // argument reste éditable à la main (mode développement), signalé.
+    const bool given = args.size() > 1;
+    SettingsNotices settings_notices;
+    std::unique_ptr<storage::SecretStore> secrets;
+    std::optional<storage::SealedSettings> sealed;
+    cli::SaveSettings save_settings;
+    if (given) {
+        settings_notices.warnings.emplace_back(
+            "Configuration non scellée (fichier donné en argument : mode développement).");
+        save_settings = [path = *config_path](const core::AppConfig& updated) {
+            return core::save_config(path, updated);
+        };
+    } else {
+        const auto data = storage::data_directory();
+        if (!data) {
+            display().error("Dossier de données introuvable : réglages non vérifiables, Avenoir "
+                            "ne démarre pas.");
+            return EXIT_FAILURE;
+        }
+        secrets = storage::open_secret_store(*data / "secrets");
+        sealed.emplace(*config_path, *secrets);
+        const bool verified = verify_settings(*sealed, *secrets, settings_notices);
+        settings_notices.audit();
+        if (!verified) {
+            settings_notices.show();
+            return EXIT_FAILURE;
+        }
+        save_settings = [&sealed](const core::AppConfig& updated) { return sealed->save(updated); };
+        // Réglages refusés et mis de côté : le dire avant de les refaire.
+        std::error_code missing;
+        if (!std::filesystem::exists(*config_path, missing)) {
+            settings_notices.show();
+        }
+    }
+    auto config = load_or_create_config(*config_path, given, save_settings);
     if (!config) {
+        settings_notices.show();
         return EXIT_FAILURE;
     }
-    ConfigFile config_file{.path = *config_path, .config = *config};
+    ConfigFile config_file{.path = *config_path, .config = *config, .save = save_settings};
 
     core::AgentOptions options;
     options.policy = config->permissions;
@@ -752,7 +872,6 @@ int run(int argc, char** argv) {
     std::optional<std::filesystem::path> history_file;
     std::optional<storage::Store> store;
     if (directory) {
-        attach_audit_file(*directory);
         history_file = *directory / "cli_history.txt";
         auto opened = storage::Store::open(*directory / "avenoir.db");
         if (opened) {
@@ -987,6 +1106,7 @@ int run(int argc, char** argv) {
     for (const auto& warning : startup_warnings) {
         display().warning(warning);
     }
+    settings_notices.show();
     conversations.show_recent();
     // Surveillance des modèles : état de départ, puis changements montrés
     // pendant la saisie.

@@ -46,7 +46,7 @@ cmake --preset release && cmake --build --preset release   # exécutable `avenoi
 AVENOIR_LOG=debug ./build/debug/apps/cli/avenoir
 ```
 
-Sans argument, Avenoir lit `~/.config/avenoir/config.toml` (`%APPDATA%\avenoir\config.toml`), créé au premier lancement par la création guidée ; **jamais** le dossier courant. Un `config.toml` de développement à la racine du dépôt est ignoré par git et se passe en argument ; partir de `config.example.toml`. L'éditer à la main n'est permis qu'en **développement**, jusqu'au jalon 3 : ensuite, les réglages ne se modifient que par Avenoir (fichier scellé, modification extérieure refusée — docs/PROJECT.md § 5.1).
+Sans argument, Avenoir lit `~/.config/avenoir/config.toml` (`%APPDATA%\avenoir\config.toml`), créé au premier lancement par la création guidée ; **jamais** le dossier courant. Cette configuration est **scellée** (HMAC-SHA256, clé dans le trousseau ; docs/PROJECT.md § 5.1) : la modifier à la main est refusé et restauré. Un `config.toml` de développement à la racine du dépôt est ignoré par git, se passe en argument et n'est pas scellé (mode développement, signalé) ; partir de `config.example.toml`. Les essais du sceau se font dans des dossiers temporaires (`XDG_CONFIG_HOME`, `XDG_DATA_HOME`) : chaque fichier a sa propre clé, les vrais réglages ne sont pas touchés.
 
 ## Essai sous Windows (VM)
 
@@ -95,7 +95,7 @@ En-têtes publics dans `libs/<nom>/include/avenoir/<nom>/`, tests Catch2 dans `l
 - Concurrence : synchrone + `std::jthread` / `std::stop_token` ; pas d'état partagé sans synchronisation.
 - Logs : `spdlog` ; audit des outils sur le logger `audit` ; niveau via `AVENOIR_LOG`.
 - Nommage : `PascalCase` (types), `snake_case` (fonctions, variables), membres privés suffixés `_`, constantes `kPascalCase`, espaces de noms `avenoir::<bibliothèque>`.
-- Bibliothèques retenues : `nlohmann/json`, `toml++`, `cpr`, `reproc`, `spdlog`, `Catch2`, `replxx` (saisie de la CLI), `sqlite3` (conversations). En ajouter une → la justifier et l'inscrire dans `vcpkg.json`.
+- Bibliothèques retenues : `nlohmann/json`, `toml++`, `cpr`, `reproc`, `spdlog`, `Catch2`, `replxx` (saisie de la CLI), `sqlite3` (conversations), `libsodium` (sceau des réglages : HMAC-SHA256, aléa). Trousseau sans bibliothèque : `CredReadW`/`CredWriteW` sous Windows, programme `secret-tool` sous Linux (libsecret est LGPL). En ajouter une → la justifier et l'inscrire dans `vcpkg.json`.
 - Fonctionnalités lourdes (voix, UI) derrière des options CMake.
 
 ## Multiplateforme

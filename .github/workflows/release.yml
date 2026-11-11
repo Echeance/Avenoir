@@ -44,10 +44,10 @@ jobs:
             echo "::error::Le numéro du tag ($number) ne correspond pas à la version du projet ($project / $manifest)"; exit 1; }
           echo "AVENOIR_VERSION_SUFFIX=$suffix" >> "$GITHUB_ENV"
 
-      - name: Outils Linux (GCC 14, Ninja)
+      - name: Outils Linux (GCC 14, Ninja, autotools pour libsodium)
         if: runner.os == 'Linux'
         run: |
-          sudo apt-get update -q && sudo apt-get install -y -q ninja-build
+          sudo apt-get update -q && sudo apt-get install -y -q ninja-build autoconf autoconf-archive automake libtool
           echo "CC=gcc-14" >> "$GITHUB_ENV"
           echo "CXX=g++-14" >> "$GITHUB_ENV"
       - name: Environnement MSVC (cl, Ninja)

@@ -36,6 +36,7 @@ find_package(cpr CONFIG REQUIRED)
 find_package(reproc++ CONFIG REQUIRED)
 find_package(replxx CONFIG REQUIRED)
 find_package(unofficial-sqlite3 CONFIG REQUIRED)
+find_package(unofficial-sodium CONFIG REQUIRED)
 
 # ─── Tests ──────────────────────────────────────────────────────────────────
 if(AVENOIR_BUILD_TESTS)

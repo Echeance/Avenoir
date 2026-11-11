@@ -256,8 +256,9 @@ void show_candidates(const std::vector<SetupCandidate>& candidates) {
 }
 
 /// Enregistre `config` à `path` et le dit.
-SetupResult save(const std::filesystem::path& path, core::AppConfig config) {
-    if (auto saved = core::save_config(path, config); !saved) {
+SetupResult save(const std::filesystem::path& path, const SaveSettings& writer,
+                 core::AppConfig config) {
+    if (auto saved = writer(config); !saved) {
         display().error(core::describe(saved.error()));
         display().warning("Configuration utilisée pour cette session seulement.");
         return SetupResult{.config = std::move(config), .saved = false};
@@ -268,7 +269,8 @@ SetupResult save(const std::filesystem::path& path, core::AppConfig config) {
 
 /// Aucun modèle : continuer avec la voie rapide seule (enregistré, la
 /// création ne revient pas d'elle-même) ou non (rien n'est écrit).
-std::optional<SetupResult> without_models(const std::filesystem::path& path, core::AppConfig config,
+std::optional<SetupResult> without_models(const std::filesystem::path& path,
+                                          const SaveSettings& writer, core::AppConfig config,
                                           const SetupAsk& io) {
     const auto keep = ask_yes_no(
         io, "Continuer sans modèle, avec la voie rapide seule ? (Non : rien n'est enregistré, "
@@ -279,7 +281,7 @@ std::optional<SetupResult> without_models(const std::filesystem::path& path, cor
     if (!*keep) {
         return SetupResult{.config = std::move(config), .saved = false};
     }
-    auto result = save(path, std::move(config));
+    auto result = save(path, writer, std::move(config));
     display().info("Sans modèle, seules les commandes simples répondent (voie rapide). Pour en "
                    "ajouter un plus tard : /configurer.");
     return result;
@@ -288,7 +290,7 @@ std::optional<SetupResult> without_models(const std::filesystem::path& path, cor
 } // namespace
 
 std::optional<SetupResult> run_setup(const std::filesystem::path& path, const core::AppConfig& base,
-                                     const SetupAsk& io) {
+                                     const SetupAsk& io, const SaveSettings& writer) {
     display().info("Recherche des modèles sur cette machine…");
     SetupFindings findings;
     findings.local_servers = llm::discover_local_servers();
@@ -326,7 +328,7 @@ std::optional<SetupResult> run_setup(const std::filesystem::path& path, const co
         display().warning("Aucun modèle trouvé.");
         display().info("Pour un modèle local : installez Ollama (https://ollama.com), puis "
                        "« ollama pull gemma4:26b-a4b ».");
-        return without_models(path, build_setup_config({}, local_only, base), io);
+        return without_models(path, writer, build_setup_config({}, local_only, base), io);
     }
 
     display().plain("");
@@ -342,7 +344,7 @@ std::optional<SetupResult> run_setup(const std::filesystem::path& path, const co
         return std::nullopt;
     }
     if (chosen_indices->empty()) {
-        return without_models(path, build_setup_config({}, local_only, base), io);
+        return without_models(path, writer, build_setup_config({}, local_only, base), io);
     }
     std::vector<SetupCandidate> chosen;
     for (const auto index : *chosen_indices) {
@@ -364,7 +366,7 @@ std::optional<SetupResult> run_setup(const std::filesystem::path& path, const co
         std::rotate(chosen.begin(), picked, picked + 1);
     }
 
-    auto result = save(path, build_setup_config(chosen, local_only, base));
+    auto result = save(path, writer, build_setup_config(chosen, local_only, base));
     if (chosen.size() > 1) {
         display().info(std::format("Changer de modèle à tout moment : « passe sur {} ».",
                                    chosen[1].model.name));
@@ -372,10 +374,11 @@ std::optional<SetupResult> run_setup(const std::filesystem::path& path, const co
     return result;
 }
 
-std::optional<core::AppConfig> run_first_setup(const std::filesystem::path& path) {
+std::optional<core::AppConfig> run_first_setup(const std::filesystem::path& path,
+                                               const SaveSettings& writer) {
     display().info(
         std::format("Première utilisation : préparons la configuration ({}).", utf8_path(path)));
-    auto result = run_setup(path, core::AppConfig{}, ask_terminal);
+    auto result = run_setup(path, core::AppConfig{}, ask_terminal, writer);
     if (!result) {
         return std::nullopt;
     }
