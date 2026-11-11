@@ -1,4 +1,7 @@
-# Configuration d'Avenoir — copiez ce fichier en `config.toml`.
+# Configuration d'Avenoir : exemple commenté de tous les réglages.
+# Au premier lancement, Avenoir crée la vôtre (création guidée) dans
+# ~/.config/avenoir/config.toml (%APPDATA%\avenoir\config.toml sous Windows) ;
+# une autre configuration se donne en argument : avenoir chemin/config.toml.
 # Les clés d'API ne sont JAMAIS écrites ici : indiquez le nom de la variable
 # d'environnement qui les contient.
 

@@ -7,6 +7,9 @@ namespace avenoir::cli {
 /// passe en UTF-8.
 void install_console();
 
+/// L'entrée standard est-elle un terminal (et non un fichier ou un tube) ?
+[[nodiscard]] bool stdin_is_terminal() noexcept;
+
 /// Vrai si Ctrl+C a été pressé depuis le dernier appel (et remet à zéro).
 [[nodiscard]] bool take_interrupt() noexcept;
 

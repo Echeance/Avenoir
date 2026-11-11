@@ -1,4 +1,7 @@
+#include <chrono>
+#include <filesystem>
 #include <string>
+#include <system_error>
 #include <variant>
 
 #include <catch2/catch_test_macros.hpp>
@@ -187,4 +190,84 @@ TEST_CASE("modèles : erreurs lisibles", "[config]") {
     CHECK(error_of("[models.x]\nprovider = \"claude_code\"\nlocal = true\n")
               .contains("models.x.local"));
     CHECK(error_of("models = 3\n").contains("models"));
+}
+
+TEST_CASE("format_config est relu à l'identique", "[config]") {
+    AppConfig config;
+    config.models.push_back(
+        NamedLlm{.name = "zeta", // pas le premier par ordre alphabétique : l'ordre est gardé
+                 .config = OpenAiCompatibleConfig{.base_url = "http://192.168.1.20:11434/v1",
+                                                  .model = "gemma4:26b-a4b",
+                                                  .api_key_env = std::nullopt,
+                                                  .temperature = 1.0,
+                                                  .reasoning_effort = "none"},
+                 .local = true});
+    config.models.push_back(NamedLlm{.name = "claude",
+                                     .config = ClaudeCodeConfig{.model = "haiku",
+                                                                .command = "claude",
+                                                                .timeout_secs = 90,
+                                                                .persistent = false},
+                                     .local = std::nullopt});
+    config.models.push_back(NamedLlm{.name = "sonnet",
+                                     .config = AnthropicConfig{.model = "claude-sonnet-5-5",
+                                                               .api_key_env = "MA_CLE",
+                                                               .max_tokens = 2048,
+                                                               .base_url = std::nullopt},
+                                     .local = std::nullopt});
+    config.agent.local_only = true;
+    config.agent.max_steps = 4;
+    config.agent.system_prompt = "Ligne 1\n« guillemets \" » et \\ barre\t\x01";
+    config.permissions.reversible = Policy::Confirm;
+    config.web.engine = "duckduckgo";
+    config.web.searxng_idle_minutes = 3;
+    config.modules["meteo"].enabled = false;
+    config.modules["autre.module"].risk.emplace("lire", RiskLevel::Sensitive);
+
+    const std::string text = format_config(config);
+    const auto parsed = parse_config(text);
+    INFO(text);
+    REQUIRE(parsed.has_value());
+    CHECK(*parsed == config);
+}
+
+TEST_CASE("format_config n'écrit que ce qui diffère des valeurs par défaut", "[config]") {
+    const std::string text = format_config(AppConfig{});
+    CHECK(text.find('[') == std::string::npos);
+    const auto parsed = parse_config(text);
+    REQUIRE(parsed.has_value());
+    CHECK(*parsed == AppConfig{});
+}
+
+TEST_CASE("save_config écrit un fichier relu à l'identique", "[config]") {
+    namespace fs = std::filesystem;
+    const fs::path directory =
+        fs::temp_directory_path() /
+        ("avenoir-config-test-" +
+         std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+    const fs::path path = directory / "sous" / "config.toml";
+    AppConfig config;
+    config.agent.fast_path = false;
+    REQUIRE(save_config(path, config).has_value());
+    const auto loaded = load_config(path);
+    REQUIRE(loaded.has_value());
+    CHECK(*loaded == config);
+    CHECK_FALSE(fs::exists(fs::path(path.string() + ".tmp")));
+#ifndef _WIN32
+    const auto perms = fs::status(path).permissions();
+    CHECK((perms & (fs::perms::group_all | fs::perms::others_all)) == fs::perms::none);
+#endif
+    // Remplacement d'un fichier existant.
+    config.agent.fast_path = true;
+    REQUIRE(save_config(path, config).has_value());
+    CHECK(load_config(path).value() == config);
+    std::error_code ignored;
+    fs::remove_all(directory, ignored);
+}
+
+TEST_CASE("default_config_path : dossier de configuration de l'utilisateur", "[config]") {
+    const auto path = default_config_path().value_or(std::filesystem::path{});
+    REQUIRE_FALSE(path.empty()); // HOME ou APPDATA existent en test
+    CHECK(path.filename() == "config.toml");
+    CHECK(path.parent_path().filename() == "avenoir");
+    CHECK(path.is_absolute());
 }

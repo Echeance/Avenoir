@@ -1,6 +1,8 @@
 // Interface en ligne de commande d'Avenoir.
 //
-// Usage : avenoir [chemin/vers/config.toml]      (défaut : config.toml)
+// Usage : avenoir [chemin/vers/config.toml]
+//   (défaut : ~/.config/avenoir/config.toml, %APPDATA%\avenoir\config.toml ;
+//    créée au premier lancement par la création guidée)
 // Logs  : variable AVENOIR_LOG (trace, debug, info, warn, error). Par défaut,
 //         seuls les avertissements s'affichent ; le journal d'audit n'apparaît
 //         qu'avec AVENOIR_LOG (les actions sont déjà montrées par les lignes d'action).
@@ -28,6 +30,7 @@
 #include <stop_token>
 #include <string>
 #include <string_view>
+#include <system_error>
 #include <thread>
 #include <utility>
 #include <variant>
@@ -58,6 +61,7 @@
 #include "display.hpp"
 #include "modules.hpp"
 #include "prompt.hpp"
+#include "setup.hpp"
 
 namespace {
 
@@ -91,21 +95,21 @@ void setup_logging() {
 /// Commandes d'Avenoir (sans « / »), alias compris : un module ne peut pas
 /// en déclarer une du même nom.
 std::vector<std::string> builtin_commands() {
-    return {"aide",       "annuler",      "charger",  "conversations", "decharger", "help",
-            "historique", "recharger",    "memoire",  "modules",       "model",     "modele",
-            "moteur",     "nouvelle",     "ouvrir",   "outils",        "q",         "quit",
-            "quitter",    "raisonnement", "renommer", "reset",         "risque",    "supprimer",
-            "tools",      "transcription"};
+    return {"aide",      "annuler",    "charger",      "configurer", "conversations", "decharger",
+            "help",      "historique", "recharger",    "memoire",    "modules",       "model",
+            "modele",    "moteur",     "nouvelle",     "ouvrir",     "outils",        "q",
+            "quit",      "quitter",    "raisonnement", "renommer",   "reset",         "risque",
+            "supprimer", "tools",      "transcription"};
 }
 
 /// Commandes proposées à la complétion (Tab).
 std::vector<std::string> command_names(const cli::ModulesUi& modules) {
     std::vector<std::string> names{
-        "/aide",          "/annuler",    "/charger", "/decharger", "/recharger",
-        "/conversations", "/historique", "/modele",  "/moteur",    "/modules",
-        "/nouvelle",      "/ouvrir",     "/outils",  "/memoire",   "/quitter",
-        "/raisonnement",  "/renommer",   "/reset",   "/risque",    "/supprimer",
-        "/transcription"};
+        "/aide",      "/annuler",       "/charger",    "/configurer", "/decharger",
+        "/recharger", "/conversations", "/historique", "/modele",     "/moteur",
+        "/modules",   "/nouvelle",      "/ouvrir",     "/outils",     "/memoire",
+        "/quitter",   "/raisonnement",  "/renommer",   "/reset",      "/risque",
+        "/supprimer", "/transcription"};
     std::ranges::copy(modules.completion_names(), std::back_inserter(names));
     return names;
 }
@@ -133,6 +137,8 @@ void print_help(const cli::ModulesUi& modules) {
         command("/charger [nom]", "charger un modèle local en mémoire (actif par défaut)") + "\n";
     out += command("/decharger [nom]", "le décharger : libère la mémoire vidéo") + "\n";
     out += command("/recharger [nom]", "le décharger puis le recharger") + "\n";
+    out += command("/configurer", "rechercher les modèles et choisir les siens (création guidée)") +
+           "\n";
     out += command("/quitter", "quitter (ou Ctrl+D)") + "\n";
     out += title("Modules") + "\n";
     out += command("/modules", "modules installés, permissions et outils") + "\n";
@@ -410,14 +416,54 @@ void print_models(const llm::ModelSwitcher& switcher) {
                         paint(line, {.bold = active})));
     }
     if (switcher.models().size() < 2) {
-        display().info("Un seul modèle : ajoutez-en d'autres dans config.toml ([models.<nom>], "
-                       "voir config.example.toml).");
+        display().info("Un seul modèle : /configurer pour en ajouter d'autres.");
+    }
+}
+
+/// Fichier de configuration utilisé, et son contenu (base de /configurer).
+struct ConfigFile {
+    std::filesystem::path path;
+    core::AppConfig config;
+};
+
+/// /configurer : création guidée des modèles, questions posées dans la barre
+/// de saisie ; les autres réglages sont gardés. Appliquée au prochain
+/// lancement.
+void configure(cli::Prompt& prompt, ConfigFile& file) {
+    std::error_code error;
+    if (std::filesystem::exists(file.path, error)) {
+        display().info(std::format("Configuration des modèles : {} sera réécrit (les autres "
+                                   "réglages sont gardés, les commentaires du fichier perdus).",
+                                   cli::utf8_path(file.path)));
+        if (!prompt.ask_yes_no("  Continuer ? [o/N] ")) {
+            (void)cli::take_interrupt(); // Un Ctrl+C ici vaut simplement « non ».
+            display().info("Configuration inchangée.");
+            return;
+        }
+    }
+    const cli::SetupAsk ask = [&prompt](const std::string& question) -> std::optional<std::string> {
+        auto input = prompt.read(question + " ", /*remember=*/false);
+        if (input.status != cli::Prompt::Status::Line) {
+            (void)cli::take_interrupt(); // abandon de la création guidée
+            return std::nullopt;
+        }
+        return std::move(input.text);
+    };
+    const auto result = cli::run_setup(file.path, file.config, ask);
+    if (!result) {
+        display().info("Configuration inchangée.");
+        return;
+    }
+    if (result->saved) {
+        file.config = result->config;
+        display().info("Relancez Avenoir pour utiliser la nouvelle configuration.");
     }
 }
 
 bool run_command(core::Agent& agent, cli::Prompt& prompt, cli::Conversations& conversations,
                  cli::ModulesUi& modules, const llm::ModelSwitcher& switcher,
-                 const tools::SearchEngines& engines, std::string_view line) {
+                 const tools::SearchEngines& engines, ConfigFile& config_file,
+                 std::string_view line) {
     // « /commande argument libre »
     const auto space = line.find(' ');
     const std::string_view command = line.substr(0, space);
@@ -441,6 +487,8 @@ bool run_command(core::Agent& agent, cli::Prompt& prompt, cli::Conversations& co
                 display().info("Transcription : " + cli::utf8_path(*cleared->transcript));
             }
         }
+    } else if (command == "/configurer") {
+        configure(prompt, config_file);
     } else if (command == "/conversations") {
         conversations.list();
     } else if (command == "/ouvrir") {
@@ -578,19 +626,60 @@ bool run_command(core::Agent& agent, cli::Prompt& prompt, cli::Conversations& co
     return true;
 }
 
+/// Fichier de configuration : chemin donné en argument, sinon emplacement
+/// standard (jamais le dossier courant). Rien si on ne peut pas le déterminer
+/// (message déjà affiché).
+std::optional<std::filesystem::path> config_location(std::span<char*> args) {
+    if (args.size() > 1) {
+        return std::filesystem::path(args[1]);
+    }
+    auto path = core::default_config_path();
+    if (!path) {
+        display().error("Emplacement de la configuration introuvable (HOME ou APPDATA absent) : "
+                        "donnez son chemin, « avenoir chemin/config.toml ».");
+    }
+    return path;
+}
+
+/// Lit la configuration de `path` ; au premier lancement (emplacement
+/// standard absent) dans un terminal, création guidée. Rien en cas d'échec
+/// (message déjà affiché).
+std::optional<core::AppConfig> load_or_create_config(const std::filesystem::path& path,
+                                                     bool given) {
+    std::error_code error;
+    if (given || std::filesystem::exists(path, error)) {
+        auto config = core::load_config(path);
+        if (!config) {
+            display().error(core::describe(config.error()) + " (fichier : " + cli::utf8_path(path) +
+                            ", partir de config.example.toml)");
+            return std::nullopt;
+        }
+        return std::move(*config);
+    }
+    if (!cli::stdin_is_terminal()) {
+        display().error("Aucune configuration (" + cli::utf8_path(path) +
+                        ") : lancez Avenoir dans un terminal pour la créer, ou donnez un "
+                        "chemin, « avenoir chemin/config.toml ».");
+        return std::nullopt;
+    }
+    return cli::run_first_setup(path);
+}
+
 int run(int argc, char** argv) {
     setup_logging();
     cli::install_console();
     terminal::set_enabled(terminal::detect_color_support());
 
     const std::span<char*> args(argv, static_cast<std::size_t>(argc));
-    const std::string path = args.size() > 1 ? args[1] : "config.toml";
-    auto config = core::load_config(path);
-    if (!config) {
-        display().error(core::describe(config.error()) + " (fichier : " + path +
-                        ", partir de config.example.toml)");
+    const auto config_path = config_location(args);
+    if (!config_path) {
         return EXIT_FAILURE;
     }
+    auto config = load_or_create_config(*config_path, args.size() > 1);
+    if (!config) {
+        return EXIT_FAILURE;
+    }
+    ConfigFile config_file{.path = *config_path, .config = *config};
 
     core::AgentOptions options;
     options.policy = config->permissions;
@@ -876,7 +965,8 @@ int run(int argc, char** argv) {
             continue;
         }
         if (line.starts_with('/')) {
-            if (!run_command(agent, prompt, conversations, modules_ui, switcher, engines, line)) {
+            if (!run_command(agent, prompt, conversations, modules_ui, switcher, engines,
+                             config_file, line)) {
                 break;
             }
             finish_request(switcher, load_watch);

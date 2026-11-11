@@ -27,6 +27,8 @@ struct OpenAiCompatibleConfig {
     /// « none », « low », « medium » ou « high ». Absent : choix du serveur.
     /// « none » réduit fortement la latence (Ollama, OpenAI…).
     std::optional<std::string> reasoning_effort;
+
+    bool operator==(const OpenAiCompatibleConfig&) const = default;
 };
 
 /// API Messages d'Anthropic.
@@ -35,6 +37,8 @@ struct AnthropicConfig {
     std::string api_key_env = "ANTHROPIC_API_KEY";
     std::uint32_t max_tokens = 4096;
     std::optional<std::string> base_url;
+
+    bool operator==(const AnthropicConfig&) const = default;
 };
 
 /// CLI Claude Code (`claude -p`) : utilise l'abonnement Claude de l'utilisateur.
@@ -45,6 +49,8 @@ struct ClaudeCodeConfig {
     /// Garder un processus `claude` ouvert d'une requête à l'autre (beaucoup
     /// plus rapide) ; faux : un lancement par appel.
     bool persistent = true;
+
+    bool operator==(const ClaudeCodeConfig&) const = default;
 };
 
 /// Fournisseur d'un modèle (champ `provider` de `[models.<nom>]`).
@@ -58,6 +64,8 @@ struct NamedLlm {
     /// `local = true` : serveur `openai_compatible` du réseau local tenu pour
     /// local. Absent : local seulement si l'adresse est celle de la machine.
     std::optional<bool> local;
+
+    bool operator==(const NamedLlm&) const = default;
 };
 
 struct AgentConfig {
@@ -73,6 +81,8 @@ struct AgentConfig {
     /// Vérifier les réponses du modèle : une action annoncée sans l'appel
     /// d'outil correspondant relance le modèle, puis est signalée.
     bool verify_replies = true;
+
+    bool operator==(const AgentConfig&) const = default;
 };
 
 /// Réglages de l'utilisateur pour un module (`[modules.<id>]`). Le module
@@ -85,6 +95,8 @@ struct ModuleSettings {
     /// peut que **relever** celui du manifeste : une baisse écrite ici est
     /// ignorée (elle exige un accord enregistré, docs/PROJECT.md § 2.6).
     std::map<std::string, RiskLevel, std::less<>> risk;
+
+    bool operator==(const ModuleSettings&) const = default;
 };
 
 /// Recherche web (`[web]`).
@@ -101,6 +113,8 @@ struct WebConfig {
     /// s'il est disponible, sinon DuckDuckGo. Un moteur choisi depuis Avenoir
     /// est retenu et l'emporte.
     std::optional<std::string> engine;
+
+    bool operator==(const WebConfig&) const = default;
 };
 
 struct AppConfig {
@@ -112,6 +126,8 @@ struct AppConfig {
     WebConfig web;
     /// Par identifiant de module.
     std::map<std::string, ModuleSettings, std::less<>> modules;
+
+    bool operator==(const AppConfig&) const = default;
 };
 
 /// Lit une configuration TOML. Les erreurs indiquent la clé fautive.
@@ -119,5 +135,21 @@ struct AppConfig {
 
 /// Lit le fichier `path` puis appelle `parse_config`.
 [[nodiscard]] Result<AppConfig> load_config(const std::filesystem::path& path);
+
+/// Emplacement standard de la configuration : `$XDG_CONFIG_HOME/avenoir/config.toml`
+/// (`~/.config/avenoir/config.toml` par défaut), `%APPDATA%\avenoir\config.toml`
+/// sous Windows. Rien si l'environnement ne permet pas de le déterminer.
+/// Le dossier courant n'est jamais lu : un `config.toml` déposé dans un
+/// dossier quelconque ne doit pas pouvoir détourner Avenoir.
+[[nodiscard]] std::optional<std::filesystem::path> default_config_path();
+
+/// Texte TOML de `config`, relu à l'identique par `parse_config`. Les modèles
+/// sont écrits en entier, dans leur ordre ; pour le reste, seules les valeurs
+/// qui diffèrent des réglages par défaut (qui peuvent ainsi évoluer).
+[[nodiscard]] std::string format_config(const AppConfig& config);
+
+/// Écrit `config` dans `path` : dossier créé (lisible par l'utilisateur seul),
+/// fichier `0600`, remplacement atomique (fichier temporaire puis renommage).
+[[nodiscard]] Result<void> save_config(const std::filesystem::path& path, const AppConfig& config);
 
 } // namespace avenoir::core

@@ -111,11 +111,18 @@ L'exécutable est créé dans `build/release/apps/cli/avenoir`. Les dépendances
 
 ## ⚙️ Configuration
 
-```sh
-cp config.example.toml config.toml
-```
+Au premier lancement, Avenoir **prépare la configuration avec vous** :
+- il cherche les modèles installés sur votre machine (Ollama, LM Studio, llama.cpp server), et sur votre réseau local si vous le demandez ;
+- il propose aussi un serveur dont vous tapez l'adresse, Claude Code s'il est installé, et l'API Anthropic si `ANTHROPIC_API_KEY` est définie ;
+- vous choisissez vos modèles (ceux conseillés par le banc d'essai sont en tête), le modèle par défaut et, si vous le voulez, le mode « local uniquement » ; ou « aucun » : seule la voie rapide répond.
 
-Décrivez ensuite vos modèles, un par section `[models.<nom>]`. Le premier sert au premier lancement ; ensuite, Avenoir reprend le **dernier modèle utilisé**. Sans aucun modèle, seule la voie rapide répond.
+Pour refaire ce choix plus tard (après avoir installé Ollama, par exemple) : `/configurer`. Les autres réglages sont gardés ; la nouvelle configuration s'applique au prochain lancement.
+
+Un serveur trouvé sur le réseau n'est retenu que si vous déclarez que la machine est à vous : vos conversations y seront envoyées.
+
+La configuration est enregistrée dans `~/.config/avenoir/config.toml` (ou `$XDG_CONFIG_HOME/avenoir/`), `%APPDATA%\avenoir\config.toml` sous Windows, lisible par vous seul. Avenoir ne lit **jamais** un `config.toml` du dossier courant : un fichier déposé dans un dossier quelconque ne peut pas le détourner. Pour une autre configuration : `avenoir chemin/config.toml` (réglages commentés : `config.example.toml`).
+
+Les modèles sont décrits un par section `[models.<nom>]`. Le premier sert au premier lancement ; ensuite, Avenoir reprend le **dernier modèle utilisé**. Sans aucun modèle, seule la voie rapide répond.
 
 | Fournisseur | `provider` | Pour qui | Mise en place |
 |---|---|---|---|
@@ -199,8 +206,8 @@ reasoning_effort = "none"
 ## 💬 Utilisation
 
 ```sh
-avenoir                      # utilise config.toml dans le dossier courant
-avenoir chemin/config.toml
+avenoir                      # configuration de l'utilisateur (créée au premier lancement)
+avenoir chemin/config.toml   # une autre configuration
 ```
 
 Écrivez simplement ce que vous voulez : *« quelle heure est-il ? »*, *« lance firefox »*, *« baisse le son »*, *« mets en pause »*, *« passe en mode sombre »*, *« va-t-il pleuvoir demain ? »*, *« décris mon ordinateur »*…
@@ -219,6 +226,7 @@ Sous Linux, le contrôle du système s'appuie sur les programmes habituels du bu
 | `/raisonnement [niveau] [modèle]` | effort de réflexion du modèle : `aucun` (le plus rapide), `faible`, `moyen`, `élevé`, `défaut` ; appliqué tout de suite, sans recharger le modèle, et retenu (aussi : *« mets le raisonnement à élevé »*, *« désactive le raisonnement »*) |
 | `/memoire [nom]` | modèles chargés en mémoire et mémoire vidéo occupée (aussi : *« quels modèles sont chargés ? »*) ; un modèle chargé ou déchargé hors d'Avenoir (Ollama le décharge après 5 min d'inactivité) est annoncé, même pendant la saisie |
 | `/charger [nom]` · `/decharger [nom]` · `/recharger [nom]` | charger un modèle local en mémoire, le décharger (libère la mémoire vidéo, par exemple avant un jeu) ou le recharger ; le modèle actif par défaut (aussi : *« décharge le modèle »*, *« libère la carte graphique »*, *« allume le modèle gemma »*) |
+| `/configurer` | refaire la création guidée des modèles (recherche des serveurs, choix, « aucun ») ; les autres réglages sont gardés, le fichier réécrit après confirmation ; appliqué au prochain lancement |
 | `/nouvelle [titre]` | nouvelle conversation (l'ancienne reste dans `/conversations`) |
 | `/reset` | efface la conversation en cours (messages et écran) après confirmation, en proposant d'en garder une transcription Markdown (`/supprimer` la propose aussi) |
 | `/transcription` | enregistre la conversation en cours dans un fichier Markdown (`transcriptions/` du dossier de données) |
@@ -290,7 +298,8 @@ Vision, décisions et directives : **[docs/PROJECT.md](docs/PROJECT.md)**. Comme
 
 ```sh
 scripts/build.sh                      # debug + tests
-scripts/build.sh -r -- config.toml    # compile, teste, puis lance Avenoir
+scripts/build.sh -r                   # compile, teste, puis lance Avenoir
+scripts/build.sh -r -- config.toml    # … avec une autre configuration
 scripts/build.sh asan -c              # build propre avec AddressSanitizer + UBSan
 scripts/build.sh -k                   # avant de committer : formatage, clang-tidy, tests
 scripts/build.sh -h                   # toutes les options

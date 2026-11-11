@@ -6,9 +6,13 @@
 #include "console.hpp"
 
 #include <csignal>
+#include <cstdio>
 
 #ifdef _WIN32
+#include <io.h>
 #include <windows.h>
+#else
+#include <unistd.h>
 #endif
 
 namespace {
@@ -56,6 +60,14 @@ void install_console() {
     sigemptyset(&action.sa_mask);
     action.sa_flags = SA_RESTART;
     sigaction(SIGINT, &action, nullptr);
+#endif
+}
+
+bool stdin_is_terminal() noexcept {
+#ifdef _WIN32
+    return _isatty(_fileno(stdin)) != 0;
+#else
+    return isatty(STDIN_FILENO) != 0;
 #endif
 }
 

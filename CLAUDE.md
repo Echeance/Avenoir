@@ -42,11 +42,23 @@ cmake --preset debug               # configuration (vcpkg en mode manifeste)
 cmake --build --preset debug       # build
 ctest --preset debug               # tests
 cmake --preset release && cmake --build --preset release   # exécutable `avenoir`
-./build/release/apps/cli/avenoir [chemin/config.toml]
+./build/release/apps/cli/avenoir [chemin/config.toml]   # défaut : ~/.config/avenoir/config.toml
 AVENOIR_LOG=debug ./build/debug/apps/cli/avenoir
 ```
 
-`config.toml` est ignoré par git ; partir de `config.example.toml`. L'éditer à la main n'est permis qu'en **développement**, jusqu'au jalon 3 : ensuite, les réglages ne se modifient que par Avenoir (fichier scellé, modification extérieure refusée — docs/PROJECT.md § 5.1).
+Sans argument, Avenoir lit `~/.config/avenoir/config.toml` (`%APPDATA%\avenoir\config.toml`), créé au premier lancement par la création guidée ; **jamais** le dossier courant. Un `config.toml` de développement à la racine du dépôt est ignoré par git et se passe en argument ; partir de `config.example.toml`. L'éditer à la main n'est permis qu'en **développement**, jusqu'au jalon 3 : ensuite, les réglages ne se modifient que par Avenoir (fichier scellé, modification extérieure refusée — docs/PROJECT.md § 5.1).
+
+## Essai sous Windows (VM)
+
+Une VM Windows 11 LTSC (conteneur podman `windows`, image `dockurr/windows`, 4 cœurs, 8 Go, disque dans `~/vms/windows/disque`) sert à essayer Avenoir en vrai sous Windows ; la CI ne fait que compiler et tester.
+
+- Démarrer / arrêter : `podman start windows` / `podman stop windows` ; bureau dans le navigateur sur `http://127.0.0.1:8006` (ou RDP `127.0.0.1:3389`).
+- Commandes : SSH par clé seule, PowerShell par défaut : `ssh -i ~/.ssh/avenoir-vm -o IdentitiesOnly=yes -p 2222 echeance@127.0.0.1`.
+- Partage : `~/vms/windows/partage` (Linux) = `\\host.lan\Data` (VM). Il contient les scripts de mise en place (`activer-ssh.ps1`, `preparer-avenoir.ps1` : Git, MSVC, CMake, Ninja, vcpkg, dépôt).
+- Dépôt dans la VM : `$HOME\Avenoir`, mis à jour par un bundle (`git bundle create ~/vms/windows/partage/avenoir.bundle main`, puis dans la VM `git fetch \\host.lan\Data\avenoir.bundle main` et `git checkout -f FETCH_HEAD`) ; un essai non commité passe par `git diff > ~/vms/windows/partage/changements.patch` et `git apply`. Build : `scripts\build.ps1`.
+- LLM : l'Ollama de Linux, joignable depuis la VM sur `http://169.254.1.2:11434/v1`.
+- Une session SSH n'a pas de bureau : pour ce qui doit s'afficher (notification, fenêtre, console interactive), lancer par une tâche planifiée interactive (`schtasks /create … /it`, puis `schtasks /run`).
+- Limites : ni WSL ni podman/docker installés dans la VM (la virtualisation imbriquée est pourtant disponible), donc SearXNG local y retombe sur DuckDuckGo ; ni Claude Code (`claude`) ; pas de sortie audio ; notifications coupées.
 
 ## Structure
 

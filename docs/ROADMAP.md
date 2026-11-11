@@ -217,7 +217,9 @@ L'ordre suit un principe : **chaque jalon produit un assistant utilisable**, plu
 
 **Fini quand :** « monte le son », « mets en pause », « cherche la météo à Lyon », « ouvre le navigateur », « passe sur le modèle léger » fonctionnent sur les deux OS.
 
-État au 11 novembre 2026 : tout fonctionne sous Linux ; sous Windows, le contrôle du système a été vérifié (VM), la recherche web, le flux et la session Claude Code sont compilés et testés par la CI mais pas encore essayés en vrai.
+- ✅ Vérifié sous Windows (VM, 11 novembre 2026) : compilation MSVC et 204 tests ; réponses du LLM en flux ; `web_search` par la voie rapide et par le LLM, avec repli sur DuckDuckGo et avis quand ni podman ni docker n'est installé ; `read_webpage` (page lue, adresse locale refusée) ; `/moteur` ; changement de modèle par la voie rapide et par le LLM (ancien modèle déchargé, le nouveau connaît son nom)
+
+État au 11 novembre 2026 : tout fonctionne sous Linux ; sous Windows (VM), le contrôle du système, la recherche web avec repli DuckDuckGo, le flux et le changement de modèle ont été vérifiés. Restent à essayer en vrai sous Windows : l'instance SearXNG locale (podman ou docker) et la session Claude Code.
 
 ---
 
@@ -225,7 +227,7 @@ L'ordre suit un principe : **chaque jalon produit un assistant utilisable**, plu
 
 *But : Avenoir tourne en permanence et répond instantanément.*
 
-- ⬜ **P1** Config à l'emplacement standard : `$XDG_CONFIG_HOME/avenoir/`, `%APPDATA%\avenoir\` ; création guidée au premier lancement
+- ✅ **P1** Config à l'emplacement standard : `$XDG_CONFIG_HOME/avenoir/`, `%APPDATA%\avenoir\` (jamais le dossier courant) ; création guidée au premier lancement : serveurs de modèles de la machine (Ollama, LM Studio, llama.cpp), du réseau local sur demande (confirmés « à moi »), adresse saisie, Claude Code, API Anthropic ; modèles conseillés par le banc en tête ; « local uniquement » proposé ; « aucun » : voie rapide seule, enregistré ; `/configurer` pour refaire le choix ensuite (autres réglages gardés) ; écriture par Avenoir (`core::save_config`, `0600`, atomique)
 - ⬜ **P1** Réglages modifiables uniquement par Avenoir (PROJECT.md § 5.1) : démon seul rédacteur (via l'IPC), changements journalisés
 - ⬜ **P1** Sceau HMAC-SHA256 des réglages, clé dans le trousseau du système (repli : fichier `0600`, signalé)
 - ⬜ **P1** Surveillance du fichier : sceau invalide → refus, restauration de la dernière version valide, alerte (avec le détail des changements), journal
@@ -361,6 +363,6 @@ Par ordre conseillé :
 6. ~~Conversations persistantes (1.9)~~ ✅
 7. ~~Hôte de modules v1 et module météo (1.6)~~ ✅
 8. ~~Essais avec de vrais modèles et `docs/FONCTIONNEMENT.md` (1.8)~~ ✅
-9. Jalon 2 — Assistant du quotidien : contrôle système, applications installées, recherche web (SearXNG local), réponses au fil de l'eau, Claude Code persistant, changer de LLM à tout moment — toutes les tâches faites ; reste la vérification sous Windows (recherche web avec SearXNG par podman ou docker, flux, session Claude Code) pour clore le jalon
+9. Jalon 2 — Assistant du quotidien : contrôle système, applications installées, recherche web (SearXNG local), réponses au fil de l'eau, Claude Code persistant, changer de LLM à tout moment — toutes les tâches faites ; reste à vérifier sous Windows l'instance SearXNG locale (podman ou docker) et la session Claude Code pour clore le jalon
 10. Jalon 3 — Résident (démon, IPC, journal structuré, permissions durables, réglages scellés)
 11. Jalon 4 — Orchestrateur multi-agents et tâches avancées

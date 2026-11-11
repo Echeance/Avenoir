@@ -85,6 +85,9 @@ class Display {
     void warning(std::string_view text); ///< ▲ jaune.
     void error(std::string_view text);   ///< ✗ rouge, sur stderr.
     void plain(std::string_view text);   ///< Texte déjà mis en forme.
+    /// Question posée avant la barre de saisie (création guidée) : sans saut
+    /// de ligne, la réponse se tape à la suite.
+    void question(std::string_view text);
 
     /// Cadre de confirmation d'une action (la question est posée ensuite).
     void confirmation(const core::ToolSpec& spec, const core::ToolCall& call);

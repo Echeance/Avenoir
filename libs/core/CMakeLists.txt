@@ -6,6 +6,7 @@ avenoir_add_library(core
         src/agent.cpp
         src/claims.cpp
         src/config.cpp
+        src/config_writer.cpp
         src/env.cpp
         src/error.cpp
         src/permission.cpp

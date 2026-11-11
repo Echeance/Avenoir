@@ -1,7 +1,7 @@
 // avenoir-evals : passe les requêtes de référence (evals/requetes.toml) sur un
 // vrai modèle, avec des doublures d'outils, et écrit un rapport Markdown.
 //
-//   avenoir-evals [--config config.toml] [--llm nom] [--model id] [--reasoning effort] [--cases
+//   avenoir-evals [--config fichier] [--llm nom] [--model id] [--reasoning effort] [--cases
 //   fichier]
 //                 [--only id,id] [--repeat N] [--prompt fichier] [--report fichier]
 
@@ -46,7 +46,8 @@ using namespace avenoir;
 namespace {
 
 struct Arguments {
-    std::filesystem::path config = "config.toml";
+    /// Absent : emplacement standard (jamais le dossier courant).
+    std::filesystem::path config;
     std::filesystem::path cases = AVENOIR_EVALS_CASES;
     std::filesystem::path modules = AVENOIR_EVALS_MODULES;
     std::optional<std::string> llm; ///< Nom d'un `[models.<nom>]` ; absent : le premier.
@@ -60,7 +61,8 @@ struct Arguments {
 
 constexpr std::string_view kUsage =
     "Usage : avenoir-evals [options]\n"
-    "  --config fichier   configuration (fournisseur LLM), config.toml par défaut\n"
+    "  --config fichier   configuration (modèles) ; par défaut, celle d'Avenoir\n"
+    "                     (~/.config/avenoir/config.toml, %APPDATA%\\avenoir\\config.toml)\n"
     "  --llm nom          modèle de la configuration ([models.<nom>]), le premier par défaut\n"
     "  --model id         remplace l'identifiant de ce modèle (ex. ministral-3:8b)\n"
     "  --reasoning effort effort de réflexion (none, low, medium, high ; openai_compatible)\n"
@@ -268,13 +270,23 @@ int run(std::span<char*> argv) {
     if (!args) {
         return EXIT_FAILURE;
     }
-    auto config = core::load_config(args->config);
+    std::filesystem::path config_path = args->config;
+    if (config_path.empty()) {
+        const auto standard = core::default_config_path();
+        if (!standard) {
+            std::println(std::cerr,
+                         "emplacement de la configuration introuvable : --config fichier");
+            return EXIT_FAILURE;
+        }
+        config_path = *standard;
+    }
+    auto config = core::load_config(config_path);
     if (!config) {
         std::println(std::cerr, "{}", core::describe(config.error()));
         return EXIT_FAILURE;
     }
     if (config->models.empty()) {
-        std::println(std::cerr, "aucun modèle dans {} ([models.<nom>])", args->config.string());
+        std::println(std::cerr, "aucun modèle dans {} ([models.<nom>])", config_path.string());
         return EXIT_FAILURE;
     }
     const auto chosen = args->llm

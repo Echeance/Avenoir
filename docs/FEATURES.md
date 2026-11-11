@@ -159,8 +159,8 @@ Plateformes : **Linux** et **Windows** (sauf mention contraire).
 
 ## 9. Interface en ligne de commande
 
-- Exécutable `avenoir [chemin/config.toml]`.
-- **Commandes** : `/aide`, `/outils`, `/annuler`, `/modules`, `/risque [outil niveau]`, `/modele [nom]`, `/moteur [nom]`, `/memoire`, `/raisonnement`, `/charger`, `/decharger`, `/recharger`, `/nouvelle`, `/reset`, `/conversations`, `/ouvrir`, `/renommer`, `/supprimer`, `/historique`, `/transcription`, `/quitter` (`/q`), et celles des modules.
+- Exécutable `avenoir [chemin/config.toml]` ; sans argument, la configuration de l'utilisateur (jamais celle du dossier courant).
+- **Commandes** : `/aide`, `/outils`, `/annuler`, `/configurer`, `/modules`, `/risque [outil niveau]`, `/modele [nom]`, `/moteur [nom]`, `/memoire`, `/raisonnement`, `/charger`, `/decharger`, `/recharger`, `/nouvelle`, `/reset`, `/conversations`, `/ouvrir`, `/renommer`, `/supprimer`, `/historique`, `/transcription`, `/quitter` (`/q`), et celles des modules.
 - **Saisie** (replxx) : édition de ligne, historique des saisies conservé entre deux lancements, complétion des commandes (Tab), Ctrl+D pour quitter.
 - **Apparence** :
   - barre de saisie fixe en bas du terminal (grandit avec la saisie, suit les redimensionnements, sous Windows aussi) ;
@@ -174,6 +174,17 @@ Plateformes : **Linux** et **Windows** (sauf mention contraire).
 ## 10. Configuration
 
 - Fichier `config.toml` (exemple commenté : `config.example.toml`) ; une clé inconnue ou de mauvais type est une erreur qui cite la clé.
+- Emplacement : `~/.config/avenoir/config.toml` (ou `$XDG_CONFIG_HOME/avenoir/`), `%APPDATA%\avenoir\config.toml` sous Windows ; un autre fichier en argument ; le dossier courant n'est jamais lu. Sans terminal et sans configuration : erreur qui donne l'emplacement attendu.
+- **Création guidée** au premier lancement (terminal, aucune configuration) :
+  - recherche des serveurs compatibles OpenAI de la machine sur les ports par défaut (Ollama 11434, LM Studio 1234, llama.cpp server 8080) ;
+  - sur demande seulement, recherche sur le réseau local (sous-réseau privé /24 de la machine, jamais une adresse publique ; en parallèle, quelques secondes, Ctrl+C pour arrêter) ; chaque serveur trouvé n'est retenu que si l'utilisateur déclare que la machine est à lui (`local = true`) ;
+  - adresse d'un autre serveur saisie à la main (http(s), sans identifiants), à soi ou tenu pour distant ;
+  - Claude Code proposé s'il est dans le PATH, l'API Anthropic (Claude Sonnet 5.5) si `ANTHROPIC_API_KEY` est définie ;
+  - liste numérotée : modèles conseillés par le banc d'essai en tête avec leur score, les autres « non évalués », les distants signalés ; choix de plusieurs modèles et du modèle par défaut ; mode « local uniquement » proposé quand il y a des modèles locaux et distants (les distants sont alors écartés) ;
+  - noms des modèles des serveurs filtrés (caractères de contrôle écartés, 100 au plus) ;
+  - fichier écrit lisible par l'utilisateur seul (dossier `0700`, fichier `0600`), remplacement atomique ; seules les valeurs qui diffèrent des défauts sont écrites hors modèles ;
+  - « aucun » (ou aucun modèle trouvé) : « Continuer sans modèle ? » ; oui : configuration sans modèle enregistrée, la voie rapide seule répond et la création ne revient pas d'elle-même ; non : rien n'est écrit, la création sera proposée de nouveau au prochain lancement.
+- **`/configurer`** : la même création guidée en cours de session, questions posées dans la barre de saisie ; seuls les modèles et « local uniquement » changent, les autres réglages du fichier en usage sont gardés ; confirmation avant de réécrire un fichier existant (ses commentaires sont perdus) ; Ctrl+C ou Ctrl+D abandonne sans rien changer ; appliquée au prochain lancement.
 - Sections : `[models.<nom>]` (un par modèle, dans l'ordre voulu : fournisseur, modèle, adresse, nom de la variable de la clé, `temperature`, `reasoning_effort`, `max_tokens`, commande, délai et `persistent` de Claude Code, `local`) ; l'ancienne section `[llm]` est refusée avec un message qui indique la nouvelle forme ; `[agent]` (`max_steps`, `fast_path`, `system_prompt`, `unload_on_switch`, `local_only`, `verify_replies`), `[web]` (`local_searxng`, `searxng_idle_minutes`, `searxng_url`, `engine`), `[permissions]` (politique par niveau), `[modules.<id>]` (`enabled`, `risk` par outil).
 - Dossier de données : `~/.local/share/avenoir` (ou `$XDG_DATA_HOME`), `%LOCALAPPDATA%\avenoir` sous Windows.
 

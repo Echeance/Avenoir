@@ -30,6 +30,8 @@ struct PermissionPolicy {
     /// Règle non négociable : une action `Sensitive` n'est **jamais**
     /// autorisée sans confirmation, même si la configuration dit `allow`.
     [[nodiscard]] Policy for_risk(RiskLevel risk) const;
+
+    bool operator==(const PermissionPolicy&) const = default;
 };
 
 enum class Decision : std::uint8_t {

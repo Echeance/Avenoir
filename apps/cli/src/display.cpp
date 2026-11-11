@@ -613,6 +613,14 @@ void Display::plain(std::string_view text) {
     write(std::string(text) + "\n");
 }
 
+void Display::question(std::string_view text) {
+    const std::scoped_lock lock(mutex_);
+    clear_spinner();
+    const std::string line = paint(text, {.bold = true}) + " ";
+    (void)std::fwrite(line.data(), 1, line.size(), stdout);
+    (void)std::fflush(stdout);
+}
+
 void Display::confirmation(const core::ToolSpec& spec, const core::ToolCall& call) {
     const std::size_t inner = width() - 4;
     std::vector<std::string> lines = {paint(spec.name, {.bold = true}) +
