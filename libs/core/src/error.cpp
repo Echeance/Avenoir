@@ -23,6 +23,9 @@ std::string describe(const Error& error) {
     case ErrorCode::Module:
         prefix = "erreur de module";
         break;
+    case ErrorCode::Ipc:
+        prefix = "erreur de communication avec le démon";
+        break;
     }
     if (error.message.empty()) {
         return std::string(prefix);

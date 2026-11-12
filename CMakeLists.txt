@@ -52,6 +52,7 @@ add_subdirectory(libs/tools)
 add_subdirectory(libs/modules)
 add_subdirectory(libs/storage)
 add_subdirectory(libs/terminal)
+add_subdirectory(libs/ipc)
 add_subdirectory(apps/cli)
 
 # ─── Modules fournis ────────────────────────────────────────────────────────

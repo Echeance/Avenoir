@@ -14,6 +14,7 @@ enum class ErrorCode : std::uint8_t {
     MaxStepsReached, ///< Trop d'allers-retours LLM ↔ outils sans réponse finale.
     Cancelled,       ///< Requête annulée par l'utilisateur.
     Module,          ///< Échec d'un module externe (lancement, délai, réponse invalide…).
+    Ipc,             ///< Communication avec le démon (connexion, message invalide…).
 };
 
 /// Erreur renvoyée par les bibliothèques (jamais d'exception, voir docs/PROJECT.md § 4.2).
