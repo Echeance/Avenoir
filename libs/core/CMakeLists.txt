@@ -10,6 +10,7 @@ avenoir_add_library(core
         src/env.cpp
         src/error.cpp
         src/permission.cpp
+        src/provenance.cpp
         src/router.cpp
         src/tool.cpp
         src/version.cpp
@@ -30,6 +31,7 @@ avenoir_add_tests(core
         tests/claims_test.cpp
         tests/config_test.cpp
         tests/permission_test.cpp
+        tests/provenance_test.cpp
         tests/router_test.cpp
         tests/tool_test.cpp
         tests/version_test.cpp)

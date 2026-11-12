@@ -12,6 +12,8 @@
 
 #include <spdlog/spdlog.h>
 
+#include "avenoir/core/provenance.hpp"
+
 namespace avenoir::core {
 
 namespace {
@@ -266,9 +268,25 @@ Agent::Execution Agent::execute(const ToolCall& call, const std::stop_token& sto
         spdlog::warn("outil inconnu demandé par le LLM : {}", call.name);
         return {.content = "Outil inconnu : " + call.name, .is_error = true};
     }
-    const ToolSpec spec = tool->spec();
+    ToolSpec spec = tool->spec();
 
-    switch (options_.policy.for_risk(spec.risk)) {
+    Policy policy = options_.policy.for_risk(spec.risk);
+    // Provenance : un argument tiré d'un résultat d'outil, et non d'une
+    // demande de l'utilisateur, se fait confirmer (injection possible).
+    if (policy != Policy::Deny) {
+        if (const auto doubtful =
+                untrusted_argument(spec, call.arguments, history_, options_.requester_text)) {
+            audit()->warn("{}provenance : « {} » vient d'un résultat d'outil, confirmation "
+                          "demandée : {}",
+                          audit_prefix(), *doubtful, call.name);
+            spec.description += "\n▲ « " + *doubtful +
+                                " » vient d'un résultat d'outil (page, module…), pas de votre "
+                                "demande : vérifiez avant d'autoriser.";
+            policy = Policy::Confirm;
+        }
+    }
+
+    switch (policy) {
     case Policy::Allow:
         break;
     case Policy::Deny:

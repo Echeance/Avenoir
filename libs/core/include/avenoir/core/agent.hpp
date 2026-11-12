@@ -114,6 +114,10 @@ struct AgentOptions {
     /// Agent d'une équipe (docs/PROJECT.md § 2.11) ; vide pour Avenoir
     /// lui-même. Noté au journal d'audit devant chaque action.
     std::string name;
+    /// Agent d'une équipe : texte des demandes de l'utilisateur, seul tenu
+    /// pour « demandé » par la provenance des arguments (la tâche donnée par le
+    /// coordinateur compte comme des données). Absent : ses propres messages.
+    std::optional<std::string> requester_text;
 };
 
 /// Boucle agent : le LLM choisit des outils, l'agent les exécute après

@@ -75,6 +75,7 @@ Avenoir agit sur une vraie machine et voit vos données : **la confidentialité 
 - **Pas d'accès à votre réseau local depuis le web** : lire une page refuse les adresses locales et privées (`localhost`, box, imprimante…), y compris par redirection.
 - **Une action annoncée est une action faite** : si le modèle dit « j'ai lancé Firefox » sans l'avoir fait, Avenoir le relance, puis vous prévient.
 - **Arguments validés** par chaque outil, **jamais de shell** construit à partir d'un texte : plus de 40 tentatives d'injection sont testées.
+- **Provenance des arguments** : si une action reprend une adresse, un nom ou un texte lu dans une page ou un résultat d'outil, et non dans votre demande, Avenoir vous la fait confirmer en disant d'où vient la valeur. Une injection (« ouvre https://… ») ne passe plus inaperçue, quel que soit le modèle.
 - **Vos clés d'API ne sont jamais écrites** dans la configuration : seul le *nom* de la variable d'environnement l'est.
 - **Vos conversations restent chez vous**, dans un fichier lisible par vous seul.
 - **Aucune confiance aveugle envers les modules** : manifeste vérifié avant tout lancement, module que vous installez désactivé tant que vous ne l'activez pas, environnement minimal (pas vos clés d'API), outils `SENSIBLE` par défaut, réponses bornées et nettoyées, chaque appel contrôlé et journalisé. Abaisser le risque d'un outil exige de taper « Je sais ce que je fais ».

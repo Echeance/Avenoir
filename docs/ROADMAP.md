@@ -260,6 +260,8 @@ L'ordre suit un principe : **chaque jalon produit un assistant utilisable**, plu
 
 État (12 novembre 2026, `libs/agents`, décision 54) : configuration `[agents.<nom>]` et `[orchestration]`, commandes `/agents` et `/agent …` ; outil `delegate_tasks` du coordinateur (Avenoir) : plan validé (agents connus ou créés à la volée selon le mode, outils compris dans ceux permis aux agents, identifiants uniques, dépendances existantes, pas de cycle, bornes), tâches en parallèle (`max_parallel`), une tâche attend ses dépendances, un échec ou Ctrl+C se propage, un modèle local sert un agent à la fois ; chaque agent : ses seuls outils, son modèle (refusé en « local uniquement » s'il est distant, confirmé sinon), confirmations par l'utilisateur, audit « agent X : … » ; résultats transmis comme des données ; activité montrée en direct (« ◇ agent : tâche »). Restent : plusieurs projets en parallèle et isolés, outils agentiques au-delà de la délégation (demander une précision, tableau de tâches), une seule profondeur de délégation aujourd'hui.
 
+- ✅ **P1** Provenance des arguments (décision 55) : un argument tiré d'un résultat d'outil, et non d'une demande de l'utilisateur, fait confirmer l'action, y compris pour les agents d'une équipe (tâche du coordinateur et résultats transmis comptent comme des données)
+
 ### Autres tâches
 - ⬜ **P1** Outils fichiers (lister, lire, déplacer, renommer, ranger) **restreints à des dossiers autorisés** dans la config, chemins canonicalisés (`std::filesystem::weakly_canonical`)
 - ⬜ **P1** Suppression = `sensitive`, avec un résumé avant confirmation (« 12 fichiers dans Téléchargements »)

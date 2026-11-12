@@ -877,6 +877,12 @@ agents::Environment Runtime::State::agent_environment() const {
     environment.confirmer = [] { return std::make_unique<UiConfirmation>(); };
     environment.policy = file.config.permissions;
     environment.base_prompt = base_prompt;
+    // Provenance : seules les demandes de l'utilisateur sont « demandées ».
+    for (const auto& message : agent->history()) {
+        if (const auto* user = std::get_if<core::UserMessage>(&message)) {
+            environment.requester_text += user->content + "\n";
+        }
+    }
     environment.context = [&ui](const std::function<void()>& body) {
         const UiScope scope(ui);
         body();
