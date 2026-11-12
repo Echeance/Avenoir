@@ -39,6 +39,7 @@
 #include "avenoir/tools/tools.hpp"
 #include "avenoir/tools/web.hpp"
 
+#include "autostart.hpp"
 #include "conversations.hpp"
 #include "modules.hpp"
 #include "settings_catalog.hpp"
@@ -72,12 +73,12 @@ std::string_view trim(std::string_view text) {
 /// Commandes d'Avenoir (sans « / »), alias compris : un module ne peut pas
 /// en déclarer une du même nom.
 std::vector<std::string> builtin_commands() {
-    return {"aide",         "annuler",  "arreter",      "charger",   "configurer", "conversations",
-            "decharger",    "help",     "historique",   "memoire",   "model",      "modele",
-            "modules",      "moteur",   "nouvelle",     "ouvrir",    "outils",     "q",
-            "quit",         "quitter",  "raisonnement", "recharger", "redemarrer", "reglage",
-            "reglages",     "renommer", "reset",        "risque",    "supprimer",  "tools",
-            "transcription"};
+    return {"aide",      "annuler",      "arreter",  "charger",      "configurer", "conversations",
+            "decharger", "demarrage",    "help",     "historique",   "memoire",    "model",
+            "modele",    "modules",      "moteur",   "nouvelle",     "ouvrir",     "outils",
+            "q",         "quit",         "quitter",  "raisonnement", "recharger",  "redemarrer",
+            "reglage",   "reglages",     "renommer", "reset",        "risque",     "supprimer",
+            "tools",     "transcription"};
 }
 
 /// Confirmation d'une action par le client de la requête en cours.
@@ -273,6 +274,7 @@ struct Runtime::State {
     void print_models() const;
     void configure(const std::stop_token& stop);
     void print_settings() const;
+    static void startup(std::string_view argument);
     void change_setting(std::string_view argument);
     [[nodiscard]] Outcome command(std::string_view line, const std::stop_token& stop);
     void run_tool(std::string_view line, core::ToolCall call, const std::stop_token& stop,
@@ -612,6 +614,7 @@ void Runtime::State::print_help() const {
     out += command("/reglage <clé> <valeur>", "changer un réglage") + "\n";
     out += command("/redemarrer", "redémarrer Avenoir avec ses réglages actuels") + "\n";
     out += command("/arreter", "arrêter Avenoir (le démon), pas seulement cette fenêtre") + "\n";
+    out += command("/demarrage [oui|non]", "lancer Avenoir à l'ouverture de session") + "\n";
     out += command("/quitter", "quitter cette fenêtre (ou Ctrl+D) ; Avenoir continue") + "\n";
     out += title("Modules") + "\n";
     out += command("/modules", "modules installés, permissions et outils") + "\n";
@@ -752,6 +755,33 @@ void Runtime::State::change_setting(std::string_view argument) {
     display().info("Pour l'appliquer dès maintenant : /redemarrer.");
 }
 
+/// /demarrage [oui|non] : démarrage du démon à l'ouverture de session.
+void Runtime::State::startup(std::string_view argument) {
+    core::Result<AutostartState> state = autostart_state();
+    if (argument == "oui" || argument == "non") {
+        state = set_autostart(argument == "oui");
+        if (state) {
+            if (const auto audit = spdlog::get("audit")) {
+                audit->info("démarrage à l'ouverture de session : {} ({})",
+                            state->enabled ? "activé" : "retiré", state->where);
+            }
+        }
+    } else if (!argument.empty()) {
+        display().warning("Usage : /demarrage [oui|non]");
+        return;
+    }
+    if (!state) {
+        display().error(core::describe(state.error()));
+        return;
+    }
+    display().info(state->enabled
+                       ? std::format("Avenoir démarre à l'ouverture de session ({}). Pour "
+                                     "l'empêcher : /demarrage non.",
+                                     state->where)
+                       : "Avenoir ne démarre pas à l'ouverture de session : il est lancé à la "
+                         "demande. Pour l'activer : /demarrage oui.");
+}
+
 Outcome Runtime::State::command(std::string_view line, const std::stop_token& stop) {
     // « /commande argument libre »
     const auto space = line.find(' ');
@@ -782,6 +812,8 @@ Outcome Runtime::State::command(std::string_view line, const std::stop_token& st
                 display().info("Transcription : " + utf8_path(*cleared->transcript));
             }
         }
+    } else if (name == "/demarrage" || name == "/démarrage") {
+        startup(argument);
     } else if (name == "/configurer") {
         configure(stop);
     } else if (name == "/reglages") {

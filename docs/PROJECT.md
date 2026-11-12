@@ -565,7 +565,7 @@ Emplacement : `$XDG_CONFIG_HOME/avenoir/config.toml` (`~/.config/avenoir/config.
 - [x] Emplacement standard de la config et création guidée (décision 50), fichier d'audit avec rotation
 - [x] Réglages scellés : HMAC-SHA256, clé dans le trousseau, restauration au lancement (décision 51)
 - [x] IPC locale (décision 53) et démon `avenoird`, la CLI cliente
-- [ ] Démarrage du démon à l'ouverture de session (unité systemd utilisateur, tâche à la connexion sous Windows)
+- [x] Démarrage du démon à l'ouverture de session, sur demande (`/demarrage` : unité systemd utilisateur, entrée `Run` sous Windows)
 - [ ] Journal structuré : historique par conversation et global
 - [ ] Permissions durables (« toujours autoriser ») et révocables
 - [ ] Raccourci clavier global

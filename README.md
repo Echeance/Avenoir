@@ -219,7 +219,7 @@ avenoir                      # configuration de l'utilisateur (créée au premie
 avenoir chemin/config.toml   # une autre configuration
 ```
 
-Avenoir tourne en arrière-plan : le **démon** `avenoird` garde l'agent, les modules, les conversations et les réglages ; la CLI n'en est qu'une interface. Au premier `avenoir`, la CLI lance le démon (une seule instance par utilisateur) ; `/quitter` ferme la CLI et le démon continue (modèle chargé, modules lancés : la fois suivante répond aussitôt) ; `/arreter` l'arrête. Une configuration donnée en argument a son démon à elle, arrêté avec la CLI. Seul votre compte peut parler au démon : socket Unix dans un dossier privé (Linux), tube nommé réservé à votre compte (Windows), identité vérifiée des deux côtés. Les journaux du démon sont dans `logs/daemon.log` du dossier de données.
+Avenoir tourne en arrière-plan : le **démon** `avenoird` garde l'agent, les modules, les conversations et les réglages ; la CLI n'en est qu'une interface. Au premier `avenoir`, la CLI lance le démon (une seule instance par utilisateur) ; `/quitter` ferme la CLI et le démon continue (modèle chargé, modules lancés : la fois suivante répond aussitôt) ; `/arreter` l'arrête ; `/demarrage oui` le lance à l'ouverture de session. Une configuration donnée en argument a son démon à elle, arrêté avec la CLI. Seul votre compte peut parler au démon : socket Unix dans un dossier privé (Linux), tube nommé réservé à votre compte (Windows), identité vérifiée des deux côtés. Les journaux du démon sont dans `logs/daemon.log` du dossier de données.
 
 Écrivez simplement ce que vous voulez : *« quelle heure est-il ? »*, *« lance firefox »*, *« baisse le son »*, *« mets en pause »*, *« passe en mode sombre »*, *« va-t-il pleuvoir demain ? »*, *« décris mon ordinateur »*…
 
@@ -241,6 +241,7 @@ Sous Linux, le contrôle du système s'appuie sur les programmes habituels du bu
 | `/configurer` | refaire la création guidée des modèles (recherche des serveurs, choix, « aucun ») ; les autres réglages sont gardés, le fichier réécrit après confirmation ; appliqué par `/redemarrer` |
 | `/redemarrer` | reconstruire Avenoir avec ses réglages actuels (modules relancés, modèle repris) |
 | `/arreter` | arrêter Avenoir (le démon), pas seulement cette fenêtre ; `/quitter` ou Ctrl+D ne ferment que la CLI |
+| `/demarrage [oui\|non]` | lancer Avenoir à l'ouverture de session (unité systemd utilisateur liée à la session graphique, ou entrée « autostart » ; entrée « Run » du compte sous Windows), ou l'en retirer ; sans argument : l'état |
 | `/nouvelle [titre]` | nouvelle conversation (l'ancienne reste dans `/conversations`) |
 | `/reset` | efface la conversation en cours (messages et écran) après confirmation, en proposant d'en garder une transcription Markdown (`/supprimer` la propose aussi) |
 | `/transcription` | enregistre la conversation en cours dans un fichier Markdown (`transcriptions/` du dossier de données) |

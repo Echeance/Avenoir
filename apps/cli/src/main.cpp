@@ -152,11 +152,12 @@ connect_daemon(const ipc::Endpoint& endpoint, const std::optional<std::filesyste
 /// Ce que le démon demande à cette CLI : afficher, questionner, confirmer.
 class Client {
   public:
-    explicit Client(ipc::Peer& peer) : peer_(&peer) {}
-
     void attach(cli::Prompt& prompt) { prompt_ = &prompt; }
 
-    void install() {
+    /// À appeler une fois la connexion créée. La connexion doit être détruite
+    /// avant ce client (ses fils l'appellent jusqu'à leur fin).
+    void install(ipc::Peer& peer) {
+        peer_ = &peer;
         peer_->on_notification("ui", [this](const json& params) { show(params); });
         peer_->on_request("ask", [this](const json& params, const std::stop_token&) {
             const auto answer = ask(text_of_question(params));
@@ -324,7 +325,7 @@ class Client {
         return approved;
     }
 
-    ipc::Peer* peer_;
+    ipc::Peer* peer_ = nullptr;
     cli::Prompt* prompt_ = nullptr;
     std::mutex notes_mutex_;
     std::deque<std::string> notes_;
@@ -361,9 +362,9 @@ int run(int argc, char** argv) {
         display().error(core::describe(connection.error()));
         return EXIT_FAILURE;
     }
-    ipc::Peer peer(std::move(*connection));
-    Client client(peer);
-    client.install();
+    // Le client et la barre de saisie avant la connexion : elle est détruite
+    // (ses fils arrêtés) avant eux, qu'elle appelle jusqu'au bout.
+    Client client;
 
     // Barre de saisie : historique des saisies dans le dossier de données.
     std::optional<std::filesystem::path> history_file;
@@ -389,6 +390,8 @@ int run(int argc, char** argv) {
         .notify = [](const std::string& message) { display().notify(message); },
     });
     client.attach(prompt);
+    ipc::Peer peer(std::move(*connection));
+    client.install(peer);
     peer.start();
 
     // Terminal rendu dans son état normal à la sortie, même en cas d'erreur.

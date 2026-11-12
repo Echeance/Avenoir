@@ -2,7 +2,16 @@
 # `avenoir` (même dossier de sortie) : la CLI le lance, et les modules fournis
 # sont cherchés à côté de l'exécutable.
 
+if(WIN32)
+    set(_avenoir_daemon_platform src/platform/windows.cpp)
+elseif(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    set(_avenoir_daemon_platform src/platform/linux.cpp)
+else()
+    set(_avenoir_daemon_platform src/platform/unsupported.cpp)
+endif()
+
 add_library(avenoir_daemon_lib STATIC
+    ${_avenoir_daemon_platform}
     src/conversations.cpp
     src/modules.cpp
     src/runtime.cpp
@@ -21,7 +30,10 @@ target_link_libraries(avenoir_daemon_lib PUBLIC
     avenoir::terminal
     avenoir::tools
     spdlog::spdlog
-    PRIVATE avenoir::options)
+    PRIVATE avenoir::options reproc++)
+if(WIN32)
+    target_link_libraries(avenoir_daemon_lib PRIVATE advapi32)
+endif()
 
 add_executable(avenoird src/main.cpp)
 target_link_libraries(avenoird PRIVATE avenoir_daemon_lib avenoir::options)
