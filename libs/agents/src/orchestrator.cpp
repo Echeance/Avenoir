@@ -76,10 +76,69 @@ class ModelQueues {
     std::map<std::string, std::shared_ptr<std::mutex>> queues_;
 };
 
+/// Outil agentique `task_board` : où en sont les tâches du plan (données).
+class BoardTool final : public core::Tool {
+  public:
+    explicit BoardTool(std::function<std::string()> text) : text_(std::move(text)) {}
+    [[nodiscard]] core::ToolSpec spec() const override {
+        return core::ToolSpec{
+            .name = "task_board",
+            .description = "Tableau des tâches de l'équipe : l'état de chaque tâche (en attente, "
+                           "en cours, réussie…) et les résultats déjà rendus. À consulter pour "
+                           "ne pas refaire le travail d'un autre agent.",
+            .input_schema = {{"type", "object"}, {"properties", nlohmann::json::object()}},
+            .risk = core::RiskLevel::ReadOnly};
+    }
+    [[nodiscard]] core::ToolResult call(const nlohmann::json& /*arguments*/,
+                                        const std::stop_token& /*stop*/) const override {
+        return core::ToolOutput{.content = text_()};
+    }
+
+  private:
+    std::function<std::string()> text_;
+};
+
+/// Outil agentique `ask_coordinator` : une précision demandée au coordinateur.
+class AskCoordinatorTool final : public core::Tool {
+  public:
+    using Ask = std::function<core::Result<std::string>(std::string_view, const std::stop_token&)>;
+    explicit AskCoordinatorTool(Ask ask) : ask_(std::move(ask)) {}
+    [[nodiscard]] core::ToolSpec spec() const override {
+        return core::ToolSpec{
+            .name = "ask_coordinator",
+            .description = "Demande une précision au coordinateur sur ce que veut l'utilisateur, "
+                           "quand ta tâche ne suffit pas pour décider. La réponse est une donnée.",
+            .input_schema = {{"type", "object"},
+                             {"properties",
+                              {{"question", {{"type", "string"}, {"description", "ta question"}}}}},
+                             {"required", {"question"}}},
+            .risk = core::RiskLevel::ReadOnly};
+    }
+    [[nodiscard]] core::ToolResult call(const nlohmann::json& arguments,
+                                        const std::stop_token& stop) const override {
+        const auto question = arguments.contains("question") && arguments["question"].is_string()
+                                  ? arguments["question"].get<std::string>()
+                                  : std::string{};
+        if (question.empty() || question.size() > 1000) {
+            return std::unexpected(core::ToolError{.kind = core::ToolErrorKind::InvalidArguments,
+                                                   .message = "question vide ou trop longue"});
+        }
+        auto answer = ask_(question, stop);
+        if (!answer) {
+            return std::unexpected(core::ToolError{.kind = core::ToolErrorKind::Execution,
+                                                   .message = core::describe(answer.error())});
+        }
+        return core::ToolOutput{.content = "Réponse du coordinateur (donnée) : " + *answer};
+    }
+
+  private:
+    Ask ask_;
+};
+
 /// Exécute une tâche avec une instance de son agent.
 TaskOutcome run_task(const Task& task, const AgentSpec& agent, const std::string& data,
                      const Environment& environment, ModelQueues& queues,
-                     const std::stop_token& stop) {
+                     const std::function<std::string()>& board, const std::stop_token& stop) {
     TaskOutcome outcome{.id = task.id, .agent = agent.name, .status = Status::Failed, .output = {}};
     auto lease = environment.model(agent);
     if (!lease) {
@@ -95,6 +154,19 @@ TaskOutcome run_task(const Task& task, const AgentSpec& agent, const std::string
             return outcome;
         }
         if (auto added = registry.add(std::move(tool)); !added) {
+            outcome.output = core::describe(added.error());
+            return outcome;
+        }
+    }
+    // Outils agentiques, donnés à chaque agent d'un plan (lecture seule).
+    if (auto added = registry.add(std::make_shared<BoardTool>(board)); !added) {
+        outcome.output = core::describe(added.error());
+        return outcome;
+    }
+    if (environment.ask_coordinator) {
+        if (auto added =
+                registry.add(std::make_shared<AskCoordinatorTool>(environment.ask_coordinator));
+            !added) {
             outcome.output = core::describe(added.error());
             return outcome;
         }
@@ -273,6 +345,26 @@ std::vector<TaskOutcome> run_plan(const Plan& plan, const Environment& environme
         return std::ranges::all_of(states, [](State state) { return state == State::Finished; });
     };
 
+    // Tableau des tâches pour les agents (verrou pris le temps de le lire).
+    const std::function<std::string()> board = [&] {
+        const std::scoped_lock lock(mutex);
+        std::string text = "Tableau des tâches (données) :";
+        for (std::size_t i = 0; i < plan.tasks.size(); ++i) {
+            const Task& task = plan.tasks[i];
+            std::string state = "en attente";
+            if (states[i] == State::Running) {
+                state = "en cours";
+            } else if (states[i] == State::Finished) {
+                state = std::string(status_label(outcomes[i].status));
+            }
+            text += std::format("\n- « {} » ({}) : {} — {}", task.id, task.agent, state,
+                                bounded(task.instruction, 200));
+            if (states[i] == State::Finished && outcomes[i].status == Status::Done) {
+                text += "\n  résultat : " + bounded(outcomes[i].output, 600);
+            }
+        }
+        return text;
+    };
     const auto worker = [&] {
         std::unique_lock lock(mutex);
         while (true) {
@@ -298,7 +390,7 @@ std::vector<TaskOutcome> run_plan(const Plan& plan, const Environment& environme
                 if (environment.on_start) {
                     environment.on_start(agent, task);
                 }
-                outcome = run_task(task, agent, data, environment, queues, stop);
+                outcome = run_task(task, agent, data, environment, queues, board, stop);
             };
             if (environment.context) {
                 environment.context(body);

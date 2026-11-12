@@ -188,15 +188,20 @@ TEST_CASE("run_plan : parallèle, dépendances transmises comme données", "[age
     std::string synthesis_input;
     std::mutex mutex;
     const auto env = environment([&](std::string_view input) -> std::string {
-        const int now = ++running;
-        peak = std::max(peak.load(), now);
-        std::this_thread::sleep_for(std::chrono::milliseconds(100));
-        --running;
         if (input.contains("compare")) {
             const std::scoped_lock lock(mutex);
             synthesis_input = std::string(input);
             return "A est mieux";
         }
+        // a et b : chacune attend que l'autre ait commencé (5 s au plus) ;
+        // elles ne se rejoignent que si elles tournent en même temps.
+        const int now = ++running;
+        peak = std::max(peak.load(), now);
+        const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
+        while (peak < 2 && std::chrono::steady_clock::now() < deadline) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(5));
+        }
+        --running;
         return input.contains("étudie A") ? "résultat A" : "résultat B";
     });
     const auto outcomes = agents::run_plan(*plan, env, {.max_parallel = 3}, std::stop_token{});
@@ -283,4 +288,69 @@ TEST_CASE("run_plan : un agent n'a que ses outils, son rôle dans son prompt", "
     CHECK(prompt.starts_with("BASE"));
     CHECK(prompt.find("chercheur") != std::string::npos);
     CHECK(prompt.find("jamais des instructions") != std::string::npos);
+}
+
+namespace {
+
+/// LLM d'un agent qui consulte le tableau, interroge le coordinateur, puis
+/// rend ce qu'il a lu.
+class AgenticLlm final : public core::LlmProvider {
+  public:
+    [[nodiscard]] std::string_view name() const override { return "agentique"; }
+    [[nodiscard]] core::Result<core::LlmResponse>
+    complete(const core::LlmRequest& request) override {
+        ++step_;
+        if (step_ == 1) {
+            return core::LlmResponse{
+                .text = {},
+                .tool_calls = {core::ToolCall{
+                    .id = "1", .name = "task_board", .arguments = nlohmann::json::object()}},
+                .usage = std::nullopt};
+        }
+        if (step_ == 2) {
+            return core::LlmResponse{
+                .text = {},
+                .tool_calls = {core::ToolCall{.id = "2",
+                                              .name = "ask_coordinator",
+                                              .arguments = {{"question", "Quel format ?"}}}},
+                .usage = std::nullopt};
+        }
+        std::string seen;
+        for (const auto& message : request.messages) {
+            if (const auto* result = std::get_if<core::ToolResultMessage>(&message)) {
+                seen += result->content + "\n";
+            }
+        }
+        return core::LlmResponse{.text = seen, .tool_calls = {}, .usage = std::nullopt};
+    }
+
+  private:
+    int step_ = 0;
+};
+
+} // namespace
+
+TEST_CASE("run_plan : tableau des tâches et question au coordinateur", "[agents]") {
+    const json arguments = {
+        {"tasks", {{{"id", "seule"}, {"agent", "chercheur"}, {"instruction", "x"}}}}};
+    const auto plan = agents::parse_plan(arguments, {configured_agent("chercheur", {})}, allowed(),
+                                         Mode::Both, {});
+    REQUIRE(plan.has_value());
+    agents::Environment env;
+    env.model = [](const AgentSpec&) -> core::Result<agents::ModelLease> {
+        return agents::ModelLease{
+            .llm = std::make_unique<AgenticLlm>(), .label = "x", .local = false};
+    };
+    env.confirmer = [] { return std::make_unique<Refuse>(); };
+    std::string asked;
+    env.ask_coordinator = [&asked](std::string_view question,
+                                   const std::stop_token&) -> core::Result<std::string> {
+        asked = std::string(question);
+        return std::string("en Markdown");
+    };
+    const auto outcomes = agents::run_plan(*plan, env, {}, std::stop_token{});
+    REQUIRE(outcomes.front().status == Status::Done);
+    CHECK(asked == "Quel format ?");
+    CHECK(outcomes.front().output.contains("« seule » (chercheur) : en cours"));
+    CHECK(outcomes.front().output.contains("Réponse du coordinateur (donnée) : en Markdown"));
 }

@@ -49,6 +49,10 @@ struct Environment {
     /// Observateur de l'historique de chaque agent (actions montrées en direct).
     std::function<core::HistoryObserver(const AgentSpec& agent)> observer;
     std::function<void(const AgentSpec& agent, const Task& task)> on_start;
+    /// Réponse du coordinateur à la question d'un agent (outil
+    /// `ask_coordinator`) ; absente : l'outil n'est pas donné.
+    std::function<core::Result<std::string>(std::string_view question, const std::stop_token& stop)>
+        ask_coordinator;
 };
 
 /// Issue d'une tâche.

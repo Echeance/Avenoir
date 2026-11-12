@@ -8,6 +8,7 @@
 Sûr par défaut, extensible par des modules, avec le LLM de votre choix — local ou dans le cloud.
 
 [![CI](https://github.com/echeance/Avenoir/actions/workflows/ci.yml/badge.svg)](https://github.com/echeance/Avenoir/actions/workflows/ci.yml)
+[![Release](https://github.com/echeance/Avenoir/actions/workflows/release.yml/badge.svg)](https://github.com/echeance/Avenoir/releases)
 [![Version](https://img.shields.io/github/v/release/echeance/Avenoir?include_prereleases&label=version&color=343f5c)](https://github.com/echeance/Avenoir/releases)
 ![C++23](https://img.shields.io/badge/C%2B%2B-23-00599C?logo=cplusplus&logoColor=white)
 ![Plateformes](https://img.shields.io/badge/plateformes-Linux%20%7C%20Windows-f5a028)

@@ -87,7 +87,7 @@ std::vector<std::string> builtin_commands() {
 /// Coordinateur de la requête en cours dans ce fil (Avenoir, ou un projet) :
 /// ses demandes sont les seules « demandées » pour les agents d'un plan.
 // NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables) : propre au fil
-thread_local const core::Agent* t_coordinator = nullptr;
+thread_local core::Agent* t_coordinator = nullptr;
 
 /// Projets en même temps au plus.
 constexpr std::size_t kMaxRunningProjects = 4;
@@ -904,11 +904,14 @@ agents::Environment Runtime::State::agent_environment() const {
             .llm = std::move(*provider), .label = choice->name, .local = choice->local};
     };
     environment.tools = &agent_tools;
+    // Une question d'agent à la fois au coordinateur (son modèle sert déjà
+    // la requête en cours).
+    const auto questions = std::make_shared<std::mutex>();
     environment.confirmer = [] { return std::make_unique<UiConfirmation>(); };
     environment.policy = file.config.permissions;
     environment.base_prompt = base_prompt;
     // Provenance : seules les demandes de l'utilisateur sont « demandées ».
-    const core::Agent* coordinator = t_coordinator != nullptr ? t_coordinator : agent.get();
+    core::Agent* coordinator = t_coordinator != nullptr ? t_coordinator : agent.get();
     for (const auto& message : coordinator->history()) {
         if (const auto* user = std::get_if<core::UserMessage>(&message)) {
             environment.requester_text += user->content + "\n";
@@ -931,6 +934,20 @@ agents::Environment Runtime::State::agent_environment() const {
                 },
             .removed_last = [] {},
         };
+    };
+    environment.ask_coordinator = [coordinator, questions, requester = environment.requester_text](
+                                      std::string_view question,
+                                      const std::stop_token& stop) -> core::Result<std::string> {
+        const std::scoped_lock lock(*questions);
+        display().info(
+            std::format("◇ question au coordinateur : {}", terminal::ellipsize(question, 100)));
+        return coordinator->ask_aside(
+            "Tu es le coordinateur d'une équipe d'agents qui travaille pour l'utilisateur. Un "
+            "agent te pose une question sur ce que veut l'utilisateur : réponds brièvement, "
+            "seulement d'après ses demandes ci-dessous ; si elles ne le disent pas, dis-le. "
+            "Demandes de l'utilisateur :\n" +
+                requester,
+            std::string(question), stop);
     };
     environment.on_start = [](const agents::AgentSpec& member, const agents::Task& task) {
         display().info(std::format("◇ {} ({}) : {}", member.name, member.role,
