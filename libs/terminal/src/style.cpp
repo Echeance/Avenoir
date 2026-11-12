@@ -49,6 +49,14 @@ std::string_view color_code(Color color) {
         return "35";
     case Color::Cyan:
         return "36";
+    case Color::Navy:
+        return "38;5;25";
+    case Color::Azure:
+        return "38;5;33";
+    case Color::Sky:
+        return "38;5;111";
+    case Color::Ice:
+        return "38;5;153";
     }
     return "";
 }
@@ -280,15 +288,17 @@ std::string box(std::string_view title, const std::vector<std::string>& lines, C
     const Style frame{.color = border};
     const std::size_t inner = width > 4 ? width - 4 : 0; // « │ » + texte + « │ »
 
-    std::string top = "╭─";
+    // Bordure peinte par morceaux : un titre mis en forme garde ses couleurs
+    // sans couper celle du cadre.
+    std::string top = paint("╭─", frame);
     std::size_t used = 2;
     if (!title.empty()) {
         top += " " + std::string(title) + " ";
         used += display_width(title) + 2;
     }
-    top += repeat("─", width > used + 1 ? width - used - 1 : 0) + "╮";
+    top += paint(repeat("─", width > used + 1 ? width - used - 1 : 0) + "╮", frame);
 
-    std::string out = paint(top, frame) + "\n";
+    std::string out = top + "\n";
     for (const auto& line : lines) {
         out += paint("│", frame) + " " + pad(line, inner) + " " + paint("│", frame) + "\n";
     }

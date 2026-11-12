@@ -5,7 +5,7 @@ dans une fenêtre stylisée (pour les captures du README).
 Émule ce qu'utilise la CLI d'Avenoir : texte UTF-8, couleurs (16, 256 et
 24 bits, gras, atténué), déplacements du curseur (CUP, CUU, CUD, CHA),
 effacements (ED, EL), zone de défilement (DECSTBM, SU, SD) et mémorisation
-du curseur (ESC 7 / ESC 8). Les demi-blocs ▀ ▄ sont dessinés en pixels.
+du curseur (ESC 7 / ESC 8). Les blocs ▀ ▄ █ sont dessinés en pixels.
 
 Usage : terminal_render.py <enregistrement> <lignes> <colonnes> <image.png>
 Polices : variables AVENOIR_FONT, AVENOIR_FONT_BOLD et AVENOIR_FONT_FALLBACK.
@@ -190,6 +190,8 @@ def render(screen: Screen, output: str) -> None:
                 draw.rectangle([left, top, left + cell_w - 1, top + cell_h // 2 - 1], fill=fg)
             elif char == "▄":
                 draw.rectangle([left, top + cell_h // 2, left + cell_w - 1, top + cell_h - 1], fill=fg)
+            elif char == "█":
+                draw.rectangle([left, top, left + cell_w - 1, top + cell_h - 1], fill=fg)
             elif char != " ":
                 main = font_bold if bold else font
                 # Police de secours pour les caractères absents (⚙…).

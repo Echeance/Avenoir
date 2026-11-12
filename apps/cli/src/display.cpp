@@ -27,6 +27,11 @@ using terminal::Style;
 
 constexpr std::size_t kMaxWidth = 72;
 constexpr Style kMuted{.color = Color::Gray};
+// Thème d'Avenoir : bleus (nuit pour les cadres, vif pour les titres, clair
+// pour les libellés) ; jaune et rouge gardent leur sens (attention, erreur).
+constexpr Style kFrame{.color = Color::Navy};
+constexpr Style kTitle{.color = Color::Azure, .bold = true};
+constexpr Style kLabel{.color = Color::Sky};
 constexpr std::array<std::string_view, 10> kSpinner = {"⠋", "⠙", "⠹", "⠸", "⠼",
                                                        "⠴", "⠦", "⠧", "⠇", "⠏"};
 
@@ -138,7 +143,27 @@ std::string Display::bar_rule() {
     for (std::size_t i = 0; i + 1 < columns; ++i) {
         line += "─";
     }
-    return paint(line, kMuted);
+    return paint(line, kFrame);
+}
+
+std::string Display::status_rule() const {
+    std::string status;
+    {
+        const std::scoped_lock lock(status_mutex_);
+        status = status_;
+    }
+    const std::size_t columns = terminal::terminal_width();
+    if (status.empty() || columns < 24) {
+        return bar_rule();
+    }
+    // « ── gemma : gemma4:26b-a4b, local ─────… », une colonne de moins que l'écran.
+    status = terminal::ellipsize(status, columns - 10);
+    const std::size_t used = 4 + terminal::display_width(status);
+    std::string rest;
+    for (std::size_t i = used; i + 1 < columns; ++i) {
+        rest += "─";
+    }
+    return paint("── ", kFrame) + paint(status, kLabel) + paint(" " + rest, kFrame);
 }
 
 void Display::draw_bar(bool marker) const {
@@ -147,7 +172,7 @@ void Display::draw_bar(bool marker) const {
     // début de la ligne d'invite. L'invite est dessinée en gris quand Avenoir
     // ne lit pas (pendant une réflexion) ; sinon c'est replxx qui l'écrit.
     std::string out = scroll_region(region_bottom()) + go_to(prompt_row() - 1) + "\x1b[J" +
-                      bar_rule() + go_to(rows_) + bar_rule() + go_to(prompt_row());
+                      bar_rule() + go_to(rows_) + status_rule() + go_to(prompt_row());
     if (marker) {
         out += paint(kPromptGlyph, {.color = Color::Gray}) + " ";
     }
@@ -389,18 +414,149 @@ std::size_t card_text_width(std::size_t inner) {
 
 } // namespace
 
-void Display::banner(std::string_view llm, std::size_t tools, std::string_view conversation) {
-    const std::size_t text_width = card_text_width(width() - 4);
-    const std::vector<std::string> text = {
-        paint(std::format("Avenoir {}", core::version()), {.bold = true}),
-        paint(terminal::ellipsize(std::format("{} · {} outil(s)", llm, tools), text_width), kMuted),
-        paint(terminal::ellipsize(std::format("Conversation : {}", conversation), text_width),
-              kMuted),
-    };
-    const auto lines = penguin_card(text);
+namespace {
+
+/// « AVENOIR » en grandes lettres (5 lignes, 5 colonnes par lettre), du bleu
+/// clair au bleu nuit.
+std::vector<std::string> title_art() {
+    static const std::array<std::array<std::string_view, 5>, 7> letters{{
+        {" ███ ", "█   █", "█████", "█   █", "█   █"}, // A
+        {"█   █", "█   █", "█   █", " █ █ ", "  █  "}, // V
+        {"█████", "█    ", "████ ", "█    ", "█████"}, // E
+        {"█   █", "██  █", "█ █ █", "█  ██", "█   █"}, // N
+        {" ███ ", "█   █", "█   █", "█   █", " ███ "}, // O
+        {"█████", "  █  ", "  █  ", "  █  ", "█████"}, // I
+        {"████ ", "█   █", "████ ", "█  █ ", "█   █"}, // R
+    }};
+    static const std::array<Color, 5> shades{Color::Ice, Color::Sky, Color::Azure, Color::Azure,
+                                             Color::Navy};
+    std::vector<std::string> lines;
+    for (std::size_t row = 0; row < 5; ++row) {
+        std::string line = "  ";
+        for (const auto& letter : letters) {
+            line += std::string(letter.at(row)) + " ";
+        }
+        lines.push_back(paint(line, {.color = shades.at(row), .bold = true}));
+    }
+    return lines;
+}
+
+/// « nom : a, b, c », découpé à `width` colonnes avec un retrait.
+std::vector<std::string> group_lines(const std::string& name, const std::vector<std::string>& items,
+                                     std::size_t width) {
+    std::string list;
+    for (const auto& item : items) {
+        list += (list.empty() ? "" : ", ") + item;
+    }
+    const std::string head = name + " : ";
+    const std::size_t indent = std::min<std::size_t>(terminal::display_width(head), 14);
+    const auto pieces = terminal::wrap(list, width > indent + 10 ? width - indent : 10);
+    std::vector<std::string> lines;
+    lines.reserve(pieces.size());
+    for (std::size_t i = 0; i < pieces.size(); ++i) {
+        lines.push_back(i == 0 ? paint(head, kLabel) + pieces[i]
+                               : std::string(indent, ' ') + pieces[i]);
+    }
+    return lines;
+}
+
+} // namespace
+
+void Display::banner(const WelcomeInfo& welcome) {
+    {
+        const std::scoped_lock lock(status_mutex_);
+        status_ = welcome.llm;
+    }
+    // Accueil large : toute la largeur du terminal (140 colonnes au plus).
+    const std::size_t total = std::min<std::size_t>(terminal::terminal_width(), 140);
+    // Terminal étroit ou sans couleurs : le cadre simple.
+    if (!terminal::enabled() || total < 72) {
+        const std::size_t narrow = width();
+        const std::size_t text_width = card_text_width(narrow - 4);
+        const std::vector<std::string> text = {
+            paint(std::format("Avenoir {}", core::version()), {.bold = true}),
+            paint(terminal::ellipsize(std::format("{} · {} outil(s)", welcome.llm, welcome.tools),
+                                      text_width),
+                  kMuted),
+            paint(terminal::ellipsize(std::format("Conversation : {}", welcome.conversation),
+                                      text_width),
+                  kMuted),
+        };
+        const auto lines = penguin_card(text);
+        const std::scoped_lock lock(mutex_);
+        write("\n" + terminal::box({}, lines, Color::Navy, narrow) + "\n");
+        write(paint("  /aide pour les commandes · Ctrl+C arrête · Ctrl+D quitte", kMuted) + "\n");
+        return;
+    }
+
+    // Colonne de gauche : le pingouin, puis le modèle et la conversation.
+    constexpr std::size_t kLeft = 22;
+    const std::size_t inner = total - 4;
+    const std::size_t right_width = inner - kLeft - 2;
+    std::vector<std::string> left;
+    for (const auto& line : penguin_card({})) {
+        left.push_back("  " + line);
+    }
+    left.emplace_back();
+    // « gemma : gemma4:26b-a4b, local » : le nom en évidence, puis le modèle.
+    const auto colon = welcome.llm.find(" : ");
+    const std::string model_name =
+        colon == std::string::npos ? welcome.llm : welcome.llm.substr(0, colon);
+    left.push_back(
+        paint(terminal::ellipsize(model_name, kLeft - 1), {.color = Color::Ice, .bold = true}));
+    if (colon != std::string::npos) {
+        for (const auto& piece : terminal::wrap(welcome.llm.substr(colon + 3), kLeft - 1)) {
+            left.push_back(paint(piece, kLabel));
+        }
+    }
+    for (const auto& piece : terminal::wrap(welcome.conversation, kLeft - 1)) {
+        left.push_back(paint(piece, kMuted));
+    }
+
+    // Colonne de droite : outils par famille, puis les rubriques.
+    std::vector<std::string> right;
+    right.push_back(paint("Outils disponibles", kTitle));
+    for (const auto& [name, items] : welcome.groups) {
+        for (auto& line : group_lines(name, items, right_width)) {
+            right.push_back(std::move(line));
+        }
+    }
+    for (const auto& [title, text] : welcome.sections) {
+        right.emplace_back();
+        right.push_back(paint(title, kTitle));
+        for (const auto& piece : terminal::wrap(text, right_width)) {
+            right.push_back(piece);
+        }
+    }
+    right.emplace_back();
+    for (const auto& piece :
+         terminal::wrap(std::format("{} outils · /aide pour les commandes · Ctrl+C arrête · "
+                                    "Ctrl+D quitte",
+                                    welcome.tools),
+                        right_width)) {
+        right.push_back(paint(piece, kMuted));
+    }
+
+    std::vector<std::string> lines;
+    const std::size_t rows = std::max(left.size(), right.size());
+    for (std::size_t row = 0; row < rows; ++row) {
+        std::string line =
+            row < left.size() ? terminal::pad(left[row], kLeft) : std::string(kLeft, ' ');
+        line += "  ";
+        if (row < right.size()) {
+            line += right[row];
+        }
+        lines.push_back(std::move(line));
+    }
+    std::string out = "\n";
+    for (const auto& line : title_art()) {
+        out += line + "\n";
+    }
+    out += terminal::box(paint(std::format("Avenoir {}", core::version()), kTitle) + " " +
+                             paint("· " + welcome.llm, kLabel),
+                         lines, Color::Navy, total);
     const std::scoped_lock lock(mutex_);
-    write("\n" + terminal::box({}, lines, Color::White, width()) + "\n");
-    write(paint("  /aide pour les commandes · Ctrl+C arrête · Ctrl+D quitte", kMuted) + "\n");
+    write(out + "\n");
 }
 
 void Display::farewell(std::string_view conversation) {
@@ -422,18 +578,18 @@ void Display::farewell(std::string_view conversation) {
         // Écran et historique du terminal vidés : on quitte sur un terminal propre.
         emit("\x1b[2J\x1b[3J\x1b[H");
     }
-    write("\n" + terminal::box({}, lines, Color::White, width()) + "\n\n");
+    write("\n" + terminal::box({}, lines, Color::Navy, width()) + "\n\n");
 }
 
 void Display::user(std::string_view text) {
-    const std::string line = "\n" + paint(kPromptGlyph, {.color = Color::Cyan, .bold = true}) +
-                             " " + paint(text, {.bold = true}) + "\n";
+    const std::string line =
+        "\n" + paint(kPromptGlyph, kTitle) + " " + paint(text, {.bold = true}) + "\n";
     const std::scoped_lock lock(mutex_);
     write(line);
 }
 
 std::string Display::render_reply(std::string_view markdown) {
-    const std::string bar = paint("│", {.color = Color::White, .dim = true});
+    const std::string bar = paint("│", kFrame);
     // Lignes découpées aux mots pour que chaque ligne garde la barre « │ ».
     const std::size_t columns = std::max<std::size_t>(terminal::terminal_width(), 20) - 3;
     std::string out;
@@ -453,8 +609,7 @@ std::string Display::render_reply(std::string_view markdown) {
 }
 
 void Display::assistant(std::string_view markdown) {
-    const std::string out = "\n" + paint("◆ Avenoir", {.color = Color::White, .bold = true}) +
-                            "\n" + render_reply(markdown);
+    const std::string out = "\n" + paint("◆ Avenoir", kTitle) + "\n" + render_reply(markdown);
     const std::scoped_lock lock(mutex_);
     write(out);
 }
@@ -468,7 +623,7 @@ void Display::stream_text(std::string_view fragment) {
         in_fence_ = false;
         stream_pending_.clear();
         stream_held_.clear();
-        write("\n" + paint("◆ Avenoir", {.color = Color::White, .bold = true}) + "\n");
+        write("\n" + paint("◆ Avenoir", kTitle) + "\n");
     }
     stream_pending_.append(fragment);
     std::size_t start = 0;
@@ -552,7 +707,7 @@ void Display::tool_result(const core::ToolResultMessage& result) {
     if (call == pending_.end()) {
         return;
     }
-    std::string line = "  " + paint(kToolGlyph, {.color = Color::Yellow}) + " " + call->name;
+    std::string line = "  " + paint(kToolGlyph, kLabel) + " " + call->name;
     if (const auto arguments = summarize_arguments(call->arguments); !arguments.empty()) {
         line += " " + paint(terminal::ellipsize(arguments, 40), kMuted);
     }
@@ -681,7 +836,7 @@ void Display::tick() {
     frame_ = (frame_ + 1) % kSpinner.size();
     const auto seconds = std::chrono::duration_cast<std::chrono::seconds>(now - since_).count();
     const std::string spinner = std::format(
-        "  {} {}", paint(kSpinner.at(frame_), {.color = Color::White}),
+        "  {} {}", paint(kSpinner.at(frame_), {.color = Color::Azure}),
         paint(std::format("{}… {} s · Ctrl+C pour arrêter", activity_, seconds), kMuted));
     // Barre fixe : la toupie s'affiche avec les réponses, sur la dernière
     // ligne de l'historique ; le curseur revient ensuite dans la barre.
@@ -705,8 +860,7 @@ void Display::resume_thinking() {
 }
 
 std::string Display::prompt_marker() {
-    return terminal::enabled() ? paint(kPromptGlyph, {.color = Color::Cyan, .bold = true}) + " "
-                               : "> ";
+    return terminal::enabled() ? paint(kPromptGlyph, kTitle) + " " : "> ";
 }
 
 void print_messages(std::span<const core::Message> messages, std::optional<std::size_t> limit) {

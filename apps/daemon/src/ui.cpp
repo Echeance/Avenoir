@@ -47,8 +47,7 @@ class LogUi final : public Ui {
     void messages(std::span<const core::Message> /*messages*/,
                   std::optional<std::size_t> /*limit*/) override {}
     void clear() override {}
-    void banner(std::string_view /*llm*/, std::size_t /*tools*/,
-                std::string_view /*conversation*/) override {}
+    void banner(const Welcome& /*welcome*/) override {}
     void start_thinking() override {}
     void set_activity(std::string_view /*activity*/) override {}
     void stop_thinking() override {}
@@ -114,8 +113,21 @@ void RemoteUi::messages(std::span<const core::Message> messages, std::optional<s
     send(std::move(params));
 }
 
-void RemoteUi::banner(std::string_view llm, std::size_t tools, std::string_view conversation) {
-    send(json{{"op", "banner"}, {"llm", llm}, {"tools", tools}, {"conversation", conversation}});
+void RemoteUi::banner(const Welcome& welcome) {
+    json groups = json::array();
+    for (const auto& [name, items] : welcome.groups) {
+        groups.push_back({{"name", name}, {"items", items}});
+    }
+    json sections = json::array();
+    for (const auto& [title, text] : welcome.sections) {
+        sections.push_back({{"title", title}, {"text", text}});
+    }
+    send(json{{"op", "banner"},
+              {"llm", welcome.llm},
+              {"tools", welcome.tools},
+              {"conversation", welcome.conversation},
+              {"groups", std::move(groups)},
+              {"sections", std::move(sections)}});
 }
 
 void RemoteUi::start_thinking() {

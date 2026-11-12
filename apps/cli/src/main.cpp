@@ -270,8 +270,25 @@ class Client {
         } else if (op == "clear") {
             display().clear();
         } else if (op == "banner") {
-            display().banner(shown(params.value("llm", "")), params.value("tools", std::size_t{0}),
-                             shown(params.value("conversation", "")));
+            cli::WelcomeInfo welcome{.llm = shown(params.value("llm", "")),
+                                     .tools = params.value("tools", std::size_t{0}),
+                                     .conversation = shown(params.value("conversation", "")),
+                                     .groups = {},
+                                     .sections = {}};
+            for (const auto& group : params.value("groups", json::array())) {
+                std::vector<std::string> items;
+                for (const auto& item : group.value("items", json::array())) {
+                    if (item.is_string()) {
+                        items.push_back(item.get<std::string>());
+                    }
+                }
+                welcome.groups.emplace_back(group.value("name", ""), std::move(items));
+            }
+            for (const auto& section : params.value("sections", json::array())) {
+                welcome.sections.emplace_back(section.value("title", ""),
+                                              shown(section.value("text", "")));
+            }
+            display().banner(welcome);
         } else if (op == "start_thinking") {
             display().start_thinking();
         } else if (op == "activity") {
@@ -385,7 +402,7 @@ int run(int argc, char** argv) {
             [](const std::string& marker, std::size_t before_cursor) {
                 display().redraw_for_resize(marker, before_cursor);
             },
-        .border = [] { return cli::Display::bar_rule(); },
+        .border = [] { return display().status_rule(); },
         .poll = [&client] { return client.take_notes(); },
         .notify = [](const std::string& message) { display().notify(message); },
     });

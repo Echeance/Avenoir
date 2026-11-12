@@ -21,6 +21,11 @@ enum class Color : std::uint8_t {
     Magenta,
     White, ///< Blanc vif.
     Cyan,
+    // Thème d'Avenoir (256 couleurs) : bleus du plus sombre au plus clair.
+    Navy,  ///< Bleu nuit : cadres, barres.
+    Azure, ///< Bleu vif : titres, invite.
+    Sky,   ///< Bleu clair : libellés, actions.
+    Ice,   ///< Bleu très pâle : texte mis en avant.
 };
 
 struct Style {

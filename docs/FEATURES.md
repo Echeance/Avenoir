@@ -193,7 +193,9 @@ Plateformes : **Linux** et **Windows** (sauf mention contraire).
 - **Apparence** :
   - barre de saisie fixe en bas du terminal (grandit avec la saisie, suit les redimensionnements, sous Windows aussi) ;
   - à la sortie, écran et historique du terminal vidés, puis cadre d'au revoir avec le pingouin (« À bientôt ! », conversation qui reprendra au prochain lancement) ;
-  - cadre d'accueil avec le pingouin en pixel art (ASCII sans couleurs) ;
+  - thème bleu : bleu nuit pour les cadres et la barre de saisie, bleu vif pour les titres, l'invite et « ◆ Avenoir », bleu clair pour les libellés et les actions ; jaune et rouge gardent leur sens (attention, erreur) ;
+  - accueil (terminal d'au moins 72 colonnes, en couleurs) : « AVENOIR » en grandes lettres, du bleu clair au bleu nuit, puis un cadre sur toute la largeur (140 colonnes au plus), version et modèle dans sa bordure : à gauche le pingouin en pixel art, le nom du modèle et la conversation ; à droite les outils disponibles par famille (système, web, modèles, équipe, puis un groupe par module), les modules, l'équipe et les projets en cours, et le nombre d'outils ; sinon, le cadre simple avec le pingouin (ASCII sans couleurs) ;
+  - ligne d'état : le modèle actif dans la bordure du bas de la barre de saisie ;
   - styles distincts pour la requête (›), la réponse (◆ Avenoir), les actions (» … ✓ / ✗ en direct), les avertissements (▲) — symboles d'une colonne présents dans les polices de console courantes, Windows compris, les confirmations encadrées, les badges de risque et les erreurs ;
   - réponses en Markdown rendu, découpées aux mots, affichées au fil de l'eau ; toupie « Réflexion… » jusqu'au premier mot ;
   - couleurs désactivées hors terminal et avec `NO_COLOR`.

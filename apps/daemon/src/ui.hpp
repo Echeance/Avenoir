@@ -8,6 +8,7 @@
 #include <span>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 #include <nlohmann/json.hpp>
@@ -22,6 +23,17 @@
 // traitée avec l'interface de ce client (`UiScope`) ; hors requête, les
 // messages vont à tous les clients connectés.
 namespace avenoir::daemon {
+
+/// Cadre d'accueil : ce qu'Avenoir sait faire en ce moment.
+struct Welcome {
+    std::string llm; ///< Modèle actif (« gemma : gemma4:26b-a4b, local »).
+    std::size_t tools = 0;
+    std::string conversation;
+    /// Outils par famille (« système », « web », « meteo »…), noms courts.
+    std::vector<std::pair<std::string, std::vector<std::string>>> groups;
+    /// Autres rubriques (« Modules », « Équipe », « Projets ») : titre, texte.
+    std::vector<std::pair<std::string, std::string>> sections;
+};
 
 /// Symbole des actions (outil), comme dans la CLI.
 inline constexpr std::string_view kToolGlyph = "»";
@@ -51,7 +63,7 @@ class Ui {
                           std::optional<std::size_t> limit) = 0;
 
     virtual void clear() = 0;
-    virtual void banner(std::string_view llm, std::size_t tools, std::string_view conversation) = 0;
+    virtual void banner(const Welcome& welcome) = 0;
 
     virtual void start_thinking() = 0;
     virtual void set_activity(std::string_view activity) = 0;
@@ -88,7 +100,7 @@ class RemoteUi final : public Ui {
     void messages(std::span<const core::Message> messages,
                   std::optional<std::size_t> limit) override;
     void clear() override { send("clear", ""); }
-    void banner(std::string_view llm, std::size_t tools, std::string_view conversation) override;
+    void banner(const Welcome& welcome) override;
     void start_thinking() override;
     void set_activity(std::string_view activity) override { send("activity", activity); }
     void stop_thinking() override { send("stop_thinking", ""); }
@@ -132,8 +144,7 @@ class BroadcastUi final : public Ui {
     void messages(std::span<const core::Message> /*messages*/,
                   std::optional<std::size_t> /*limit*/) override {}
     void clear() override {}
-    void banner(std::string_view /*llm*/, std::size_t /*tools*/,
-                std::string_view /*conversation*/) override {}
+    void banner(const Welcome& /*welcome*/) override {}
     void start_thinking() override {}
     void set_activity(std::string_view /*activity*/) override {}
     void stop_thinking() override {}
@@ -176,8 +187,7 @@ class ProjectUi final : public Ui {
     void messages(std::span<const core::Message> /*messages*/,
                   std::optional<std::size_t> /*limit*/) override {}
     void clear() override {}
-    void banner(std::string_view /*llm*/, std::size_t /*tools*/,
-                std::string_view /*conversation*/) override {}
+    void banner(const Welcome& /*welcome*/) override {}
     void start_thinking() override {}
     void set_activity(std::string_view /*activity*/) override {}
     void stop_thinking() override {}

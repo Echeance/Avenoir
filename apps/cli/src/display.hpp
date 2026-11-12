@@ -9,6 +9,7 @@
 #include <span>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 #include "avenoir/core/message.hpp"
@@ -35,6 +36,15 @@ inline constexpr std::string_view kWarningGlyph = "▲";
 /// lignes du terminal forment la barre de saisie (bordure, invite, bordure) ;
 /// tout le reste défile au-dessus, dans une zone de défilement (DECSTBM).
 /// Sinon, mode « en ligne » : tout défile, la barre est tracée à chaque saisie.
+/// Cadre d'accueil, tel que le démon le décrit.
+struct WelcomeInfo {
+    std::string llm;
+    std::size_t tools = 0;
+    std::string conversation;
+    std::vector<std::pair<std::string, std::vector<std::string>>> groups; ///< Outils par famille.
+    std::vector<std::pair<std::string, std::string>> sections;            ///< Modules, équipe…
+};
+
 class Display {
   public:
     /// Passe en mode barre fixe si le terminal interprète les séquences de
@@ -57,13 +67,19 @@ class Display {
     /// replxx redessine ensuite la saisie.
     void redraw_for_resize(std::string_view prompt, std::size_t before_cursor);
 
-    /// Bordure de la barre de saisie (ligne grise sur toute la largeur).
+    /// Bordure de la barre de saisie (ligne bleu nuit sur toute la largeur).
     [[nodiscard]] static std::string bar_rule();
+    /// Bordure du bas de la barre : la même, avec le modèle actif (ligne d'état).
+    [[nodiscard]] std::string status_rule() const;
 
     /// Vide l'écran et l'historique du terminal (/reset). Sans effet hors
     /// d'un terminal (sortie redirigée).
     void clear();
-    void banner(std::string_view llm, std::size_t tools, std::string_view conversation);
+    /// Titre AVENOIR en grandes lettres, puis cadre : pingouin, modèle et
+    /// conversation à gauche, outils par famille et rubriques à droite ;
+    /// cadre simple si le terminal est étroit ou sans couleurs. Retient le
+    /// modèle pour la ligne d'état sous la barre de saisie.
+    void banner(const WelcomeInfo& welcome);
     /// À la sortie : écran et historique du terminal vidés (dans un
     /// terminal), puis un cadre d'au revoir avec le pingouin.
     void farewell(std::string_view conversation);
@@ -135,6 +151,8 @@ class Display {
     void stream_flush();
 
     std::mutex mutex_;
+    mutable std::mutex status_mutex_; ///< À part : la ligne d'état est lue verrou principal pris.
+    std::string status_;              ///< Modèle actif, montré sous la barre de saisie.
     bool thinking_ = false;
     std::string activity_ = "Réflexion";
     bool shown_ = false;

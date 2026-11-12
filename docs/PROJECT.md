@@ -314,11 +314,13 @@ La CLI doit être agréable à lire : chaque type d'élément a son style, recon
 
 | Élément | Rendu |
 |---|---|
-| Accueil | cadre avec le **pingouin en pixel art** (demi-blocs ▀ ▄ colorés, couleurs 24 bits ou 256 selon le terminal ; en ASCII sans couleurs), version, LLM, conversation en cours |
-| Barre de saisie | **fixe en bas du terminal** : une ligne grise, l'invite `›` cyan, une ligne grise ; tout le reste défile au-dessus. Elle **grandit** quand la saisie dépasse une ligne et reprend sa taille après validation ; les confirmations s'y répondent (« Autoriser ? [o/N] ») |
-| Requête de l'utilisateur | `›` cyan, texte en gras, **sans cadre** dans l'historique |
-| Réponse d'Avenoir | `◆ Avenoir` blanc, puis le texte précédé d'une barre `│` ; **Markdown rendu** (gras, italique, `code`, titres, puces `•`, citations, blocs de code) |
-| Action en cours | `» outil « argument »` jaune, suivi de `✓` vert ou `✗` rouge et de l'erreur, affichés **en direct** |
+| Thème | **bleu** : bleu nuit pour les cadres et la barre de saisie, bleu vif pour les titres et l'invite, bleu clair pour les libellés ; le jaune et le rouge gardent leur sens (attention, erreur) |
+| Accueil | « AVENOIR » en grandes lettres (dégradé du bleu clair au bleu nuit), puis un cadre sur toute la largeur (140 colonnes au plus), version et modèle dans la bordure : à gauche le **pingouin en pixel art** (demi-blocs ▀ ▄ colorés, couleurs 24 bits ou 256 selon le terminal), le modèle et la conversation ; à droite les outils par famille, les modules, l'équipe, les projets. Terminal étroit (< 72 colonnes) ou sans couleurs : le cadre simple avec le pingouin (ASCII sans couleurs) |
+| Ligne d'état | le modèle actif dans la bordure du bas de la barre de saisie |
+| Barre de saisie | **fixe en bas du terminal** : une ligne bleu nuit, l'invite `›` bleue, une ligne bleu nuit portant le modèle actif ; tout le reste défile au-dessus. Elle **grandit** quand la saisie dépasse une ligne et reprend sa taille après validation ; les confirmations s'y répondent (« Autoriser ? [o/N] ») |
+| Requête de l'utilisateur | `›` bleu, texte en gras, **sans cadre** dans l'historique |
+| Réponse d'Avenoir | `◆ Avenoir` bleu, puis le texte précédé d'une barre `│` ; **Markdown rendu** (gras, italique, `code`, titres, puces `•`, citations, blocs de code) |
+| Action en cours | `» outil « argument »` bleu clair, suivi de `✓` vert ou `✗` rouge et de l'erreur, affichés **en direct** |
 | Réflexion du LLM | toupie animée, temps écoulé et rappel « Ctrl+C pour arrêter », **avec les réponses** (au-dessus de la barre) |
 | Confirmation | cadre jaune « ▲ Action à confirmer », badge de risque, arguments |
 | Risques | `lecture seule` vert, `réversible` jaune, `SENSIBLE` rouge (confirmations, `/outils`) |

@@ -27,7 +27,7 @@ Sûr par défaut, extensible par des modules, avec le LLM de votre choix — loc
 > Avenoir est en développement actif (jalon 1, versions `0.x`). La CLI et les modules sont utilisables ; le démon résident, la voix et l'interface graphique arrivent dans les prochains jalons.
 
 <div align="center">
-  <img src="docs/readme/cli-demo.png" alt="Avenoir dans un terminal : accueil avec le pingouin, une requête par la voie rapide, une requête au LLM qui appelle un outil, et la barre de saisie fixe en bas" width="900">
+  <img src="docs/readme/cli-demo.png" alt="Avenoir dans un terminal : titre AVENOIR, accueil en deux colonnes (pingouin, modèle, outils par famille), une requête par la voie rapide, une requête au LLM qui appelle un outil, et la barre de saisie fixe en bas" width="900">
 </div>
 
 ---

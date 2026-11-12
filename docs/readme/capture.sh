@@ -19,8 +19,8 @@ config="$(cd "$(dirname "$config")" && pwd)/$(basename "$config")"
 avenoir="$root/build/debug/apps/cli/avenoir"
 [[ -x "$avenoir" ]] || { echo "Compilez d'abord : scripts/build.sh" >&2; exit 1; }
 
-rows=30
-columns=100
+rows=42
+columns=120
 work="$(mktemp -d)"
 trap 'rm -rf "$work"' EXIT
 

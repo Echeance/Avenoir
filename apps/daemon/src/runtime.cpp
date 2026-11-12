@@ -299,6 +299,8 @@ struct Runtime::State {
     std::map<std::string, std::unique_ptr<Project>> projects;
 
     void print_help() const;
+    /// Cadre d'accueil : outils par famille, modules, équipe, projets.
+    [[nodiscard]] Welcome welcome_info();
     void print_tools() const;
     void print_models() const;
     void configure(const std::stop_token& stop);
@@ -616,8 +618,7 @@ const ConfigFile& Runtime::config() const {
 }
 
 void Runtime::welcome(bool first) {
-    display().banner(model_label(*state_->switcher), state_->agent->tools().size(),
-                     state_->conversations->describe_current());
+    display().banner(state_->welcome_info());
     if (first) {
         for (const auto& warning : state_->startup_warnings) {
             display().warning(warning);
@@ -687,6 +688,84 @@ void Runtime::State::run_tool(std::string_view line, core::ToolCall call,
             return target.run_tool(input, call, token);
         },
         stop, activity);
+}
+
+Welcome Runtime::State::welcome_info() {
+    Welcome welcome{.llm = model_label(*switcher),
+                    .tools = agent->tools().size(),
+                    .conversation = conversations->describe_current(),
+                    .groups = {},
+                    .sections = {}};
+    // Familles d'outils : celles d'Avenoir, puis une par module.
+    const auto family = [](std::string_view tool) -> std::string {
+        static const std::vector<std::pair<std::string_view, std::vector<std::string_view>>> known{
+            {"web", {"web_search", "read_webpage", "set_search_engine"}},
+            {"modèles", {"switch_llm", "load_llm", "unload_llm", "set_reasoning", "llm_status"}},
+            {"équipe", {"delegate_tasks"}},
+        };
+        for (const auto& [name, tools] : known) {
+            if (std::ranges::contains(tools, tool)) {
+                return std::string(name);
+            }
+        }
+        if (const auto separator = tool.find("__"); separator != std::string_view::npos) {
+            return std::string(tool.substr(0, separator));
+        }
+        return "système";
+    };
+    for (const auto& spec : agent->tools().specs()) {
+        const std::string group = family(spec.name);
+        std::string item = spec.name;
+        if (const auto separator = item.find("__"); separator != std::string::npos) {
+            item = item.substr(separator + 2);
+        }
+        auto found = std::ranges::find(welcome.groups, group,
+                                       &std::pair<std::string, std::vector<std::string>>::first);
+        if (found == welcome.groups.end()) {
+            welcome.groups.emplace_back(group, std::vector<std::string>{});
+            found = std::prev(welcome.groups.end());
+        }
+        found->second.push_back(std::move(item));
+    }
+    // Ordre : système, web, modèles, équipe, puis les modules.
+    const std::vector<std::string> order{"système", "web", "modèles", "équipe"};
+    std::ranges::stable_sort(welcome.groups, [&order](const auto& a, const auto& b) {
+        const auto rank = [&order](const std::string& name) {
+            const auto found = std::ranges::find(order, name);
+            return static_cast<std::size_t>(found - order.begin());
+        };
+        return rank(a.first) < rank(b.first);
+    });
+
+    std::string modules;
+    for (const auto& module : modules_ui->known_modules()) {
+        modules += (modules.empty() ? "" : ", ") + module.id +
+                   (module.bundled ? std::string{} : std::string(" (installé par vous)"));
+    }
+    welcome.sections.emplace_back("Modules", modules.empty() ? "aucun" : modules);
+    std::string team;
+    if (!file.config.orchestration.enabled) {
+        team = "coupée";
+    } else if (file.config.agents.empty()) {
+        team = "créée à la volée selon la demande (/agents)";
+    } else {
+        for (const auto& member : file.config.agents) {
+            team += (team.empty() ? "" : ", ") + member.name + " (" + member.role + ")";
+        }
+    }
+    welcome.sections.emplace_back("Équipe", team);
+    {
+        const std::scoped_lock lock(projects_mutex);
+        if (!projects.empty()) {
+            std::string list;
+            for (const auto& [project_name, project] : projects) {
+                list += (list.empty() ? "" : ", ") + project_name +
+                        (project->running ? " (en cours)" : "");
+            }
+            welcome.sections.emplace_back("Projets", list);
+        }
+    }
+    return welcome;
 }
 
 void Runtime::State::print_help() const {
@@ -1313,8 +1392,7 @@ Outcome Runtime::State::command(std::string_view line, const std::stop_token& st
     } else if (name == "/reset") {
         if (const auto cleared = conversations->clear()) {
             display().clear();
-            display().banner(model_label(*switcher), agent->tools().size(),
-                             conversations->describe_current());
+            display().banner(welcome_info());
             display().success("Conversation effacée.");
             if (cleared->transcript) {
                 display().info("Transcription : " + utf8_path(*cleared->transcript));
