@@ -83,11 +83,12 @@ jobs:
           cp README.md LICENSE.md config.example.toml dist/avenoir/
           # Modules fournis (programme + module.toml), à côté de l'exécutable.
           cp -r build/release/apps/cli/modules dist/avenoir/
+          # La CLI (avenoir) et le démon qu'elle lance (avenoird), côte à côte.
           if [ "$RUNNER_OS" = "Windows" ]; then
-            cp build/release/apps/cli/avenoir.exe dist/avenoir/
+            cp build/release/apps/cli/avenoir.exe build/release/apps/cli/avenoird.exe dist/avenoir/
             (cd dist && 7z a -bso0 "${{ matrix.archive }}" avenoir)
           else
-            cp build/release/apps/cli/avenoir dist/avenoir/
+            cp build/release/apps/cli/avenoir build/release/apps/cli/avenoird dist/avenoir/
             tar -C dist -czf "dist/${{ matrix.archive }}" avenoir
           fi
 

@@ -1,40 +1,34 @@
 # Interface texte : exécutable `avenoir`.
 
+if(WIN32)
+    set(_avenoir_cli_platform src/platform/windows.cpp)
+elseif(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    set(_avenoir_cli_platform src/platform/linux.cpp)
+else()
+    set(_avenoir_cli_platform src/platform/unsupported.cpp)
+endif()
+
 add_executable(avenoir_cli
     src/console.cpp
-    src/conversations.cpp
     src/display.cpp
     src/main.cpp
-    src/modules.cpp
     src/prompt.cpp
-    src/settings_catalog.cpp
-    src/setup.cpp
-    src/setup_plan.cpp)
+    ${_avenoir_cli_platform})
 set_target_properties(avenoir_cli PROPERTIES OUTPUT_NAME avenoir)
 avenoir_utf8_manifest(avenoir_cli)
 target_link_libraries(avenoir_cli PRIVATE
     avenoir::core
-    avenoir::llm
-    avenoir::modules
+    avenoir::ipc
     avenoir::storage
     avenoir::terminal
-    avenoir::tools
     avenoir::options
     replxx::replxx
     spdlog::spdlog)
+# La CLI lance le démon, placé à côté d'elle.
+add_dependencies(avenoir_cli avenoird)
 
 # Test de bout en bout (sans LLM ni réseau), lancé par ctest sur Linux et Windows.
 if(AVENOIR_BUILD_TESTS)
-    # Création guidée : la partie sans terminal ni réseau.
-    add_executable(avenoir_cli_tests
-        tests/settings_catalog_test.cpp tests/setup_plan_test.cpp
-        src/settings_catalog.cpp src/setup_plan.cpp)
-    target_include_directories(avenoir_cli_tests PRIVATE src)
-    target_link_libraries(avenoir_cli_tests PRIVATE
-        avenoir::core avenoir::llm avenoir::options Catch2::Catch2WithMain)
-    avenoir_utf8_manifest(avenoir_cli_tests)
-    catch_discover_tests(avenoir_cli_tests TEST_PREFIX "cli: ")
-
     add_test(NAME "cli: dialogue par la voie rapide"
              COMMAND "${CMAKE_COMMAND}"
                      "-DAVENOIR=$<TARGET_FILE:avenoir_cli>"

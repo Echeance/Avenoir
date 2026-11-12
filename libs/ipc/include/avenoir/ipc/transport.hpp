@@ -28,6 +28,10 @@ struct Endpoint {
 /// `\\.\pipe\avenoir-<SID>`. Rien si elle ne peut pas être établie sûrement.
 [[nodiscard]] core::Result<Endpoint> default_endpoint();
 
+/// Adresse voisine de `base`, propre à `tag` (minuscules, chiffres, « - ») :
+/// un démon privé, par exemple pour une configuration de développement.
+[[nodiscard]] Endpoint endpoint_variant(const Endpoint& base, std::string_view tag);
+
 /// Connexion établie, dans les deux sens. Lecture et écriture peuvent se faire
 /// depuis deux fils différents (un lecteur, des écrivains synchronisés).
 class Connection {

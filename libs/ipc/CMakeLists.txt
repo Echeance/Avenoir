@@ -11,6 +11,7 @@ endif()
 
 avenoir_add_library(ipc
     SOURCES
+        src/endpoint.cpp
         src/peer.cpp
         ${_avenoir_ipc_platform}
     DEPS

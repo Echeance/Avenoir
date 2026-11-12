@@ -50,11 +50,19 @@ class Peer {
     /// Lance le fil de lecture.
     void start();
 
+    /// Que faire de l'appel quand `stop` est demandé.
+    enum class OnStop : unsigned char {
+        Abandon,  ///< Annuler chez l'autre et rendre `Cancelled` tout de suite.
+        AwaitEnd, ///< Annuler chez l'autre mais attendre sa réponse (qui peut
+                  ///< encore poser des questions, comme proposer d'annuler).
+    };
+
     /// Appelle `method` de l'autre côté et attend sa réponse. Si `stop` est
-    /// demandé, l'appel est annulé chez l'autre (`$/cancelRequest`) et
-    /// l'erreur `Cancelled` rendue.
+    /// demandé, l'appel est annulé chez l'autre (`$/cancelRequest`) ; selon
+    /// `on_stop`, l'erreur `Cancelled` est rendue aussitôt ou la réponse attendue.
     [[nodiscard]] core::Result<nlohmann::json> call(std::string_view method, nlohmann::json params,
-                                                    const std::stop_token& stop);
+                                                    const std::stop_token& stop,
+                                                    OnStop on_stop = OnStop::Abandon);
 
     /// Message sans réponse (texte qui arrive au fil de l'eau…).
     [[nodiscard]] core::Result<void> notify(std::string_view method, nlohmann::json params);

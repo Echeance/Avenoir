@@ -55,6 +55,10 @@ void set_enabled(bool enabled) noexcept;
 /// Complète `text` par des espaces jusqu'à `width` colonnes.
 [[nodiscard]] std::string pad(std::string_view text, std::size_t width);
 
+/// `text` sans ses séquences de couleur (CSI `ESC [ … lettre`) : texte mis en
+/// forme ailleurs (par le démon), montré sans couleurs ici.
+[[nodiscard]] std::string strip_styles(std::string_view text);
+
 /// Découpe `text` en lignes d'au plus `width` colonnes, aux espaces (un mot
 /// plus long que `width` est coupé). Les retours à la ligne sont conservés.
 [[nodiscard]] std::vector<std::string> wrap(std::string_view text, std::size_t width);

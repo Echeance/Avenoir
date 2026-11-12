@@ -16,7 +16,7 @@
 #include "avenoir/core/config.hpp"
 #include "avenoir/llm/discovery.hpp"
 
-namespace avenoir::cli {
+namespace avenoir::daemon {
 
 namespace {
 
@@ -253,4 +253,4 @@ std::optional<std::string> normalize_server_url(std::string_view text) {
     return url;
 }
 
-} // namespace avenoir::cli
+} // namespace avenoir::daemon

@@ -530,7 +530,8 @@ Emplacement : `$XDG_CONFIG_HOME/avenoir/config.toml` (`~/.config/avenoir/config.
 - **Vérification au lancement**, avant toute lecture : valide → rien ; modifié ou supprimé → version scellée remise, lignes changées montrées ; sceau absent, falsifié ou rejoué → fichier mis de côté (`.rejected`), création guidée ; trousseau muet → chargé mais signalé « non vérifié » ; jamais scellé → scellé (adoption). Tout est noté au journal d'audit.
 - **Mode développement** : un fichier donné en argument n'est pas scellé, et c'est signalé au lancement.
 - **Changer un réglage** : `/reglage <clé> <valeur>` (et `/reglages` pour les voir), `/configurer` pour les modèles ; affaiblir la sécurité demande la phrase « Je sais ce que je fais », comme abaisser un risque (décision 52).
-- **Reste à faire** avec le démon : surveillance du fichier pendant que tourne Avenoir (aujourd'hui : vérifié à chaque lancement), démon seul rédacteur via l'IPC, changements appliqués à chaud.
+- **Démon seul rédacteur** : depuis la décision 53, seul le démon lit et écrit les réglages ; les interfaces passent par l'IPC (`/reglage`, `/configurer`), un changement s'applique par `/redemarrer` (Avenoir reconstruit).
+- **Reste à faire** : surveillance du fichier pendant que tourne le démon (aujourd'hui : vérifié à chaque démarrage du démon).
 
 ---
 
@@ -563,7 +564,8 @@ Emplacement : `$XDG_CONFIG_HOME/avenoir/config.toml` (`~/.config/avenoir/config.
 ### Phase 3 : résident
 - [x] Emplacement standard de la config et création guidée (décision 50), fichier d'audit avec rotation
 - [x] Réglages scellés : HMAC-SHA256, clé dans le trousseau, restauration au lancement (décision 51)
-- [ ] Mode démon (service Windows / unité systemd utilisateur) + IPC locale pour les interfaces
+- [x] IPC locale (décision 53) et démon `avenoird`, la CLI cliente
+- [ ] Démarrage du démon à l'ouverture de session (unité systemd utilisateur, tâche à la connexion sous Windows)
 - [ ] Journal structuré : historique par conversation et global
 - [ ] Permissions durables (« toujours autoriser ») et révocables
 - [ ] Raccourci clavier global

@@ -54,6 +54,9 @@ class Prompt {
         std::function<void(const std::string& message)> notify;
     };
     void set_hooks(Hooks hooks);
+    /// Commandes proposées à la complétion (connues du démon une fois
+    /// connecté). Hors saisie seulement.
+    void set_commands(std::vector<std::string> commands) { commands_ = std::move(commands); }
 
     /// Pose une question fermée ; seuls « o », « oui », « y », « yes » valent
     /// oui. Ctrl+C vaut non et lève une demande d'interruption.

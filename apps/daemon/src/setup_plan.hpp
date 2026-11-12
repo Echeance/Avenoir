@@ -11,7 +11,7 @@
 
 // Création guidée de la configuration : ce qui se décide sans terminal ni
 // réseau (testé à part), à partir de ce qu'Avenoir a trouvé.
-namespace avenoir::cli {
+namespace avenoir::daemon {
 
 /// Ce que la création guidée a trouvé.
 struct SetupFindings {
@@ -61,4 +61,4 @@ struct SetupCandidate {
 /// caractère de contrôle ni identifiants ; « /v1 » ajouté s'il manque.
 [[nodiscard]] std::optional<std::string> normalize_server_url(std::string_view text);
 
-} // namespace avenoir::cli
+} // namespace avenoir::daemon

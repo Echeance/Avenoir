@@ -3,12 +3,13 @@
 #include <filesystem>
 #include <functional>
 #include <optional>
+#include <stop_token>
 #include <string>
 
 #include "avenoir/core/config.hpp"
 #include "avenoir/core/error.hpp"
 
-namespace avenoir::cli {
+namespace avenoir::daemon {
 
 /// Pose une question et rend la réponse ; rien si l'utilisateur abandonne
 /// (Ctrl+D, Ctrl+C, fin de l'entrée).
@@ -30,12 +31,14 @@ struct SetupResult {
 /// sont ceux de `base`. Rien si l'utilisateur abandonne.
 [[nodiscard]] std::optional<SetupResult> run_setup(const std::filesystem::path& path,
                                                    const core::AppConfig& base, const SetupAsk& io,
-                                                   const SaveSettings& writer);
+                                                   const SaveSettings& writer,
+                                                   const std::stop_token& stop);
 
 /// Création guidée au premier lancement (aucun fichier à `path`, terminal
-/// interactif), questions posées sur l'entrée standard. Renvoie la
+/// interactif), questions posées au client qui se connecte. Renvoie la
 /// configuration à utiliser ; rien si l'utilisateur abandonne.
 [[nodiscard]] std::optional<core::AppConfig> run_first_setup(const std::filesystem::path& path,
-                                                             const SaveSettings& writer);
+                                                             const SaveSettings& writer,
+                                                             const std::stop_token& stop);
 
-} // namespace avenoir::cli
+} // namespace avenoir::daemon

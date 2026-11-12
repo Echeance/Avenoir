@@ -12,10 +12,9 @@
 #include "avenoir/core/agent.hpp"
 #include "avenoir/storage/store.hpp"
 
-#include "display.hpp"
-#include "prompt.hpp"
+#include "ui.hpp"
 
-namespace avenoir::cli {
+namespace avenoir::daemon {
 
 /// Chemin en UTF-8, sous Windows aussi (`string()` y rendrait la page de code ANSI).
 [[nodiscard]] inline std::string utf8_path(const std::filesystem::path& path) {
@@ -30,7 +29,7 @@ inline constexpr std::size_t kResumeMessages = 50;
 /// (ouverture impossible), tout fonctionne mais rien n'est conservé.
 class Conversations {
   public:
-    Conversations(std::optional<storage::Store> store, core::Agent& agent, Prompt& prompt);
+    Conversations(std::optional<storage::Store> store, core::Agent& agent);
 
     /// Reprend la conversation la plus récente (ou en crée une) et la charge
     /// dans l'agent, sans l'afficher (voir `show_recent`).
@@ -78,10 +77,9 @@ class Conversations {
 
     std::optional<storage::Store> store_;
     core::Agent* agent_;
-    Prompt* prompt_;
     std::int64_t current_ = 0;
     std::string title_;
     bool auto_title_ = false; ///< Titre à déduire de la première question.
 };
 
-} // namespace avenoir::cli
+} // namespace avenoir::daemon

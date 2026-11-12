@@ -11,10 +11,9 @@
 #include "avenoir/modules/host.hpp"
 #include "avenoir/storage/store.hpp"
 
-#include "prompt.hpp"
 #include "settings_catalog.hpp"
 
-namespace avenoir::cli {
+namespace avenoir::daemon {
 
 /// Phrase exacte exigée pour abaisser le risque d'un outil de module
 /// (docs/PROJECT.md § 2.6, décision 21).
@@ -31,7 +30,7 @@ class ModulesUi {
     /// /risque [outil niveau] : sans argument, liste les risques ; sinon
     /// relève (librement) ou abaisse (avertissement, disclaimer et phrase
     /// exacte) le risque d'un outil de module, et l'enregistre dans `store`.
-    void risk(std::string_view argument, Prompt& prompt, storage::Store* store);
+    void risk(std::string_view argument, storage::Store* store);
 
     /// Commande d'un module (`meteo` pour « /meteo »), ou rien.
     [[nodiscard]] const modules::ModuleCommand* find_command(std::string_view name) const;
@@ -53,4 +52,4 @@ class ModulesUi {
     std::vector<modules::ModuleCommand> commands_;
 };
 
-} // namespace avenoir::cli
+} // namespace avenoir::daemon

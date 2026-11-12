@@ -14,7 +14,7 @@
 #include "avenoir/core/error.hpp"
 #include "avenoir/core/permission.hpp"
 
-namespace avenoir::cli {
+namespace avenoir::daemon {
 
 namespace {
 
@@ -332,4 +332,4 @@ core::Result<SettingChange> change_setting(const core::AppConfig& config, std::s
     return change;
 }
 
-} // namespace avenoir::cli
+} // namespace avenoir::daemon

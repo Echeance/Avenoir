@@ -11,7 +11,7 @@
 // Réglages modifiables depuis Avenoir (/reglages, /reglage) : ce qui se
 // décide sans terminal (testé à part). Les réglages sont scellés : c'est la
 // seule façon de les changer (docs/PROJECT.md § 5.1).
-namespace avenoir::cli {
+namespace avenoir::daemon {
 
 /// Module connu (découvert), pour `modules.<id>.enabled`.
 struct KnownModule {
@@ -54,4 +54,4 @@ struct SettingChange {
                                                          std::string_view value,
                                                          const std::vector<KnownModule>& modules);
 
-} // namespace avenoir::cli
+} // namespace avenoir::daemon

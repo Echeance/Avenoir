@@ -42,9 +42,11 @@ cmake --preset debug               # configuration (vcpkg en mode manifeste)
 cmake --build --preset debug       # build
 ctest --preset debug               # tests
 cmake --preset release && cmake --build --preset release   # exécutable `avenoir`
-./build/release/apps/cli/avenoir [chemin/config.toml]   # défaut : ~/.config/avenoir/config.toml
-AVENOIR_LOG=debug ./build/debug/apps/cli/avenoir
+./build/release/apps/cli/avenoir [chemin/config.toml]   # défaut : ~/.config/avenoir/config.toml ; lance le démon avenoird (à côté) au besoin
+AVENOIR_LOG=debug ./build/debug/apps/cli/avenoir   # logs du démon : logs/daemon.log du dossier de données
 ```
+
+La CLI est un client du **démon** `avenoird` (décision 53) : après une modification du démon, l'arrêter (`/arreter`) pour que la CLI lance le nouveau. Une configuration donnée en argument a son propre démon, arrêté avec la CLI ; le test de bout en bout fonctionne ainsi.
 
 Sans argument, Avenoir lit `~/.config/avenoir/config.toml` (`%APPDATA%\avenoir\config.toml`), créé au premier lancement par la création guidée ; **jamais** le dossier courant. Cette configuration est **scellée** (HMAC-SHA256, clé dans le trousseau ; docs/PROJECT.md § 5.1) : la modifier à la main est refusé et restauré. Un `config.toml` de développement à la racine du dépôt est ignoré par git, se passe en argument et n'est pas scellé (mode développement, signalé) ; partir de `config.example.toml`. Les essais du sceau se font dans des dossiers temporaires (`XDG_CONFIG_HOME`, `XDG_DATA_HOME`) : chaque fichier a sa propre clé, les vrais réglages ne sont pas touchés.
 
@@ -76,7 +78,7 @@ Une VM Windows 11 LTSC (conteneur podman `windows`, image `dockurr/windows`, 4 c
 - `modules/` : modules fournis avec Avenoir, programmes séparés (`modules/meteo/`) ; compilés dans `modules/` à côté de l'exécutable et livrés dans les archives de release.
 - `evals/` : banc d'essai avec de vrais modèles (`avenoir-evals`) : requêtes de référence (`requetes.toml`), doublures d'outils, rapports et comparaison dans `resultats/`. Jamais lancé par ctest ni la CI (il appelle un vrai LLM). **Modifier le prompt système ou la description d'un outil → repasser le banc** sur les modèles recommandés et noter le résultat dans `resultats/COMPARAISON.md`.
 
-Ces dossiers sont créés à leur étape de la roadmap. Existent aujourd'hui : `libs/core`, `libs/llm`, `libs/tools`, `libs/modules`, `libs/storage`, `libs/terminal`, `libs/ipc`, `apps/cli` (avec un test de bout en bout dans `apps/cli/tests/`), `modules/meteo` et `evals`. Comment le code s'articule : `docs/FONCTIONNEMENT.md` (à tenir à jour avec le code).
+Ces dossiers sont créés à leur étape de la roadmap. Existent aujourd'hui : `libs/core`, `libs/llm`, `libs/tools`, `libs/modules`, `libs/storage`, `libs/terminal`, `libs/ipc`, `apps/daemon` (démon `avenoird`), `apps/cli` (client du démon, avec un test de bout en bout dans `apps/cli/tests/`), `modules/meteo` et `evals`. Comment le code s'articule : `docs/FONCTIONNEMENT.md` (à tenir à jour avec le code).
 
 En-têtes publics dans `libs/<nom>/include/avenoir/<nom>/`, tests Catch2 dans `libs/<nom>/tests/`.
 

@@ -14,9 +14,9 @@
 #include "avenoir/core/tool.hpp"
 #include "avenoir/terminal/style.hpp"
 
-#include "display.hpp"
+#include "ui.hpp"
 
-namespace avenoir::cli {
+namespace avenoir::daemon {
 
 namespace {
 
@@ -190,7 +190,7 @@ void ModulesUi::print_risks() const {
     display().plain(gray("Changer : /risque <outil> <lecture | réversible | sensible | défaut>"));
 }
 
-void ModulesUi::risk(std::string_view argument, Prompt& prompt, storage::Store* store) {
+void ModulesUi::risk(std::string_view argument, storage::Store* store) {
     argument = trim(argument);
     if (argument.empty()) {
         print_risks();
@@ -244,8 +244,8 @@ void ModulesUi::risk(std::string_view argument, Prompt& prompt, storage::Store* 
                                         "confirmation."));
         }
         const auto answer =
-            prompt.read(std::format("  Pour confirmer, tapez « {} » : ", kAgreementPhrase), false);
-        if (answer.status != Prompt::Status::Line || trim(answer.text) != kAgreementPhrase) {
+            display().ask(std::format("  Pour confirmer, tapez « {} » :", kAgreementPhrase));
+        if (!answer || trim(*answer) != kAgreementPhrase) {
             display().info("Rien n'a été changé.");
             return;
         }
@@ -305,4 +305,4 @@ std::string ModulesUi::help() const {
     return out;
 }
 
-} // namespace avenoir::cli
+} // namespace avenoir::daemon

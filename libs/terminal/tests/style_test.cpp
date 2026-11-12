@@ -79,3 +79,12 @@ TEST_CASE("pixel art : demi-blocs, une ligne pour deux rangées de pixels", "[st
     CHECK(lines[0].find("▀") != std::string::npos);
     CHECK(lines[1].find("▀") != std::string::npos);
 }
+
+TEST_CASE("strip_styles : couleurs retirées, texte gardé", "[style]") {
+    set_enabled(true);
+    const std::string colored = paint("Réglages", {.color = Color::Cyan, .bold = true}) + " · ok";
+    CHECK(strip_styles(colored) == "Réglages · ok");
+    CHECK(strip_styles("sans couleur") == "sans couleur");
+    CHECK(strip_styles("\x1b[") == "");
+    set_enabled(false);
+}

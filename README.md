@@ -116,7 +116,7 @@ Au premier lancement, Avenoir **prépare la configuration avec vous** :
 - il propose aussi un serveur dont vous tapez l'adresse, Claude Code s'il est installé, et l'API Anthropic si `ANTHROPIC_API_KEY` est définie ;
 - vous choisissez vos modèles (ceux conseillés par le banc d'essai sont en tête), le modèle par défaut et, si vous le voulez, le mode « local uniquement » ; ou « aucun » : seule la voie rapide répond.
 
-Pour refaire ce choix plus tard (après avoir installé Ollama, par exemple) : `/configurer`. Les autres réglages sont gardés ; la nouvelle configuration s'applique au prochain lancement.
+Pour refaire ce choix plus tard (après avoir installé Ollama, par exemple) : `/configurer`. Les autres réglages sont gardés ; `/redemarrer` applique la nouvelle configuration.
 
 Un serveur trouvé sur le réseau n'est retenu que si vous déclarez que la machine est à vous : vos conversations y seront envoyées.
 
@@ -219,6 +219,8 @@ avenoir                      # configuration de l'utilisateur (créée au premie
 avenoir chemin/config.toml   # une autre configuration
 ```
 
+Avenoir tourne en arrière-plan : le **démon** `avenoird` garde l'agent, les modules, les conversations et les réglages ; la CLI n'en est qu'une interface. Au premier `avenoir`, la CLI lance le démon (une seule instance par utilisateur) ; `/quitter` ferme la CLI et le démon continue (modèle chargé, modules lancés : la fois suivante répond aussitôt) ; `/arreter` l'arrête. Une configuration donnée en argument a son démon à elle, arrêté avec la CLI. Seul votre compte peut parler au démon : socket Unix dans un dossier privé (Linux), tube nommé réservé à votre compte (Windows), identité vérifiée des deux côtés. Les journaux du démon sont dans `logs/daemon.log` du dossier de données.
+
 Écrivez simplement ce que vous voulez : *« quelle heure est-il ? »*, *« lance firefox »*, *« baisse le son »*, *« mets en pause »*, *« passe en mode sombre »*, *« va-t-il pleuvoir demain ? »*, *« décris mon ordinateur »*…
 
 Sous Linux, le contrôle du système s'appuie sur les programmes habituels du bureau : `wpctl` (ou `pactl`), `playerctl`, `brightnessctl`, `gsettings`, `loginctl`, `notify-send`. Un outil dont le programme manque n'est simplement pas proposé. Pour la recherche web, **podman** (ou docker) permet à Avenoir de lancer SearXNG en local ; sans lui, la recherche passe par DuckDuckGo.
@@ -235,8 +237,10 @@ Sous Linux, le contrôle du système s'appuie sur les programmes habituels du bu
 | `/raisonnement [niveau] [modèle]` | effort de réflexion du modèle : `aucun` (le plus rapide), `faible`, `moyen`, `élevé`, `défaut` ; appliqué tout de suite, sans recharger le modèle, et retenu (aussi : *« mets le raisonnement à élevé »*, *« désactive le raisonnement »*) |
 | `/memoire [nom]` | modèles chargés en mémoire et mémoire vidéo occupée (aussi : *« quels modèles sont chargés ? »*) ; un modèle chargé ou déchargé hors d'Avenoir (Ollama le décharge après 5 min d'inactivité) est annoncé, même pendant la saisie |
 | `/charger [nom]` · `/decharger [nom]` · `/recharger [nom]` | charger un modèle local en mémoire, le décharger (libère la mémoire vidéo, par exemple avant un jeu) ou le recharger ; le modèle actif par défaut (aussi : *« décharge le modèle »*, *« libère la carte graphique »*, *« allume le modèle gemma »*) |
-| `/reglages` · `/reglage <clé> <valeur>` | voir les réglages et leur valeur, en changer un (ex. `/reglage agent.local_only oui`) ; écrit par le sceau, noté au journal d'audit, appliqué au prochain lancement ; affaiblir la sécurité demande de taper « Je sais ce que je fais » |
-| `/configurer` | refaire la création guidée des modèles (recherche des serveurs, choix, « aucun ») ; les autres réglages sont gardés, le fichier réécrit après confirmation ; appliqué au prochain lancement |
+| `/reglages` · `/reglage <clé> <valeur>` | voir les réglages et leur valeur, en changer un (ex. `/reglage agent.local_only oui`) ; écrit par le sceau, noté au journal d'audit, appliqué par `/redemarrer` ; affaiblir la sécurité demande de taper « Je sais ce que je fais » |
+| `/configurer` | refaire la création guidée des modèles (recherche des serveurs, choix, « aucun ») ; les autres réglages sont gardés, le fichier réécrit après confirmation ; appliqué par `/redemarrer` |
+| `/redemarrer` | reconstruire Avenoir avec ses réglages actuels (modules relancés, modèle repris) |
+| `/arreter` | arrêter Avenoir (le démon), pas seulement cette fenêtre ; `/quitter` ou Ctrl+D ne ferment que la CLI |
 | `/nouvelle [titre]` | nouvelle conversation (l'ancienne reste dans `/conversations`) |
 | `/reset` | efface la conversation en cours (messages et écran) après confirmation, en proposant d'en garder une transcription Markdown (`/supprimer` la propose aussi) |
 | `/transcription` | enregistre la conversation en cours dans un fichier Markdown (`transcriptions/` du dossier de données) |

@@ -10,26 +10,26 @@
 #include "setup_plan.hpp"
 
 using namespace avenoir;
-using cli::SetupFindings;
+using daemon::SetupFindings;
 
 namespace {
 
-const core::OpenAiCompatibleConfig& openai(const cli::SetupCandidate& candidate) {
+const core::OpenAiCompatibleConfig& openai(const daemon::SetupCandidate& candidate) {
     return std::get<core::OpenAiCompatibleConfig>(candidate.model.config);
 }
 
 } // namespace
 
 TEST_CASE("model_name_for : nom de section valide et unique", "[setup]") {
-    CHECK(cli::model_name_for("gemma4:26b-a4b", {}) == "gemma4");
-    CHECK(cli::model_name_for("qwen3.8:27b-q4_K_M", {}) == "qwen3-8");
-    CHECK(cli::model_name_for("lmstudio-community/Mistral-7B.Q4", {}) == "mistral-7b-q4");
-    CHECK(cli::model_name_for("gemma4:e4b", {"gemma4"}) == "gemma4-2");
-    CHECK(cli::model_name_for("gemma4:2b", {"gemma4", "gemma4-2"}) == "gemma4-3");
-    CHECK(cli::model_name_for("Модель", {}) == "modele");
-    CHECK(cli::model_name_for(std::string(80, 'a'), {}).size() <= 32);
+    CHECK(daemon::model_name_for("gemma4:26b-a4b", {}) == "gemma4");
+    CHECK(daemon::model_name_for("qwen3.8:27b-q4_K_M", {}) == "qwen3-8");
+    CHECK(daemon::model_name_for("lmstudio-community/Mistral-7B.Q4", {}) == "mistral-7b-q4");
+    CHECK(daemon::model_name_for("gemma4:e4b", {"gemma4"}) == "gemma4-2");
+    CHECK(daemon::model_name_for("gemma4:2b", {"gemma4", "gemma4-2"}) == "gemma4-3");
+    CHECK(daemon::model_name_for("Модель", {}) == "modele");
+    CHECK(daemon::model_name_for(std::string(80, 'a'), {}).size() <= 32);
     // Toujours accepté par l'analyse de la configuration.
-    const auto parsed = core::parse_config("[models." + cli::model_name_for("Ünï code:1", {}) +
+    const auto parsed = core::parse_config("[models." + daemon::model_name_for("Ünï code:1", {}) +
                                            "]\nprovider = \"claude_code\"\n");
     CHECK(parsed.has_value());
 }
@@ -44,7 +44,7 @@ TEST_CASE("make_candidates : conseillés d'abord, distants à la fin", "[setup]"
     findings.claude_code = true;
     findings.anthropic_key = true;
 
-    const auto candidates = cli::make_candidates(findings, /*local_only=*/false);
+    const auto candidates = daemon::make_candidates(findings, /*local_only=*/false);
     REQUIRE(candidates.size() == 6);
     CHECK(openai(candidates[0]).model == "gemma4:26b-a4b");
     CHECK(candidates[0].recommended);
@@ -63,7 +63,7 @@ TEST_CASE("make_candidates : conseillés d'abord, distants à la fin", "[setup]"
     CHECK(std::holds_alternative<core::AnthropicConfig>(candidates[5].model.config));
     CHECK(candidates[5].remote);
 
-    const auto local = cli::make_candidates(findings, /*local_only=*/true);
+    const auto local = daemon::make_candidates(findings, /*local_only=*/true);
     CHECK(local.size() == 4);
     for (const auto& candidate : local) {
         CHECK_FALSE(candidate.remote);
@@ -74,32 +74,32 @@ TEST_CASE("make_candidates : serveur saisi mais pas à soi, tenu pour distant", 
     SetupFindings findings;
     findings.remote_servers.push_back(
         {.base_url = "https://llm.exemple.org/v1", .models = {"mistral-large"}});
-    const auto candidates = cli::make_candidates(findings, false);
+    const auto candidates = daemon::make_candidates(findings, false);
     REQUIRE(candidates.size() == 1);
     CHECK(candidates[0].remote);
     CHECK_FALSE(candidates[0].model.local.has_value());
-    CHECK(cli::make_candidates(findings, true).empty());
+    CHECK(daemon::make_candidates(findings, true).empty());
 }
 
 TEST_CASE("parse_selection", "[setup]") {
     using List = std::vector<std::size_t>;
-    CHECK(cli::parse_selection("1", 3) == List{0});
-    CHECK(cli::parse_selection("3 1", 3) == List{2, 0});
-    CHECK(cli::parse_selection("2,3, 2", 3) == List{1, 2});
-    CHECK_FALSE(cli::parse_selection("", 3).has_value());
-    CHECK_FALSE(cli::parse_selection("0", 3).has_value());
-    CHECK_FALSE(cli::parse_selection("4", 3).has_value());
-    CHECK_FALSE(cli::parse_selection("1 a", 3).has_value());
-    CHECK_FALSE(cli::parse_selection("-1", 3).has_value());
-    CHECK_FALSE(cli::parse_selection("99999999999999999999999", 3).has_value());
+    CHECK(daemon::parse_selection("1", 3) == List{0});
+    CHECK(daemon::parse_selection("3 1", 3) == List{2, 0});
+    CHECK(daemon::parse_selection("2,3, 2", 3) == List{1, 2});
+    CHECK_FALSE(daemon::parse_selection("", 3).has_value());
+    CHECK_FALSE(daemon::parse_selection("0", 3).has_value());
+    CHECK_FALSE(daemon::parse_selection("4", 3).has_value());
+    CHECK_FALSE(daemon::parse_selection("1 a", 3).has_value());
+    CHECK_FALSE(daemon::parse_selection("-1", 3).has_value());
+    CHECK_FALSE(daemon::parse_selection("99999999999999999999999", 3).has_value());
 }
 
 TEST_CASE("build_setup_config : relu à l'identique", "[setup]") {
     SetupFindings findings;
     findings.local_servers.push_back(
         {.base_url = "http://127.0.0.1:11434/v1", .models = {"gemma4:26b-a4b", "ministral-3:8b"}});
-    const auto candidates = cli::make_candidates(findings, false);
-    const auto config = cli::build_setup_config({candidates[1], candidates[0]}, true);
+    const auto candidates = daemon::make_candidates(findings, false);
+    const auto config = daemon::build_setup_config({candidates[1], candidates[0]}, true);
     REQUIRE(config.models.size() == 2);
     CHECK(config.models[0].name == "ministral-3");
     CHECK(config.agent.local_only);
@@ -109,14 +109,15 @@ TEST_CASE("build_setup_config : relu à l'identique", "[setup]") {
 }
 
 TEST_CASE("normalize_server_url", "[setup]") {
-    CHECK(cli::normalize_server_url("http://192.168.1.20:11434") == "http://192.168.1.20:11434/v1");
-    CHECK(cli::normalize_server_url(" http://pc:1234/v1/ ") == "http://pc:1234/v1");
-    CHECK(cli::normalize_server_url("https://llm.exemple.org") == "https://llm.exemple.org/v1");
-    CHECK_FALSE(cli::normalize_server_url("ftp://pc:21").has_value());
-    CHECK_FALSE(cli::normalize_server_url("pc:11434").has_value());
-    CHECK_FALSE(cli::normalize_server_url("http://moi:secret@pc:11434").has_value());
-    CHECK_FALSE(cli::normalize_server_url("http://pc:11434/v1\x1b[2J").has_value());
-    CHECK_FALSE(cli::normalize_server_url("http://p c:1").has_value());
+    CHECK(daemon::normalize_server_url("http://192.168.1.20:11434") ==
+          "http://192.168.1.20:11434/v1");
+    CHECK(daemon::normalize_server_url(" http://pc:1234/v1/ ") == "http://pc:1234/v1");
+    CHECK(daemon::normalize_server_url("https://llm.exemple.org") == "https://llm.exemple.org/v1");
+    CHECK_FALSE(daemon::normalize_server_url("ftp://pc:21").has_value());
+    CHECK_FALSE(daemon::normalize_server_url("pc:11434").has_value());
+    CHECK_FALSE(daemon::normalize_server_url("http://moi:secret@pc:11434").has_value());
+    CHECK_FALSE(daemon::normalize_server_url("http://pc:11434/v1\x1b[2J").has_value());
+    CHECK_FALSE(daemon::normalize_server_url("http://p c:1").has_value());
 }
 
 TEST_CASE("build_setup_config : les autres réglages de la base sont gardés", "[setup]") {
@@ -128,7 +129,7 @@ TEST_CASE("build_setup_config : les autres réglages de la base sont gardés", "
     base.modules["meteo"].enabled = false;
     base.agent.max_steps = 3;
 
-    const auto none = cli::build_setup_config({}, /*local_only=*/true, base);
+    const auto none = daemon::build_setup_config({}, /*local_only=*/true, base);
     CHECK(none.models.empty()); // « aucun » : voie rapide seule
     CHECK(none.agent.local_only);
     CHECK(none.agent.max_steps == 3);

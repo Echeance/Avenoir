@@ -371,4 +371,23 @@ std::string risk_badge(core::RiskLevel risk) {
     return "inconnu";
 }
 
+std::string strip_styles(std::string_view text) {
+    std::string out;
+    out.reserve(text.size());
+    for (std::size_t i = 0; i < text.size(); ++i) {
+        if (text[i] == '\x1b' && i + 1 < text.size() && text[i + 1] == '[') {
+            std::size_t end = i + 2;
+            // Jusqu'à la lettre finale (0x40 à 0x7E).
+            while (end < text.size() && (static_cast<unsigned char>(text[end]) < 0x40U ||
+                                         static_cast<unsigned char>(text[end]) > 0x7EU)) {
+                ++end;
+            }
+            i = end; // la lettre finale est sautée aussi
+            continue;
+        }
+        out += text[i];
+    }
+    return out;
+}
+
 } // namespace avenoir::terminal

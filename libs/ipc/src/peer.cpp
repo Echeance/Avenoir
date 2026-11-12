@@ -119,7 +119,8 @@ core::Result<void> Peer::send(const json& message) {
     return connection_->write_line(message.dump(-1, ' ', false, json::error_handler_t::replace));
 }
 
-core::Result<json> Peer::call(std::string_view method, json params, const std::stop_token& stop) {
+core::Result<json> Peer::call(std::string_view method, json params, const std::stop_token& stop,
+                              OnStop on_stop) {
     std::int64_t id = 0;
     std::future<core::Result<json>> answer;
     {
@@ -135,15 +136,18 @@ core::Result<json> Peer::call(std::string_view method, json params, const std::s
         pending_.erase(id);
         return std::unexpected(std::move(sent.error()));
     }
+    bool cancel_sent = false;
     while (answer.wait_for(kPoll) != std::future_status::ready) {
-        if (stop.stop_requested()) {
-            {
-                const std::scoped_lock lock(mutex_);
-                pending_.erase(id);
-            }
-            if (auto sent = notify(kCancelMethod, {{"id", id}}); !sent) {
-                spdlog::debug("annulation non transmise : {}", sent.error().message);
-            }
+        if (!stop.stop_requested() || cancel_sent) {
+            continue;
+        }
+        if (auto sent = notify(kCancelMethod, {{"id", id}}); !sent) {
+            spdlog::debug("annulation non transmise : {}", sent.error().message);
+        }
+        cancel_sent = true;
+        if (on_stop == OnStop::Abandon) {
+            const std::scoped_lock lock(mutex_);
+            pending_.erase(id);
             return core::make_error(core::ErrorCode::Cancelled, {});
         }
     }

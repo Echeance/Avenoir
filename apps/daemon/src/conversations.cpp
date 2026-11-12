@@ -23,7 +23,7 @@
 #include "avenoir/storage/transcript.hpp"
 #include "avenoir/terminal/style.hpp"
 
-namespace avenoir::cli {
+namespace avenoir::daemon {
 
 namespace {
 
@@ -58,9 +58,8 @@ flatten(core::Result<std::optional<storage::ConversationInfo>> result) {
 
 } // namespace
 
-Conversations::Conversations(std::optional<storage::Store> store, core::Agent& agent,
-                             Prompt& prompt)
-    : store_(std::move(store)), agent_(&agent), prompt_(&prompt) {}
+Conversations::Conversations(std::optional<storage::Store> store, core::Agent& agent)
+    : store_(std::move(store)), agent_(&agent) {}
 
 void Conversations::resume() {
     if (!store_) {
@@ -74,7 +73,7 @@ void Conversations::resume() {
 }
 
 void Conversations::show_recent() {
-    print_messages(agent_->history(), kResumeMessages);
+    display().messages(agent_->history(), kResumeMessages);
 }
 
 void Conversations::switch_to(const storage::ConversationInfo& conversation, bool show) {
@@ -90,7 +89,7 @@ void Conversations::switch_to(const storage::ConversationInfo& conversation, boo
     title_ = conversation.title;
     auto_title_ = conversation.message_count == 0 && conversation.title == kDefaultTitle;
     if (show) {
-        print_messages(*messages, kResumeMessages);
+        display().messages(*messages, kResumeMessages);
     }
     agent_->load_history(std::move(*messages));
 }
@@ -185,12 +184,12 @@ std::optional<Conversations::Cleared> Conversations::clear() {
     const std::span<const core::Message> messages = agent_->history();
     Cleared cleared;
     if (!messages.empty()) {
-        if (!prompt_->ask_yes_no(std::format("Effacer les {} message(s) de « {} » ? [o/N] ",
-                                             messages.size(), title_))) {
+        if (!display().ask_yes_no(std::format("Effacer les {} message(s) de « {} » ? [o/N] ",
+                                              messages.size(), title_))) {
             display().info("Rien n'a été effacé.");
             return std::nullopt;
         }
-        if (prompt_->ask_yes_no("En garder une transcription (fichier Markdown) ? [o/N] ")) {
+        if (display().ask_yes_no("En garder une transcription (fichier Markdown) ? [o/N] ")) {
             auto written = write_transcript(current_, title_, messages);
             if (!written) {
                 display().error(std::format("transcription impossible ({}) : rien n'a été effacé",
@@ -290,13 +289,13 @@ void Conversations::remove(std::string_view target) {
     }
     const std::string question = std::format("Supprimer « {} » et ses {} message(s) ? [o/N] ",
                                              conversation->title, conversation->message_count);
-    if (!prompt_->ask_yes_no(question)) {
+    if (!display().ask_yes_no(question)) {
         display().info("Rien n'a été supprimé.");
         return;
     }
     std::optional<std::filesystem::path> transcript;
     if (conversation->message_count > 0 &&
-        prompt_->ask_yes_no("En garder une transcription (fichier Markdown) ? [o/N] ")) {
+        display().ask_yes_no("En garder une transcription (fichier Markdown) ? [o/N] ")) {
         // Conversation en cours : l'historique de l'agent ; sinon, la base.
         std::vector<core::Message> stored;
         std::span<const core::Message> messages = agent_->history();
@@ -354,7 +353,7 @@ void Conversations::transcribe() const {
 }
 
 void Conversations::show_history() {
-    print_messages(agent_->history(), std::nullopt);
+    display().messages(agent_->history(), std::nullopt);
 }
 
 std::string Conversations::describe_current() const {
@@ -392,4 +391,4 @@ void Conversations::record_removal() {
     }
 }
 
-} // namespace avenoir::cli
+} // namespace avenoir::daemon

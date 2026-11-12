@@ -1,18 +1,15 @@
 #include "setup.hpp"
 
 #include <algorithm>
-#include <atomic>
 #include <chrono>
 #include <cstddef>
 #include <filesystem>
 #include <format>
-#include <iostream>
 #include <optional>
 #include <stop_token>
 #include <string>
 #include <string_view>
 #include <system_error>
-#include <thread>
 #include <utility>
 #include <vector>
 
@@ -20,30 +17,17 @@
 #include "avenoir/core/env.hpp"
 #include "avenoir/llm/discovery.hpp"
 
-#include "console.hpp"
 #include "conversations.hpp"
-#include "display.hpp"
 #include "setup_plan.hpp"
+#include "ui.hpp"
 
-namespace avenoir::cli {
+namespace avenoir::daemon {
 
 namespace {
 
 /// Délai pour un serveur dont l'adresse a été saisie : il peut être loin.
 constexpr std::chrono::seconds kTypedServerTimeout{5};
 constexpr std::size_t kShownModels = 4;
-
-/// Saisie au premier lancement, avant la barre de saisie : ligne de l'entrée
-/// standard ; rien en fin de saisie (Ctrl+D, entrée fermée).
-std::optional<std::string> ask_terminal(const std::string& question) {
-    display().question(question);
-    std::string answer;
-    if (!std::getline(std::cin, answer)) {
-        display().plain("");
-        return std::nullopt;
-    }
-    return answer;
-}
 
 /// Une ligne saisie, sans espaces en fin ; rien si l'utilisateur abandonne.
 std::optional<std::string> ask(const SetupAsk& io, std::string_view question) {
@@ -114,30 +98,20 @@ std::string models_summary(const std::vector<std::string>& models) {
     return text;
 }
 
-/// Sondage du réseau local, interrompu par Ctrl+C.
-std::vector<llm::DiscoveredServer> scan_network(const std::vector<std::string>& hosts) {
-    std::vector<llm::DiscoveredServer> servers;
-    std::atomic<bool> done{false};
-    std::jthread scan([&servers, &hosts, &done](const std::stop_token& stop) {
-        servers = llm::discover_servers(hosts, stop);
-        done = true;
-    });
-    (void)take_interrupt();
-    while (!done) {
-        std::this_thread::sleep_for(std::chrono::milliseconds{100});
-        if (take_interrupt()) {
-            scan.request_stop();
-            display().info("Recherche sur le réseau arrêtée.");
-            break;
-        }
+/// Sondage du réseau local, interrompu si la requête l'est (Ctrl+C).
+std::vector<llm::DiscoveredServer> scan_network(const std::vector<std::string>& hosts,
+                                                const std::stop_token& stop) {
+    auto servers = llm::discover_servers(hosts, stop);
+    if (stop.stop_requested()) {
+        display().info("Recherche sur le réseau arrêtée.");
     }
-    scan.join(); // `servers` n'est lu qu'une fois le fil terminé
     return servers;
 }
 
 /// Serveurs du réseau local, chacun retenu seulement si l'utilisateur le
 /// déclare à lui. Rien en fin de saisie.
-std::optional<std::vector<llm::DiscoveredServer>> find_network_servers(const SetupAsk& io) {
+std::optional<std::vector<llm::DiscoveredServer>>
+find_network_servers(const SetupAsk& io, const std::stop_token& stop) {
     std::vector<llm::DiscoveredServer> owned;
     const auto address = llm::local_network_address();
     if (!address) {
@@ -158,7 +132,7 @@ std::optional<std::vector<llm::DiscoveredServer>> find_network_servers(const Set
         return owned;
     }
     display().info("Recherche sur le réseau… (quelques secondes, Ctrl+C pour arrêter)");
-    const auto found = scan_network(llm::subnet_neighbours(*address));
+    const auto found = scan_network(llm::subnet_neighbours(*address), stop);
     if (found.empty()) {
         display().info("Aucun serveur de modèles trouvé sur le réseau.");
     }
@@ -290,7 +264,8 @@ std::optional<SetupResult> without_models(const std::filesystem::path& path,
 } // namespace
 
 std::optional<SetupResult> run_setup(const std::filesystem::path& path, const core::AppConfig& base,
-                                     const SetupAsk& io, const SaveSettings& writer) {
+                                     const SetupAsk& io, const SaveSettings& writer,
+                                     const std::stop_token& stop) {
     display().info("Recherche des modèles sur cette machine…");
     SetupFindings findings;
     findings.local_servers = llm::discover_local_servers();
@@ -298,7 +273,7 @@ std::optional<SetupResult> run_setup(const std::filesystem::path& path, const co
         display().info(
             std::format("Trouvé : {} ({}).", server.base_url, models_summary(server.models)));
     }
-    auto network = find_network_servers(io);
+    auto network = find_network_servers(io, stop);
     if (!network) {
         return std::nullopt;
     }
@@ -375,14 +350,16 @@ std::optional<SetupResult> run_setup(const std::filesystem::path& path, const co
 }
 
 std::optional<core::AppConfig> run_first_setup(const std::filesystem::path& path,
-                                               const SaveSettings& writer) {
+                                               const SaveSettings& writer,
+                                               const std::stop_token& stop) {
     display().info(
         std::format("Première utilisation : préparons la configuration ({}).", utf8_path(path)));
-    auto result = run_setup(path, core::AppConfig{}, ask_terminal, writer);
+    const SetupAsk ask = [](const std::string& question) { return display().ask(question); };
+    auto result = run_setup(path, core::AppConfig{}, ask, writer, stop);
     if (!result) {
         return std::nullopt;
     }
     return std::move(result->config);
 }
 
-} // namespace avenoir::cli
+} // namespace avenoir::daemon
