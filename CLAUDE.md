@@ -71,6 +71,7 @@ Une VM Windows 11 LTSC (conteneur podman `windows`, image `dockurr/windows`, 4 c
 - `libs/storage` : conversations et journal (SQLite) ; chaque message est écrit immédiatement.
 - `libs/terminal` : rendu dans le terminal (couleurs, cadres, Markdown) ; dans la CLI, **toute sortie passe par le module d'affichage** (`apps/cli/src/display.*`), jamais par `std::print` direct, pour respecter le verrou de la toupie et `NO_COLOR`.
 - `libs/ipc` : protocole et transport démon ↔ interfaces.
+- `libs/agents` : orchestrateur multi-agents (plan de tâches, exécution parallèle, outil `delegate_tasks`) ; ne dépend que de `libs/core`.
 - `libs/voice` : interfaces voix.
 - `apps/cli` : interface texte (exécutable `avenoir`) ; `apps/daemon` : démon résident ; `apps/ui` : hôte C++ des fenêtres (widget + application principale). Les applications de `apps/` assemblent le tout.
 - `ui/` : interface web en TypeScript strict ; ne parle qu'à l'hôte C++ des fenêtres.
@@ -78,7 +79,7 @@ Une VM Windows 11 LTSC (conteneur podman `windows`, image `dockurr/windows`, 4 c
 - `modules/` : modules fournis avec Avenoir, programmes séparés (`modules/meteo/`) ; compilés dans `modules/` à côté de l'exécutable et livrés dans les archives de release.
 - `evals/` : banc d'essai avec de vrais modèles (`avenoir-evals`) : requêtes de référence (`requetes.toml`), doublures d'outils, rapports et comparaison dans `resultats/`. Jamais lancé par ctest ni la CI (il appelle un vrai LLM). **Modifier le prompt système ou la description d'un outil → repasser le banc** sur les modèles recommandés et noter le résultat dans `resultats/COMPARAISON.md`.
 
-Ces dossiers sont créés à leur étape de la roadmap. Existent aujourd'hui : `libs/core`, `libs/llm`, `libs/tools`, `libs/modules`, `libs/storage`, `libs/terminal`, `libs/ipc`, `apps/daemon` (démon `avenoird`), `apps/cli` (client du démon, avec un test de bout en bout dans `apps/cli/tests/`), `modules/meteo` et `evals`. Comment le code s'articule : `docs/FONCTIONNEMENT.md` (à tenir à jour avec le code).
+Ces dossiers sont créés à leur étape de la roadmap. Existent aujourd'hui : `libs/core`, `libs/llm`, `libs/tools`, `libs/modules`, `libs/storage`, `libs/terminal`, `libs/ipc`, `libs/agents`, `apps/daemon` (démon `avenoird`), `apps/cli` (client du démon, avec un test de bout en bout dans `apps/cli/tests/`), `modules/meteo` et `evals`. Comment le code s'articule : `docs/FONCTIONNEMENT.md` (à tenir à jour avec le code).
 
 En-têtes publics dans `libs/<nom>/include/avenoir/<nom>/`, tests Catch2 dans `libs/<nom>/tests/`.
 

@@ -106,6 +106,9 @@ class RemoteUi final : public Ui {
     ipc::Peer* peer_;
     std::mutex mutex_;
     bool streamed_ = false;
+    /// Une question à la fois : des agents en parallèle peuvent en poser
+    /// ensemble, l'utilisateur y répond l'une après l'autre.
+    std::mutex question_mutex_;
 };
 
 /// Hors requête : messages à tous les clients connectés (« notify »), ou au

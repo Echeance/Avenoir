@@ -225,6 +225,10 @@ Avenoir tourne en arrière-plan : le **démon** `avenoird` garde l'agent, les mo
 
 Sous Linux, le contrôle du système s'appuie sur les programmes habituels du bureau : `wpctl` (ou `pactl`), `playerctl`, `brightnessctl`, `gsettings`, `loginctl`, `notify-send`. Un outil dont le programme manque n'est simplement pas proposé. Pour la recherche web, **podman** (ou docker) permet à Avenoir de lancer SearXNG en local ; sans lui, la recherche passe par DuckDuckGo.
 
+### Équipe d'agents
+
+Pour une demande longue ou en plusieurs parties (*« compare ces trois offres et prépare une lettre pour la meilleure »*, *« compare la météo de demain à Lyon et à Brest »*), Avenoir peut **confier le travail à une équipe d'agents** qui travaillent en parallèle, chacun avec son rôle, son modèle et seulement les outils de sa tâche ; une tâche peut attendre le résultat d'une autre. Sans configuration, Avenoir crée les agents d'une demande ; vous pouvez aussi composer votre équipe (`/agents`, `/agent …`, ou `[agents.<nom>]` dans `config.example.toml`). Les mêmes protections valent pour chaque agent : ses actions passent par les permissions, les confirmations vous sont toujours demandées (une à la fois), le journal d'audit note l'agent qui a agi, un modèle distant pour un agent se confirme (et reste interdit en mode « local uniquement »), et Ctrl+C arrête toute l'équipe.
+
 ### Commandes
 
 | Commande | Effet |
@@ -239,6 +243,7 @@ Sous Linux, le contrôle du système s'appuie sur les programmes habituels du bu
 | `/charger [nom]` · `/decharger [nom]` · `/recharger [nom]` | charger un modèle local en mémoire, le décharger (libère la mémoire vidéo, par exemple avant un jeu) ou le recharger ; le modèle actif par défaut (aussi : *« décharge le modèle »*, *« libère la carte graphique »*, *« allume le modèle gemma »*) |
 | `/reglages` · `/reglage <clé> <valeur>` | voir les réglages et leur valeur, en changer un (ex. `/reglage agent.local_only oui`) ; écrit par le sceau, noté au journal d'audit, appliqué par `/redemarrer` ; affaiblir la sécurité demande de taper « Je sais ce que je fais » |
 | `/configurer` | refaire la création guidée des modèles (recherche des serveurs, choix, « aucun ») ; les autres réglages sont gardés, le fichier réécrit après confirmation ; appliqué par `/redemarrer` |
+| `/agents` · `/agent …` | l'équipe d'agents ; la composer : `/agent ajouter chercheur chercheur web`, `/agent outils chercheur web_search,read_webpage`, `/agent modele chercheur gemma`, `/agent consigne …`, `/agent supprimer …` (appliqué par `/redemarrer`) |
 | `/redemarrer` | reconstruire Avenoir avec ses réglages actuels (modules relancés, modèle repris) |
 | `/arreter` | arrêter Avenoir (le démon), pas seulement cette fenêtre ; `/quitter` ou Ctrl+D ne ferment que la CLI |
 | `/demarrage [oui\|non]` | lancer Avenoir à l'ouverture de session (unité systemd utilisateur liée à la session graphique, ou entrée « autostart » ; entrée « Run » du compte sous Windows), ou l'en retirer ; sans argument : l'état |

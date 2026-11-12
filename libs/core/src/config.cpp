@@ -395,6 +395,139 @@ Result<WebConfig> parse_web(const toml::table& web) {
     return config;
 }
 
+// ─── [orchestration] et [agents.<nom>] ──────────────────────────────────────
+
+Result<OrchestrationConfig> parse_orchestration(const toml::table& table) {
+    constexpr std::string_view kSection = "orchestration";
+    auto enabled = optional_value<bool>(table, kSection, "enabled");
+    auto mode = optional_value<std::string>(table, kSection, "mode");
+    auto tasks = optional_integer(table, kSection, "max_tasks", 1, 50);
+    auto agents = optional_integer(table, kSection, "max_agents", 1, 20);
+    auto parallel = optional_integer(table, kSection, "max_parallel", 1, 8);
+    if (auto error = first_error(enabled, mode, tasks, agents, parallel)) {
+        return std::unexpected(std::move(*error));
+    }
+    OrchestrationConfig config;
+    config.enabled = enabled->value_or(config.enabled);
+    if (mode->has_value()) {
+        if (**mode != "auto" && **mode != "configured" && **mode != "both") {
+            return config_error("orchestration.mode",
+                                "« auto », « configured » ou « both » attendu");
+        }
+        config.mode = **mode;
+    }
+    if (tasks->has_value()) {
+        config.max_tasks = static_cast<std::size_t>(**tasks);
+    }
+    if (agents->has_value()) {
+        config.max_agents = static_cast<std::size_t>(**agents);
+    }
+    if (parallel->has_value()) {
+        config.max_parallel = static_cast<std::size_t>(**parallel);
+    }
+    return config;
+}
+
+/// Nom d'agent : minuscules ASCII, chiffres, « - » et « _ » (40 au plus).
+bool is_valid_agent_name(std::string_view name) {
+    return !name.empty() && name.size() <= 40 && std::ranges::all_of(name, [](char c) {
+        return (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '-' || c == '_';
+    });
+}
+
+Result<AgentProfile> parse_agent_profile(const toml::table& table, const std::string& name,
+                                         const std::vector<NamedLlm>& models) {
+    const std::string section = "agents." + name;
+    for (const auto& [key, value] : table) {
+        const auto k = key.str();
+        if (k != "role" && k != "instructions" && k != "model" && k != "tools" &&
+            k != "max_steps") {
+            return config_error(key_path(section, k),
+                                "clé inconnue (role, instructions, model, tools, max_steps)");
+        }
+    }
+    if (!is_valid_agent_name(name)) {
+        return config_error(section, "nom invalide (minuscules, chiffres, - et _)");
+    }
+    auto role = required_value<std::string>(table, section, "role");
+    auto instructions = optional_value<std::string>(table, section, "instructions");
+    auto model = optional_value<std::string>(table, section, "model");
+    auto steps = optional_integer(table, section, "max_steps", 1, 20);
+    if (auto error = first_error(role, instructions, model, steps)) {
+        return std::unexpected(std::move(*error));
+    }
+    AgentProfile profile;
+    profile.name = name;
+    profile.role = std::move(*role);
+    profile.instructions = instructions->value_or("");
+    if (model->has_value()) {
+        if (std::ranges::none_of(models,
+                                 [&](const NamedLlm& llm) { return llm.name == **model; })) {
+            return config_error(key_path(section, "model"),
+                                "modèle inconnu « " + **model + " » (voir [models.<nom>])");
+        }
+        profile.model = std::move(**model);
+    }
+    if (steps->has_value()) {
+        profile.max_steps = static_cast<std::size_t>(**steps);
+    }
+    if (const toml::node* tools = table.get("tools")) {
+        const auto* list = tools->as_array();
+        if (list == nullptr) {
+            return config_error(key_path(section, "tools"), "liste de noms d'outils attendue");
+        }
+        for (const auto& item : *list) {
+            const auto tool = item.value<std::string>();
+            if (!tool || !is_valid_tool_name(*tool)) {
+                return config_error(key_path(section, "tools"), "nom d'outil invalide");
+            }
+            if (!std::ranges::contains(profile.tools, *tool)) {
+                profile.tools.push_back(*tool);
+            }
+        }
+    }
+    return profile;
+}
+
+/// `[agents.<nom>]`, dans l'ordre du fichier.
+Result<std::vector<AgentProfile>> parse_agents(const toml::table& root,
+                                               const std::vector<NamedLlm>& models) {
+    std::vector<AgentProfile> agents;
+    std::vector<toml::source_index> lines;
+    auto table = optional_table(root, "agents");
+    if (!table) {
+        return std::unexpected(std::move(table.error()));
+    }
+    if (*table == nullptr) {
+        return agents;
+    }
+    for (const auto& [key, node] : **table) {
+        const std::string name(key.str());
+        const auto* agent = node.as_table();
+        if (agent == nullptr) {
+            return config_error("agents." + name, "une table est attendue ([agents." + name + "])");
+        }
+        auto profile = parse_agent_profile(*agent, name, models);
+        if (!profile) {
+            return std::unexpected(std::move(profile.error()));
+        }
+        agents.push_back(std::move(*profile));
+        lines.push_back(node.source().begin.line);
+    }
+    std::vector<std::size_t> order(agents.size());
+    for (std::size_t i = 0; i < order.size(); ++i) {
+        order[i] = i;
+    }
+    std::ranges::sort(order,
+                      [&lines](std::size_t a, std::size_t b) { return lines[a] < lines[b]; });
+    std::vector<AgentProfile> sorted;
+    sorted.reserve(agents.size());
+    for (const std::size_t i : order) {
+        sorted.push_back(std::move(agents[i]));
+    }
+    return sorted;
+}
+
 } // namespace
 
 Result<AppConfig> parse_config(std::string_view toml_text) {
@@ -446,6 +579,22 @@ Result<AppConfig> parse_config(std::string_view toml_text) {
         }
         config.web = std::move(*web);
     }
+    auto orchestration_table = optional_table(root, "orchestration");
+    if (!orchestration_table) {
+        return std::unexpected(std::move(orchestration_table.error()));
+    }
+    if (*orchestration_table != nullptr) {
+        auto orchestration = parse_orchestration(**orchestration_table);
+        if (!orchestration) {
+            return std::unexpected(std::move(orchestration.error()));
+        }
+        config.orchestration = std::move(*orchestration);
+    }
+    auto agents = parse_agents(root, config.models);
+    if (!agents) {
+        return std::unexpected(std::move(agents.error()));
+    }
+    config.agents = std::move(*agents);
     auto modules = parse_modules(root);
     if (!modules) {
         return std::unexpected(std::move(modules.error()));

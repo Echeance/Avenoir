@@ -271,3 +271,52 @@ TEST_CASE("default_config_path : dossier de configuration de l'utilisateur", "[c
     CHECK(path.parent_path().filename() == "avenoir");
     CHECK(path.is_absolute());
 }
+
+TEST_CASE("[agents.<nom>] et [orchestration] : lus dans l'ordre, relus à l'identique", "[config]") {
+    const auto config = parse_config(R"(
+[models.gemma]
+provider = "openai_compatible"
+base_url = "http://localhost:11434/v1"
+model = "gemma4:26b-a4b"
+
+[orchestration]
+mode = "configured"
+max_parallel = 2
+
+[agents.zeta-dev]
+role = "développeur"
+instructions = "Code en C++23."
+model = "gemma"
+tools = ["web_search", "read_webpage", "web_search"]
+max_steps = 12
+
+[agents.alpha]
+role = "relecteur"
+)");
+    REQUIRE(config.has_value());
+    REQUIRE(config->agents.size() == 2);
+    CHECK(config->agents[0].name == "zeta-dev"); // ordre du fichier
+    CHECK(config->agents[0].tools == std::vector<std::string>{"web_search", "read_webpage"});
+    CHECK(config->agents[0].model == "gemma");
+    CHECK(config->agents[0].max_steps == 12);
+    CHECK(config->agents[1].tools.empty());
+    CHECK(config->orchestration.mode == "configured");
+    CHECK(config->orchestration.max_parallel == 2);
+    CHECK(config->orchestration.max_tasks == 12);
+
+    const auto reread = parse_config(format_config(*config));
+    REQUIRE(reread.has_value());
+    CHECK(*reread == *config);
+}
+
+TEST_CASE("[agents.<nom>] : refus", "[config]") {
+    CHECK_FALSE(parse_config("[agents.a]\ninstructions = \"x\"\n").has_value()); // rôle manquant
+    CHECK_FALSE(parse_config("[agents.Grand]\nrole = \"x\"\n").has_value());     // nom invalide
+    CHECK_FALSE(parse_config("[agents.a]\nrole = \"x\"\nmodel = \"absent\"\n").has_value());
+    CHECK_FALSE(parse_config("[agents.a]\nrole = \"x\"\ntools = \"web_search\"\n").has_value());
+    CHECK_FALSE(parse_config("[agents.a]\nrole = \"x\"\ntools = [\"a b\"]\n").has_value());
+    CHECK_FALSE(parse_config("[agents.a]\nrole = \"x\"\ninconnue = 1\n").has_value());
+    CHECK_FALSE(parse_config("[agents.a]\nrole = \"x\"\nmax_steps = 0\n").has_value());
+    CHECK_FALSE(parse_config("[orchestration]\nmode = \"libre\"\n").has_value());
+    CHECK_FALSE(parse_config("[orchestration]\nmax_parallel = 99\n").has_value());
+}

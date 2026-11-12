@@ -142,6 +142,7 @@ bool RemoteUi::streamed() {
 }
 
 std::optional<std::string> RemoteUi::ask(std::string_view question) {
+    const std::scoped_lock lock(question_mutex_);
     auto answer = peer_->call("ask", {{"question", question}}, never());
     if (!answer || !answer->is_object() || !answer->contains("answer") ||
         !(*answer)["answer"].is_string()) {
@@ -151,6 +152,7 @@ std::optional<std::string> RemoteUi::ask(std::string_view question) {
 }
 
 bool RemoteUi::ask_yes_no(std::string_view question) {
+    const std::scoped_lock lock(question_mutex_);
     const auto answer = peer_->call("ask_yes_no", {{"question", question}}, never());
     return answer && answer->is_boolean() && answer->get<bool>();
 }
@@ -161,6 +163,7 @@ bool RemoteUi::confirm(const core::ToolSpec& spec, const core::ToolCall& call) {
                         {"description", spec.description},
                         {"risk", core::to_string(spec.risk)}}},
                       {"call", call_to_json(call)}};
+    const std::scoped_lock lock(question_mutex_);
     const auto answer = peer_->call("confirm", params, never());
     return answer && answer->is_boolean() && answer->get<bool>(); // client parti : refusé
 }

@@ -111,3 +111,23 @@ sensitive = "confirm"
 # # L'ABAISSER sous celui du manifeste se fait uniquement par la commande
 # # /risque (avertissement + saisie de « Je sais ce que je fais ») : une baisse
 # # écrite ici à la main est ignorée.
+
+# ─── Équipe d'agents (orchestrateur, docs/PROJECT.md § 2.11) ────────────────
+# Avenoir peut confier une demande longue à une équipe d'agents qui travaillent
+# en parallèle (outil delegate_tasks). Sans agent configuré, il crée au besoin
+# les agents d'une demande, avec seulement les outils nécessaires.
+# [orchestration]
+# enabled = true          # false : jamais d'équipe
+# mode = "both"           # auto (agents créés à la volée), configured (votre
+#                         # équipe seulement) ou both
+# max_tasks = 12          # tâches au plus par demande
+# max_agents = 6          # agents créés à la volée au plus par demande
+# max_parallel = 3        # tâches en même temps (un modèle local sert à tour de rôle)
+#
+# Votre équipe (aussi : /agent ajouter|outils|modele|consigne|etapes|supprimer).
+# [agents.chercheur]
+# role = "chercheur"
+# instructions = "Cite toujours tes sources."
+# model = "gemma"         # un [models.<nom>] ; absent : le modèle actif
+# tools = ["web_search", "read_webpage"]   # seulement ces outils
+# max_steps = 8

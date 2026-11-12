@@ -18,6 +18,7 @@ set_target_properties(avenoir_evals PROPERTIES OUTPUT_NAME avenoir-evals)
 avenoir_utf8_manifest(avenoir_evals)
 target_link_libraries(avenoir_evals PRIVATE
     avenoir_evals_core
+    avenoir::agents
     avenoir::llm
     avenoir::modules
     avenoir::tools

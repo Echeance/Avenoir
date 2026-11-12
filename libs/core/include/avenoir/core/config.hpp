@@ -117,6 +117,31 @@ struct WebConfig {
     bool operator==(const WebConfig&) const = default;
 };
 
+/// Agent de l'équipe de l'utilisateur (`[agents.<nom>]`, docs/PROJECT.md § 2.11).
+struct AgentProfile {
+    std::string name;                 ///< Minuscules, chiffres, « - » et « _ » (40 au plus).
+    std::string role;                 ///< « développeur », « relecteur »…
+    std::string instructions;         ///< Consigne propre à l'agent.
+    std::optional<std::string> model; ///< Un `[models.<nom>]` ; absent : le modèle actif.
+    std::vector<std::string> tools;   ///< Outils permis (noms exacts).
+    std::size_t max_steps = 8;
+
+    bool operator==(const AgentProfile&) const = default;
+};
+
+/// Orchestrateur multi-agents (`[orchestration]`).
+struct OrchestrationConfig {
+    bool enabled = true; ///< Faux : pas d'outil de délégation.
+    /// « auto » (agents créés à la volée), « configured » (équipe de
+    /// l'utilisateur seulement) ou « both ».
+    std::string mode = "both";
+    std::size_t max_tasks = 12;
+    std::size_t max_agents = 6;   ///< Agents créés à la volée par plan.
+    std::size_t max_parallel = 3; ///< Tâches en même temps.
+
+    bool operator==(const OrchestrationConfig&) const = default;
+};
+
 struct AppConfig {
     /// Modèles (`[models.<nom>]`), dans l'ordre du fichier : le premier sert
     /// par défaut. Aucun : pas de LLM, seule la voie rapide répond.
@@ -126,6 +151,9 @@ struct AppConfig {
     WebConfig web;
     /// Par identifiant de module.
     std::map<std::string, ModuleSettings, std::less<>> modules;
+    /// Équipe de l'utilisateur, dans l'ordre du fichier.
+    std::vector<AgentProfile> agents;
+    OrchestrationConfig orchestration;
 
     bool operator==(const AppConfig&) const = default;
 };

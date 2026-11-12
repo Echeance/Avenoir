@@ -197,6 +197,46 @@ void format_module(std::string& out, std::string_view id, const ModuleSettings& 
     }
 }
 
+std::string format_orchestration(const OrchestrationConfig& orchestration) {
+    const OrchestrationConfig defaults;
+    std::string body;
+    if (orchestration.enabled != defaults.enabled) {
+        line(body, "enabled", boolean(orchestration.enabled));
+    }
+    if (orchestration.mode != defaults.mode) {
+        line(body, "mode", toml_string(orchestration.mode));
+    }
+    if (orchestration.max_tasks != defaults.max_tasks) {
+        line(body, "max_tasks", std::to_string(orchestration.max_tasks));
+    }
+    if (orchestration.max_agents != defaults.max_agents) {
+        line(body, "max_agents", std::to_string(orchestration.max_agents));
+    }
+    if (orchestration.max_parallel != defaults.max_parallel) {
+        line(body, "max_parallel", std::to_string(orchestration.max_parallel));
+    }
+    return body;
+}
+
+void format_agent_profile(std::string& out, const AgentProfile& agent) {
+    out += std::format("\n[agents.{}]\n", key(agent.name));
+    line(out, "role", toml_string(agent.role));
+    if (!agent.instructions.empty()) {
+        line(out, "instructions", toml_string(agent.instructions));
+    }
+    if (agent.model) {
+        line(out, "model", toml_string(*agent.model));
+    }
+    std::string tools;
+    for (const auto& tool : agent.tools) {
+        tools += (tools.empty() ? "" : ", ") + toml_string(tool);
+    }
+    line(out, "tools", "[" + tools + "]");
+    if (agent.max_steps != AgentProfile{}.max_steps) {
+        line(out, "max_steps", std::to_string(agent.max_steps));
+    }
+}
+
 std::unexpected<Error> write_error(const std::filesystem::path& path, std::string_view what) {
     return make_error(ErrorCode::Config,
                       std::format("écriture impossible : {} ({})", path.string(), what));
@@ -236,6 +276,10 @@ std::string format_config(const AppConfig& config) {
     section(out, "web", format_web(config.web));
     for (const auto& [id, settings] : config.modules) {
         format_module(out, id, settings);
+    }
+    section(out, "orchestration", format_orchestration(config.orchestration));
+    for (const auto& agent : config.agents) {
+        format_agent_profile(out, agent);
     }
     return out;
 }

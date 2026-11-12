@@ -26,6 +26,7 @@
 
 #include <spdlog/spdlog.h>
 
+#include "avenoir/agents/delegate.hpp"
 #include "avenoir/core/agent.hpp"
 #include "avenoir/core/claims.hpp"
 #include "avenoir/core/config.hpp"
@@ -236,6 +237,22 @@ core::Result<std::vector<core::ToolSpec>> real_specs(const core::AppConfig& conf
         if (auto added = registry.add(std::move(tool)); !added) {
             return std::unexpected(std::move(added.error()));
         }
+    }
+    // Délégation à une équipe d'agents (orchestrateur) : décrite comme dans
+    // Avenoir, sans agent configuré (agents créés à la volée).
+    agents::DelegateOptions delegate;
+    delegate.allowed_tools = [specs = registry.specs()] {
+        std::vector<std::string> names;
+        for (const auto& spec : specs) {
+            if (spec.name != "switch_llm" && spec.name != "load_llm" && spec.name != "unload_llm" &&
+                spec.name != "set_reasoning" && spec.name != "set_search_engine") {
+                names.push_back(spec.name);
+            }
+        }
+        return names;
+    };
+    if (auto added = registry.add(agents::make_delegate_tool(std::move(delegate))); !added) {
+        return std::unexpected(std::move(added.error()));
     }
     return registry.specs();
 }

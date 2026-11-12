@@ -111,6 +111,9 @@ struct AgentOptions {
     std::string system_prompt{kDefaultSystemPrompt};
     std::size_t max_steps = 10;       ///< Allers-retours LLM ↔ outils maximum par requête (≥ 1).
     std::optional<FastRouter> router; ///< Voie rapide ; absente = tout passe par le LLM.
+    /// Agent d'une équipe (docs/PROJECT.md § 2.11) ; vide pour Avenoir
+    /// lui-même. Noté au journal d'audit devant chaque action.
+    std::string name;
 };
 
 /// Boucle agent : le LLM choisit des outils, l'agent les exécute après
@@ -201,6 +204,8 @@ class Agent {
     [[nodiscard]] std::vector<UndoOutcome> undo_last();
 
   private:
+    /// « agent X : » devant les lignes du journal d'audit (vide pour Avenoir).
+    [[nodiscard]] std::string audit_prefix() const;
     /// Premier problème trouvé par les vérifications de réponse, ou rien.
     [[nodiscard]] std::optional<ReplyIssue> check_reply(std::string_view reply,
                                                         std::span<const ToolCall> calls) const;

@@ -272,21 +272,21 @@ Agent::Execution Agent::execute(const ToolCall& call, const std::stop_token& sto
     case Policy::Allow:
         break;
     case Policy::Deny:
-        audit()->info("refusé par la politique : {}", call.name);
+        audit()->info("{}refusé par la politique : {}", audit_prefix(), call.name);
         return {.content = "Action refusée par la politique de sécurité.", .is_error = true};
     case Policy::Confirm:
         if (confirmer_ == nullptr || confirmer_->confirm(spec, call) == Decision::Rejected) {
-            audit()->info("refusé par l'utilisateur : {}", call.name);
+            audit()->info("{}refusé par l'utilisateur : {}", audit_prefix(), call.name);
             return {.content = "L'utilisateur a refusé cette action.", .is_error = true};
         }
         break;
     }
 
-    audit()->info("exécution : {} {}", call.name, call.arguments.dump());
+    audit()->info("{}exécution : {} {}", audit_prefix(), call.name, call.arguments.dump());
     auto output = tool->call(call.arguments, stop);
     if (!output) {
         std::string message = describe(output.error());
-        audit()->warn("échec : {} : {}", call.name, message);
+        audit()->warn("{}échec : {} : {}", audit_prefix(), call.name, message);
         return {.content = std::move(message), .is_error = true};
     }
     // Journal d'annulation : seules les actions à effet de bord y figurent.
@@ -347,20 +347,25 @@ std::vector<UndoOutcome> Agent::undo_last() {
             continue;
         }
         const std::string& description = action.undo->description;
-        audit()->info("annulation : {} ({})", description, action.tool);
+        audit()->info("{}annulation : {} ({})", audit_prefix(), description, action.tool);
         auto result = action.undo->run();
         if (result) {
             outcomes.push_back(
                 {.description = description, .succeeded = true, .message = result->content});
         } else {
             std::string message = describe(result.error());
-            audit()->warn("échec de l'annulation : {} : {}", description, message);
+            audit()->warn("{}échec de l'annulation : {} : {}", audit_prefix(), description,
+                          message);
             outcomes.push_back(
                 {.description = description, .succeeded = false, .message = std::move(message)});
         }
     }
     journals_.erase(std::next(it).base());
     return outcomes;
+}
+
+std::string Agent::audit_prefix() const {
+    return options_.name.empty() ? std::string{} : "agent " + options_.name + " : ";
 }
 
 } // namespace avenoir::core

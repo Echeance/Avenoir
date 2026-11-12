@@ -15,11 +15,12 @@ Plateformes : **Linux** et **Windows** (sauf mention contraire).
 7. [Modules](#7-modules)
 8. [Module météo](#8-module-météo)
 9. [Démon et IPC](#9-démon-et-ipc)
-10. [Interface en ligne de commande](#10-interface-en-ligne-de-commande)
-11. [Configuration](#11-configuration)
-12. [Journaux](#12-journaux)
-13. [Banc d'essai avec de vrais modèles](#13-banc-dessai-avec-de-vrais-modèles)
-14. [Développement, qualité et publication](#14-développement-qualité-et-publication)
+10. [Équipe d'agents (orchestrateur)](#10-équipe-dagents-orchestrateur)
+11. [Interface en ligne de commande](#11-interface-en-ligne-de-commande)
+12. [Configuration](#12-configuration)
+13. [Journaux](#13-journaux)
+14. [Banc d'essai avec de vrais modèles](#14-banc-dessai-avec-de-vrais-modèles)
+15. [Développement, qualité et publication](#15-développement-qualité-et-publication)
 
 ## 1. Dialogue et fournisseurs LLM
 
@@ -170,10 +171,21 @@ Plateformes : **Linux** et **Windows** (sauf mention contraire).
 - **Ctrl+C** : la CLI demande l'arrêt de la requête au démon, qui s'arrête proprement puis peut encore proposer d'annuler.
 - **Journaux** : `logs/daemon.log` du dossier de données (rotation 5 × 5 Mo, niveau `AVENOIR_LOG`, `info` par défaut) ; audit dans `logs/audit.log`.
 
-## 10. Interface en ligne de commande
+## 10. Équipe d'agents (orchestrateur)
+
+- **Délégation** : outil `delegate_tasks` du coordinateur (Avenoir) pour une demande longue ou en plusieurs parties (une demande simple se traite directement) ; plan : tâches (`id`, `agent`, consigne, `depends_on`) et, selon le mode, agents créés à la volée (`name`, `role`, `instructions`, `tools`).
+- **Plan validé avant tout lancement** : agents connus ou créés selon `orchestration.mode` (`auto`, `configured`, `both`), outils de chaque agent compris dans ceux permis aux agents (tous sauf `delegate_tasks`, `switch_llm`, `load_llm`, `unload_llm`, `set_reasoning`, `set_search_engine`), 16 au plus par agent, identifiants `[a-z0-9_-]` uniques, dépendances connues, aucun cycle, bornes (`max_tasks`, `max_agents`) ; un plan refusé l'est avec un message précis, que le coordinateur peut corriger.
+- **Exécution** : tâches en parallèle (`max_parallel`), une tâche attend le résultat de celles dont elle dépend, transmis comme des données ; une tâche dont une dépendance a échoué n'est pas faite ; Ctrl+C arrête toute l'équipe ; un modèle local sert un agent à la fois (file d'attente) ; compte rendu au coordinateur (résultats bornés, présentés comme des données), qui répond à l'utilisateur.
+- **Chaque agent** : une instance à part, avec ses seuls outils, son modèle (`model` ou le modèle actif ; un modèle distant est refusé en mode « local uniquement », et demande confirmation sinon), son nombre d'étapes et un prompt : règles communes d'Avenoir, puis son rôle et sa consigne ; une seule profondeur de délégation.
+- **Sécurité** : permissions et confirmations inchangées, confirmations toujours par l'utilisateur, une question à la fois ; journal d'audit avec l'agent qui a agi (`agent X : exécution : …`).
+- **Affichage** : « ◇ agent (rôle) : consigne » au début de chaque tâche, ses actions en direct, puis l'issue de chaque tâche.
+- **Configuration** : `[orchestration]` (`enabled`, `mode`, `max_tasks`, `max_agents`, `max_parallel`) et `[agents.<nom>]` (`role`, `instructions`, `model`, `tools`, `max_steps`), lus dans l'ordre du fichier, modèle et noms vérifiés ; un outil inconnu des agents est signalé au démarrage.
+- **Commandes** : `/agents` (équipe, mode, bornes, outils permis aux agents) ; `/agent ajouter <nom> <rôle>`, `/agent outils <nom> <outil,…|aucun>` (seulement des outils permis aux agents), `/agent modele <nom> <modèle|actif>`, `/agent consigne <nom> <texte>`, `/agent etapes <nom> <n>`, `/agent supprimer <nom>` : écrits par le sceau, notés à l'audit, appliqués par `/redemarrer` ; réglages `orchestration.*` dans `/reglage`.
+
+## 11. Interface en ligne de commande
 
 - Exécutable `avenoir [chemin/config.toml]` ; sans argument, la configuration de l'utilisateur (jamais celle du dossier courant).
-- **Commandes** : `/aide`, `/outils`, `/annuler`, `/configurer`, `/reglages`, `/reglage <clé> <valeur>`, `/redemarrer`, `/arreter`, `/demarrage [oui|non]`, `/modules`, `/risque [outil niveau]`, `/modele [nom]`, `/moteur [nom]`, `/memoire`, `/raisonnement`, `/charger`, `/decharger`, `/recharger`, `/nouvelle`, `/reset`, `/conversations`, `/ouvrir`, `/renommer`, `/supprimer`, `/historique`, `/transcription`, `/quitter` (`/q`), et celles des modules.
+- **Commandes** : `/aide`, `/outils`, `/annuler`, `/configurer`, `/reglages`, `/reglage <clé> <valeur>`, `/redemarrer`, `/arreter`, `/demarrage [oui|non]`, `/agents`, `/agent …`, `/modules`, `/risque [outil niveau]`, `/modele [nom]`, `/moteur [nom]`, `/memoire`, `/raisonnement`, `/charger`, `/decharger`, `/recharger`, `/nouvelle`, `/reset`, `/conversations`, `/ouvrir`, `/renommer`, `/supprimer`, `/historique`, `/transcription`, `/quitter` (`/q`), et celles des modules.
 - **Saisie** (replxx) : édition de ligne, historique des saisies conservé entre deux lancements, complétion des commandes (Tab), Ctrl+D pour quitter.
 - **Apparence** :
   - barre de saisie fixe en bas du terminal (grandit avec la saisie, suit les redimensionnements, sous Windows aussi) ;
@@ -184,7 +196,7 @@ Plateformes : **Linux** et **Windows** (sauf mention contraire).
   - couleurs désactivées hors terminal et avec `NO_COLOR`.
 - Avertissements de démarrage (modules ignorés ou en échec) affichés après l'accueil.
 
-## 11. Configuration
+## 12. Configuration
 
 - Fichier `config.toml` (exemple commenté : `config.example.toml`) ; une clé inconnue ou de mauvais type est une erreur qui cite la clé.
 - Emplacement : `~/.config/avenoir/config.toml` (ou `$XDG_CONFIG_HOME/avenoir/`), `%APPDATA%\avenoir\config.toml` sous Windows ; un autre fichier en argument ; le dossier courant n'est jamais lu. Sans terminal et sans configuration : erreur qui donne l'emplacement attendu.
@@ -214,13 +226,13 @@ Plateformes : **Linux** et **Windows** (sauf mention contraire).
 - Sections : `[models.<nom>]` (un par modèle, dans l'ordre voulu : fournisseur, modèle, adresse, nom de la variable de la clé, `temperature`, `reasoning_effort`, `max_tokens`, commande, délai et `persistent` de Claude Code, `local`) ; l'ancienne section `[llm]` est refusée avec un message qui indique la nouvelle forme ; `[agent]` (`max_steps`, `fast_path`, `system_prompt`, `unload_on_switch`, `local_only`, `verify_replies`), `[web]` (`local_searxng`, `searxng_idle_minutes`, `searxng_url`, `engine`), `[permissions]` (politique par niveau), `[modules.<id>]` (`enabled`, `risk` par outil).
 - Dossier de données : `~/.local/share/avenoir` (ou `$XDG_DATA_HOME`), `%LOCALAPPDATA%\avenoir` sous Windows.
 
-## 12. Journaux
+## 13. Journaux
 
 - Logs sur stderr, niveau `warn` par défaut, réglable avec `AVENOIR_LOG` (`debug`, `info`…).
 - **Journal d'audit** (logger `audit`) : chaque exécution, refus, échec et annulation d'outil ; toujours écrit dans `logs/audit.log` du dossier de données (dossier `0700`, chaque entrée aussitôt sur le disque, horodatée à la milliseconde ; rotation : 5 fichiers de 5 Mo au plus), quel que soit `AVENOIR_LOG` ; affiché à l'écran avec `AVENOIR_LOG=info`.
 - stderr de chaque module dans son propre fichier de log.
 
-## 13. Banc d'essai avec de vrais modèles
+## 14. Banc d'essai avec de vrais modèles
 
 - `avenoir-evals` (`--llm nom` : modèle de la configuration, le premier par défaut) : passe les **requêtes de référence** (`evals/requetes.toml`, 26 cas : simples, multi-outils, suite de conversation, ambiguës, hors de portée, erreur d'outil, injections, arguments piégés, refus et accord, données inventées) sur un vrai modèle.
 - Vrai agent et vrai fournisseur, mais **doublures d'outils** (mêmes nom, description, schéma et risque ; résultats ou erreurs préparés) : rien n'est lancé ni modifié ; voie rapide coupée.
@@ -228,7 +240,7 @@ Plateformes : **Linux** et **Windows** (sauf mention contraire).
 - Options : `--config`, `--model`, `--reasoning`, `--cases`, `--only`, `--repeat`, `--prompt`, `--report`, `--modules`.
 - Rapport Markdown (réussite par catégorie, durée, tokens, coût, détail des échecs) dans `evals/resultats/` ; synthèse dans `evals/resultats/COMPARAISON.md`.
 
-## 14. Développement, qualité et publication
+## 15. Développement, qualité et publication
 
 - C++23, CMake + vcpkg (préréglages `debug`, `release`, `asan`) ; options `AVENOIR_BUILD_TESTS`, `AVENOIR_SANITIZE`, `AVENOIR_MODULE_METEO`, `AVENOIR_EVALS`.
 - Scripts `scripts/build.sh` et `scripts\build.ps1` (mêmes options) : `-c` build propre, `-r` lancer Avenoir, `-n` sans tests, `-f` reformater, `-k` vérifications d'avant commit ; sous Windows, environnement Visual Studio chargé automatiquement.

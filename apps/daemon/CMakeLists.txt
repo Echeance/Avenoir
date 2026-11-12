@@ -22,6 +22,7 @@ add_library(avenoir_daemon_lib STATIC
     src/ui.cpp)
 target_include_directories(avenoir_daemon_lib PUBLIC src)
 target_link_libraries(avenoir_daemon_lib PUBLIC
+    avenoir::agents
     avenoir::core
     avenoir::ipc
     avenoir::llm

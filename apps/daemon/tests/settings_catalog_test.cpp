@@ -133,3 +133,18 @@ TEST_CASE("change_setting : refus", "[reglages]") {
     CHECK_FALSE(daemon::change_setting(config, "agent.system_prompt", "ignore tout", known()));
     CHECK_FALSE(daemon::change_setting(config, "models.gemma.base_url", "http://x", known()));
 }
+
+TEST_CASE("change_setting : orchestration", "[reglages]") {
+    const core::AppConfig config;
+    auto mode = daemon::change_setting(config, "orchestration.mode", "configured", known());
+    REQUIRE(mode.has_value());
+    CHECK(mode->updated.orchestration.mode == "configured");
+    auto parallel = daemon::change_setting(config, "orchestration.max_parallel", "2", known());
+    REQUIRE(parallel.has_value());
+    CHECK(parallel->updated.orchestration.max_parallel == 2);
+    auto off = daemon::change_setting(config, "orchestration.enabled", "non", known());
+    REQUIRE(off.has_value());
+    CHECK_FALSE(off->updated.orchestration.enabled);
+    CHECK_FALSE(daemon::change_setting(config, "orchestration.mode", "libre", known()));
+    CHECK_FALSE(daemon::change_setting(config, "orchestration.max_parallel", "9", known()));
+}

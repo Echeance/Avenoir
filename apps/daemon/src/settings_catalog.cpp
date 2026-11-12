@@ -208,6 +208,32 @@ std::vector<SettingLine> list_settings(const core::AppConfig& config,
          .description = "votre propre instance SearXNG (les recherches y sont envoyées)",
          .security = true},
     };
+    const auto& orchestration = config.orchestration;
+    lines.push_back({.key = "orchestration.enabled",
+                     .value = std::string(yes_no(orchestration.enabled)),
+                     .accepted = std::string(kBooleans),
+                     .description = "confier une demande à une équipe d'agents (/agents)",
+                     .security = false});
+    lines.push_back({.key = "orchestration.mode",
+                     .value = orchestration.mode,
+                     .accepted = "auto | configured | both",
+                     .description = "agents créés à la volée, équipe de l'utilisateur, ou les deux",
+                     .security = false});
+    lines.push_back({.key = "orchestration.max_tasks",
+                     .value = std::to_string(orchestration.max_tasks),
+                     .accepted = "1 à 50",
+                     .description = "tâches au plus par demande",
+                     .security = false});
+    lines.push_back({.key = "orchestration.max_agents",
+                     .value = std::to_string(orchestration.max_agents),
+                     .accepted = "1 à 20",
+                     .description = "agents créés à la volée au plus par demande",
+                     .security = false});
+    lines.push_back({.key = "orchestration.max_parallel",
+                     .value = std::to_string(orchestration.max_parallel),
+                     .accepted = "1 à 8",
+                     .description = "tâches en même temps (un modèle local sert à tour de rôle)",
+                     .security = false});
     for (const auto& module : modules) {
         lines.push_back({.key = std::format("modules.{}.enabled", module.id),
                          .value = std::string(yes_no(module_enabled(config, module))),
@@ -248,6 +274,37 @@ core::Result<SettingChange> change_setting(const core::AppConfig& config, std::s
         done = change_bool(change, agent.unload_on_switch, value, std::nullopt, false);
     } else if (key == "web.local_searxng") {
         done = change_bool(change, change.updated.web.local_searxng, value, std::nullopt, false);
+    } else if (key == "orchestration.enabled") {
+        done =
+            change_bool(change, change.updated.orchestration.enabled, value, std::nullopt, false);
+    } else if (key == "orchestration.mode") {
+        if (value != "auto" && value != "configured" && value != "both") {
+            return setting_error("orchestration.mode : auto, configured ou both attendu");
+        }
+        change.before = change.updated.orchestration.mode;
+        change.after = std::string(value);
+        change.updated.orchestration.mode = std::string(value);
+        done = {};
+    } else if (key == "orchestration.max_tasks" || key == "orchestration.max_agents" ||
+               key == "orchestration.max_parallel") {
+        auto& orchestration = change.updated.orchestration;
+        std::size_t* field = &orchestration.max_parallel;
+        std::int64_t max = 8;
+        if (key == "orchestration.max_tasks") {
+            field = &orchestration.max_tasks;
+            max = 50;
+        } else if (key == "orchestration.max_agents") {
+            field = &orchestration.max_agents;
+            max = 20;
+        }
+        const auto parsed = parse_integer(value, 1, max);
+        if (!parsed) {
+            return setting_error(std::format("{} : nombre de 1 à {} attendu", key, max));
+        }
+        change.before = std::to_string(*field);
+        change.after = std::to_string(*parsed);
+        *field = static_cast<std::size_t>(*parsed);
+        done = {};
     } else if (key == "agent.max_steps") {
         const auto parsed = parse_integer(value, 1, 100);
         if (!parsed) {

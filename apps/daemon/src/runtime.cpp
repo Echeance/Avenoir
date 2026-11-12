@@ -24,6 +24,9 @@
 #include <nlohmann/json.hpp>
 #include <spdlog/spdlog.h>
 
+#include "avenoir/agents/delegate.hpp"
+#include "avenoir/agents/orchestrator.hpp"
+#include "avenoir/agents/plan.hpp"
 #include "avenoir/core/agent.hpp"
 #include "avenoir/core/claims.hpp"
 #include "avenoir/core/config.hpp"
@@ -73,12 +76,12 @@ std::string_view trim(std::string_view text) {
 /// Commandes d'Avenoir (sans « / »), alias compris : un module ne peut pas
 /// en déclarer une du même nom.
 std::vector<std::string> builtin_commands() {
-    return {"aide",      "annuler",      "arreter",  "charger",      "configurer", "conversations",
-            "decharger", "demarrage",    "help",     "historique",   "memoire",    "model",
-            "modele",    "modules",      "moteur",   "nouvelle",     "ouvrir",     "outils",
-            "q",         "quit",         "quitter",  "raisonnement", "recharger",  "redemarrer",
-            "reglage",   "reglages",     "renommer", "reset",        "risque",     "supprimer",
-            "tools",     "transcription"};
+    return {"agent",      "agents",        "aide",      "annuler",      "arreter",  "charger",
+            "configurer", "conversations", "decharger", "demarrage",    "help",     "historique",
+            "memoire",    "model",         "modele",    "modules",      "moteur",   "nouvelle",
+            "ouvrir",     "outils",        "q",         "quit",         "quitter",  "raisonnement",
+            "recharger",  "redemarrer",    "reglage",   "reglages",     "renommer", "reset",
+            "risque",     "supprimer",     "tools",     "transcription"};
 }
 
 /// Confirmation d'une action par le client de la requête en cours.
@@ -266,6 +269,10 @@ struct Runtime::State {
     std::unique_ptr<tools::SearxngHost> searxng_host;
     std::unique_ptr<tools::SearchEngines> engines;
     core::Agent* page_reader = nullptr;
+    /// Outils que les agents d'une équipe peuvent recevoir (sans la délégation
+    /// ni ce qui change le modèle ou le moteur de tout Avenoir).
+    core::ToolRegistry agent_tools;
+    std::string base_prompt; ///< Prompt système commun, repris par les agents.
     std::unique_ptr<core::Agent> agent;
     std::unique_ptr<Conversations> conversations;
 
@@ -274,6 +281,9 @@ struct Runtime::State {
     void print_models() const;
     void configure(const std::stop_token& stop);
     void print_settings() const;
+    void print_agents() const;
+    void edit_agent(std::string_view argument);
+    [[nodiscard]] agents::Environment agent_environment() const;
     static void startup(std::string_view argument);
     void change_setting(std::string_view argument);
     [[nodiscard]] Outcome command(std::string_view line, const std::stop_token& stop);
@@ -448,6 +458,74 @@ core::Result<std::unique_ptr<Runtime>> Runtime::create(ConfigFile file) {
         }
     }
 
+    // Orchestrateur multi-agents (docs/PROJECT.md § 2.11) : les agents ne
+    // reçoivent jamais la délégation, ni ce qui change le modèle ou le moteur
+    // de recherche de tout Avenoir.
+    for (const auto& spec : registry.specs()) {
+        if (spec.name == "switch_llm" || spec.name == "load_llm" || spec.name == "unload_llm" ||
+            spec.name == "set_reasoning" || spec.name == "set_search_engine") {
+            continue;
+        }
+        if (auto added = s->agent_tools.add(registry.find(spec.name)); !added) {
+            return std::unexpected(std::move(added.error()));
+        }
+    }
+    for (const auto& profile : config.agents) {
+        for (const auto& tool : profile.tools) {
+            if (!s->agent_tools.find(tool)) {
+                s->startup_warnings.push_back(
+                    std::format("agent « {} » : outil « {} » indisponible pour les agents",
+                                profile.name, tool));
+            }
+        }
+    }
+    s->base_prompt = options.system_prompt;
+    if (config.orchestration.enabled) {
+        agents::DelegateOptions delegate;
+        for (const auto& profile : config.agents) {
+            delegate.configured.push_back(agents::AgentSpec{.name = profile.name,
+                                                            .role = profile.role,
+                                                            .instructions = profile.instructions,
+                                                            .model = profile.model,
+                                                            .tools = profile.tools,
+                                                            .max_steps = profile.max_steps,
+                                                            .ephemeral = false});
+        }
+        delegate.allowed_tools = [state] {
+            std::vector<std::string> names;
+            for (const auto& spec : state->agent_tools.specs()) {
+                names.push_back(spec.name);
+            }
+            return names;
+        };
+        delegate.mode = agents::Mode::Both;
+        if (config.orchestration.mode == "auto") {
+            delegate.mode = agents::Mode::Automatic;
+        } else if (config.orchestration.mode == "configured") {
+            delegate.mode = agents::Mode::Configured;
+        }
+        delegate.limits = agents::Limits{.max_tasks = config.orchestration.max_tasks,
+                                         .max_agents = config.orchestration.max_agents,
+                                         .max_parallel = config.orchestration.max_parallel,
+                                         .max_tools_per_agent = 16};
+        delegate.environment = [state] { return state->agent_environment(); };
+        delegate.on_finished = [](const std::vector<agents::TaskOutcome>& outcomes) {
+            for (const auto& outcome : outcomes) {
+                if (outcome.status == agents::TaskOutcome::Status::Done) {
+                    display().info(
+                        std::format("◇ {} : tâche « {} » faite", outcome.agent, outcome.id));
+                } else {
+                    display().warning(std::format("{} : tâche « {} » non aboutie : {}",
+                                                  outcome.agent, outcome.id,
+                                                  terminal::ellipsize(outcome.output, 120)));
+                }
+            }
+        };
+        if (auto added = registry.add(agents::make_delegate_tool(std::move(delegate))); !added) {
+            return std::unexpected(std::move(added.error()));
+        }
+    }
+
     s->agent =
         std::make_unique<core::Agent>(std::move(*llm), std::move(registry),
                                       std::make_unique<UiConfirmation>(), std::move(options));
@@ -612,6 +690,9 @@ void Runtime::State::print_help() const {
            "\n";
     out += command("/reglages", "réglages d'Avenoir et leur valeur") + "\n";
     out += command("/reglage <clé> <valeur>", "changer un réglage") + "\n";
+    out += command("/agents", "équipe d'agents et bornes de l'orchestrateur") + "\n";
+    out +=
+        command("/agent <action> <nom> …", "composer l'équipe (ajouter, outils, modele…)") + "\n";
     out += command("/redemarrer", "redémarrer Avenoir avec ses réglages actuels") + "\n";
     out += command("/arreter", "arrêter Avenoir (le démon), pas seulement cette fenêtre") + "\n";
     out += command("/demarrage [oui|non]", "lancer Avenoir à l'ouverture de session") + "\n";
@@ -755,6 +836,221 @@ void Runtime::State::change_setting(std::string_view argument) {
     display().info("Pour l'appliquer dès maintenant : /redemarrer.");
 }
 
+/// Environnement des agents d'un plan, créé dans le fil de la requête : leur
+/// affichage et leurs questions vont au client de cette requête.
+agents::Environment Runtime::State::agent_environment() const {
+    Ui& ui = display();
+    agents::Environment environment;
+    environment.model =
+        [this](const agents::AgentSpec& member) -> core::Result<agents::ModelLease> {
+        const llm::ModelChoice* choice =
+            member.model ? switcher->find(*member.model) : switcher->active();
+        if (choice == nullptr) {
+            return core::make_error(core::ErrorCode::Config,
+                                    member.model ? "modèle inconnu « " + *member.model + " »"
+                                                 : std::string("aucun modèle actif"));
+        }
+        // Directive 17 : « local uniquement » vaut pour tous les agents ; un
+        // modèle distant se confirme.
+        if (!choice->local) {
+            if (switcher->local_only()) {
+                return core::make_error(core::ErrorCode::Config,
+                                        "mode « local uniquement » : modèle distant « " +
+                                            choice->name + " » refusé");
+            }
+            if (!display().ask_yes_no(std::format(
+                    "L'agent « {} » utiliserait le modèle distant « {} » : sa tâche partirait "
+                    "chez son fournisseur. Autoriser ? [o/N]",
+                    member.name, choice->name))) {
+                return core::make_error(core::ErrorCode::Config,
+                                        "modèle distant « " + choice->name + " » refusé");
+            }
+        }
+        auto provider = llm::make_provider(choice->config);
+        if (!provider) {
+            return std::unexpected(std::move(provider.error()));
+        }
+        return agents::ModelLease{
+            .llm = std::move(*provider), .label = choice->name, .local = choice->local};
+    };
+    environment.tools = &agent_tools;
+    environment.confirmer = [] { return std::make_unique<UiConfirmation>(); };
+    environment.policy = file.config.permissions;
+    environment.base_prompt = base_prompt;
+    environment.context = [&ui](const std::function<void()>& body) {
+        const UiScope scope(ui);
+        body();
+    };
+    environment.observer = [](const agents::AgentSpec& /*agent*/) {
+        return core::HistoryObserver{
+            .appended =
+                [](const core::Message& message) {
+                    if (const auto* reply = std::get_if<core::AssistantMessage>(&message)) {
+                        display().tool_calls(reply->tool_calls);
+                    } else if (const auto* result =
+                                   std::get_if<core::ToolResultMessage>(&message)) {
+                        display().tool_result(*result);
+                    }
+                },
+            .removed_last = [] {},
+        };
+    };
+    environment.on_start = [](const agents::AgentSpec& member, const agents::Task& task) {
+        display().info(std::format("◇ {} ({}) : {}", member.name, member.role,
+                                   terminal::ellipsize(task.instruction, 90)));
+    };
+    return environment;
+}
+
+/// /agents : l'équipe de l'utilisateur et les bornes de l'orchestrateur.
+void Runtime::State::print_agents() const {
+    const auto& orchestration = file.config.orchestration;
+    display().plain(paint("Agents", {.color = Color::White, .bold = true}) +
+                    paint(std::format("  orchestration {} · mode {} · {} tâches, {} agents créés, "
+                                      "{} en parallèle au plus",
+                                      orchestration.enabled ? "active" : "coupée",
+                                      orchestration.mode, orchestration.max_tasks,
+                                      orchestration.max_agents, orchestration.max_parallel),
+                          {.color = Color::Gray}));
+    if (file.config.agents.empty()) {
+        display().info("Aucun agent configuré : Avenoir crée au besoin les agents d'une demande "
+                       "(mode « both » ou « auto »). Pour composer votre équipe : /agent "
+                       "ajouter <nom> <rôle>.");
+    }
+    for (const auto& member : file.config.agents) {
+        std::string tools;
+        for (const auto& tool : member.tools) {
+            tools += (tools.empty() ? "" : ", ") + tool;
+        }
+        display().plain(std::format("  {} {}  {}", paint("◇", {.color = Color::Cyan}),
+                                    paint(member.name, {.bold = true}), member.role));
+        display().plain(paint(
+            std::format("      modèle : {} · outils : {} · {} étapes{}",
+                        member.model.value_or("modèle actif"), tools.empty() ? "aucun" : tools,
+                        member.max_steps,
+                        member.instructions.empty()
+                            ? std::string{}
+                            : " · consigne : " + terminal::ellipsize(member.instructions, 60)),
+            {.color = Color::Gray}));
+    }
+    std::string allowed;
+    for (const auto& spec : agent_tools.specs()) {
+        allowed += (allowed.empty() ? "" : ", ") + spec.name;
+    }
+    display().plain(paint("Outils qu'un agent peut recevoir : " + allowed, {.color = Color::Gray}));
+    display().plain(
+        paint("Changer : /agent ajouter <nom> <rôle> · /agent outils <nom> <outil,…|aucun> "
+              "· /agent modele <nom> <modèle|actif> · /agent consigne <nom> <texte> · "
+              "/agent etapes <nom> <n> · /agent supprimer <nom>",
+              {.color = Color::Gray}));
+}
+
+/// /agent … : compose l'équipe ; écrit par le sceau, noté à l'audit, appliqué
+/// par /redemarrer. Un agent ne reçoit que des outils permis aux agents.
+void Runtime::State::edit_agent(std::string_view argument) {
+    const auto first = argument.find(' ');
+    const std::string_view action = argument.substr(0, first);
+    const std::string_view rest =
+        first == std::string_view::npos ? std::string_view{} : trim(argument.substr(first + 1));
+    const auto second = rest.find(' ');
+    const std::string name(rest.substr(0, second));
+    const std::string_view value =
+        second == std::string_view::npos ? std::string_view{} : trim(rest.substr(second + 1));
+    if (action.empty() || name.empty()) {
+        display().warning("Usage : /agent <ajouter|outils|modele|consigne|etapes|supprimer> <nom> "
+                          "[valeur] (voir /agents)");
+        return;
+    }
+    core::AppConfig updated = file.config;
+    auto& team = updated.agents;
+    const auto found = std::ranges::find(team, name, &core::AgentProfile::name);
+    if (action != "ajouter" && found == team.end()) {
+        display().warning(std::format("Agent inconnu : « {} » (voir /agents).", name));
+        return;
+    }
+    std::string summary;
+    if (action == "ajouter") {
+        if (found != team.end()) {
+            display().warning(std::format("L'agent « {} » existe déjà.", name));
+            return;
+        }
+        if (value.empty()) {
+            display().warning("Usage : /agent ajouter <nom> <rôle>");
+            return;
+        }
+        team.push_back(core::AgentProfile{.name = name,
+                                          .role = std::string(value),
+                                          .instructions = {},
+                                          .model = std::nullopt,
+                                          .tools = {},
+                                          .max_steps = core::AgentProfile{}.max_steps});
+        summary = std::format("agent « {} » ajouté ({}), sans outil", name, value);
+    } else if (action == "supprimer") {
+        team.erase(found);
+        summary = std::format("agent « {} » supprimé", name);
+    } else if (action == "outils") {
+        std::vector<std::string> tools;
+        if (value != "aucun") {
+            for (const auto part : std::views::split(value, ',')) {
+                const std::string tool(trim(std::string_view(part)));
+                if (tool.empty()) {
+                    continue;
+                }
+                // Moindre privilège : seulement des outils permis aux agents.
+                if (!agent_tools.find(tool)) {
+                    display().warning(std::format("Outil « {} » non permis aux agents (voir "
+                                                  "/agents).",
+                                                  tool));
+                    return;
+                }
+                if (!std::ranges::contains(tools, tool)) {
+                    tools.push_back(tool);
+                }
+            }
+        }
+        found->tools = std::move(tools);
+        summary = std::format("outils de « {} » : {}", name, value);
+    } else if (action == "modele" || action == "modèle") {
+        if (value == "actif") {
+            found->model.reset();
+        } else {
+            found->model = std::string(value);
+        }
+        summary = std::format("modèle de « {} » : {}", name, value);
+    } else if (action == "consigne") {
+        found->instructions = std::string(value);
+        summary = std::format("consigne de « {} » changée", name);
+    } else if (action == "etapes" || action == "étapes") {
+        found->max_steps = 0;
+        for (const char c : value) {
+            if (c < '0' || c > '9' || found->max_steps > 100) {
+                found->max_steps = 0;
+                break;
+            }
+            found->max_steps = (found->max_steps * 10) + static_cast<std::size_t>(c - '0');
+        }
+        summary = std::format("étapes de « {} » : {}", name, value);
+    } else {
+        display().warning(std::format("Action inconnue : « {} » (voir /agents).", action));
+        return;
+    }
+    // Mêmes règles que le fichier (nom, modèle existant, bornes).
+    if (auto checked = core::parse_config(core::format_config(updated)); !checked) {
+        display().warning(checked.error().message);
+        return;
+    }
+    if (auto saved = file.save(updated); !saved) {
+        display().error(core::describe(saved.error()));
+        return;
+    }
+    file.config = std::move(updated);
+    if (const auto audit = spdlog::get("audit")) {
+        audit->info("équipe : {} (/agent)", summary);
+    }
+    display().success(summary + ".");
+    display().info("Pour l'appliquer dès maintenant : /redemarrer.");
+}
+
 /// /demarrage [oui|non] : démarrage du démon à l'ouverture de session.
 void Runtime::State::startup(std::string_view argument) {
     core::Result<AutostartState> state = autostart_state();
@@ -812,6 +1108,10 @@ Outcome Runtime::State::command(std::string_view line, const std::stop_token& st
                 display().info("Transcription : " + utf8_path(*cleared->transcript));
             }
         }
+    } else if (name == "/agents") {
+        print_agents();
+    } else if (name == "/agent") {
+        edit_agent(argument);
     } else if (name == "/demarrage" || name == "/démarrage") {
         startup(argument);
     } else if (name == "/configurer") {
