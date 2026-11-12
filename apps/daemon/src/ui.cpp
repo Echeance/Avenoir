@@ -1,6 +1,7 @@
 #include "ui.hpp"
 
 #include <cstddef>
+#include <format>
 #include <memory>
 #include <mutex>
 #include <optional>
@@ -16,6 +17,7 @@
 #include "avenoir/core/message.hpp"
 #include "avenoir/core/tool.hpp"
 #include "avenoir/storage/store.hpp"
+#include "avenoir/terminal/style.hpp"
 
 namespace avenoir::daemon {
 
@@ -177,6 +179,69 @@ void BroadcastUi::broadcast(std::string_view text) {
     for (const auto& client : clients) {
         client->notify(text);
     }
+}
+
+namespace {
+
+/// Interface par défaut (clients connectés, ou journal), quel que soit le fil.
+Ui& background_display() {
+    const std::scoped_lock lock(g_default_mutex);
+    if (!g_default) {
+        g_default = std::make_shared<LogUi>();
+    }
+    return *g_default;
+}
+
+} // namespace
+
+void ProjectUi::note(std::string_view text) const {
+    background_display().notify(std::format("[projet {}] {}", project_, text));
+}
+
+void ProjectUi::assistant(std::string_view markdown) {
+    {
+        const std::scoped_lock lock(mutex_);
+        last_reply_ = std::string(markdown);
+    }
+    note(std::format("terminé : {} (/projet voir {})", terminal::ellipsize(markdown, 160),
+                     project_));
+}
+
+void ProjectUi::tool_calls(std::span<const core::ToolCall> calls) {
+    for (const auto& call : calls) {
+        note(std::format("{} {} {}", kToolGlyph, call.name,
+                         terminal::ellipsize(call.arguments.dump(), 80)));
+    }
+}
+
+void ProjectUi::tool_result(const core::ToolResultMessage& result) {
+    if (result.is_error) {
+        note("✗ " + terminal::ellipsize(result.content, 120));
+    }
+}
+
+std::optional<std::string> ProjectUi::ask(std::string_view question) {
+    note(std::format("question sans réponse (arrière-plan) : {}",
+                     terminal::ellipsize(question, 120)));
+    return std::nullopt;
+}
+
+bool ProjectUi::ask_yes_no(std::string_view question) {
+    note(std::format("refusé (arrière-plan, personne pour confirmer) : {}",
+                     terminal::ellipsize(question, 120)));
+    return false;
+}
+
+bool ProjectUi::confirm(const core::ToolSpec& spec, const core::ToolCall& /*call*/) {
+    note(std::format("action « {} » refusée : une action à confirmer ne se fait pas en "
+                     "arrière-plan ; refaites la demande au premier plan.",
+                     spec.name));
+    return false;
+}
+
+std::string ProjectUi::last_reply() const {
+    const std::scoped_lock lock(mutex_);
+    return last_reply_;
 }
 
 Ui& display() {

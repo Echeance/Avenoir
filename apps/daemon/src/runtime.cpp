@@ -84,6 +84,14 @@ std::vector<std::string> builtin_commands() {
             "risque",     "supprimer",     "tools",     "transcription"};
 }
 
+/// Coordinateur de la requête en cours dans ce fil (Avenoir, ou un projet) :
+/// ses demandes sont les seules « demandées » pour les agents d'un plan.
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables) : propre au fil
+thread_local const core::Agent* t_coordinator = nullptr;
+
+/// Projets en même temps au plus.
+constexpr std::size_t kMaxRunningProjects = 4;
+
 /// Confirmation d'une action par le client de la requête en cours.
 class UiConfirmation final : public core::ConfirmationHandler {
   public:
@@ -276,6 +284,20 @@ struct Runtime::State {
     std::unique_ptr<core::Agent> agent;
     std::unique_ptr<Conversations> conversations;
 
+    /// Projet qui travaille en arrière-plan (/projet), isolé : son propre
+    /// coordinateur (historique, contexte), ses équipes, son nom à l'audit.
+    struct Project {
+        std::string name;
+        std::shared_ptr<ProjectUi> ui;
+        std::unique_ptr<core::Agent> agent;
+        std::string request;
+        std::atomic<bool> running{false};
+        std::jthread worker; ///< Dernier membre : arrêté et attendu en premier.
+    };
+    std::mutex projects_mutex;
+    /// Déclarés en dernier : arrêtés avant tout le reste d'Avenoir.
+    std::map<std::string, std::unique_ptr<Project>> projects;
+
     void print_help() const;
     void print_tools() const;
     void print_models() const;
@@ -284,6 +306,10 @@ struct Runtime::State {
     void print_agents() const;
     void edit_agent(std::string_view argument);
     [[nodiscard]] agents::Environment agent_environment() const;
+    void print_projects();
+    void project_command(std::string_view argument);
+    [[nodiscard]] core::Result<std::unique_ptr<core::Agent>>
+    make_project_agent(const std::string& name) const;
     static void startup(std::string_view argument);
     void change_setting(std::string_view argument);
     [[nodiscard]] Outcome command(std::string_view line, const std::stop_token& stop);
@@ -693,6 +719,10 @@ void Runtime::State::print_help() const {
     out += command("/agents", "équipe d'agents et bornes de l'orchestrateur") + "\n";
     out +=
         command("/agent <action> <nom> …", "composer l'équipe (ajouter, outils, modele…)") + "\n";
+    out +=
+        command("/projet <nom> <demande>", "travailler en arrière-plan sur un projet isolé") + "\n";
+    out +=
+        command("/projets", "projets et leur état (voir, arreter, supprimer : /projet …)") + "\n";
     out += command("/redemarrer", "redémarrer Avenoir avec ses réglages actuels") + "\n";
     out += command("/arreter", "arrêter Avenoir (le démon), pas seulement cette fenêtre") + "\n";
     out += command("/demarrage [oui|non]", "lancer Avenoir à l'ouverture de session") + "\n";
@@ -878,7 +908,8 @@ agents::Environment Runtime::State::agent_environment() const {
     environment.policy = file.config.permissions;
     environment.base_prompt = base_prompt;
     // Provenance : seules les demandes de l'utilisateur sont « demandées ».
-    for (const auto& message : agent->history()) {
+    const core::Agent* coordinator = t_coordinator != nullptr ? t_coordinator : agent.get();
+    for (const auto& message : coordinator->history()) {
         if (const auto* user = std::get_if<core::UserMessage>(&message)) {
             environment.requester_text += user->content + "\n";
         }
@@ -906,6 +937,164 @@ agents::Environment Runtime::State::agent_environment() const {
                                    terminal::ellipsize(task.instruction, 90)));
     };
     return environment;
+}
+
+/// Coordinateur d'un projet : ses propres historique et contexte, le modèle
+/// actif, les outils permis aux agents et la délégation ; jamais ce qui change
+/// le modèle ou le moteur de tout Avenoir.
+core::Result<std::unique_ptr<core::Agent>>
+Runtime::State::make_project_agent(const std::string& name) const {
+    const auto* active = switcher->active();
+    if (active == nullptr) {
+        return core::make_error(core::ErrorCode::Config, "aucun modèle actif pour le projet");
+    }
+    auto provider = llm::make_provider(active->config);
+    if (!provider) {
+        return std::unexpected(std::move(provider.error()));
+    }
+    core::ToolRegistry registry;
+    for (const auto& spec : agent_tools.specs()) {
+        if (auto added = registry.add(agent_tools.find(spec.name)); !added) {
+            return std::unexpected(std::move(added.error()));
+        }
+    }
+    if (auto delegate = agent->tools().find(agents::kDelegateTool)) {
+        if (auto added = registry.add(std::move(delegate)); !added) {
+            return std::unexpected(std::move(added.error()));
+        }
+    }
+    core::AgentOptions options;
+    options.policy = file.config.permissions;
+    options.max_steps = file.config.agent.max_steps;
+    options.name = "projet " + name;
+    options.system_prompt =
+        base_prompt + std::format("\n\nTu travailles en arrière-plan sur le projet « {} ». "
+                                  "Personne ne peut confirmer une action pendant ce temps : une "
+                                  "action à confirmer est refusée, dis-le dans ta réponse.",
+                                  name);
+    return std::make_unique<core::Agent>(std::move(*provider), std::move(registry),
+                                         std::make_unique<UiConfirmation>(), std::move(options));
+}
+
+/// /projets : chaque projet, son état et sa dernière demande.
+void Runtime::State::print_projects() {
+    const std::scoped_lock lock(projects_mutex);
+    if (projects.empty()) {
+        display().info("Aucun projet. Pour en lancer un : /projet <nom> <demande> (il travaille "
+                       "en arrière-plan, à part de cette conversation).");
+        return;
+    }
+    for (const auto& [project_name, project] : projects) {
+        const bool running = project->running;
+        display().plain(std::format("  {} {}  {}", paint("◇", {.color = Color::Cyan}),
+                                    paint(project_name, {.bold = true}),
+                                    running ? paint("en cours", {.color = Color::Yellow})
+                                            : paint("en attente", {.color = Color::Gray})));
+        display().plain(paint("      demande : " + terminal::ellipsize(project->request, 90),
+                              {.color = Color::Gray}));
+        if (!running) {
+            const std::string reply = project->ui->last_reply();
+            if (!reply.empty()) {
+                display().plain(paint("      réponse : " + terminal::ellipsize(reply, 90),
+                                      {.color = Color::Gray}));
+            }
+        }
+    }
+    display().plain(paint("/projet voir <nom> · /projet arreter <nom> · /projet supprimer <nom>",
+                          {.color = Color::Gray}));
+}
+
+/// /projet <nom> <demande> | voir <nom> | arreter <nom> | supprimer <nom>.
+void Runtime::State::project_command(std::string_view argument) {
+    const auto first = argument.find(' ');
+    const std::string head(argument.substr(0, first));
+    const std::string_view rest =
+        first == std::string_view::npos ? std::string_view{} : trim(argument.substr(first + 1));
+    if (head.empty()) {
+        display().warning("Usage : /projet <nom> <demande> (voir /projets)");
+        return;
+    }
+    const std::scoped_lock lock(projects_mutex);
+    if (head == "voir" || head == "arreter" || head == "arrêter" || head == "supprimer") {
+        const auto found = projects.find(std::string(rest));
+        if (found == projects.end()) {
+            display().warning(std::format("Projet inconnu : « {} » (voir /projets).", rest));
+            return;
+        }
+        Project& project = *found->second;
+        if (head == "voir") {
+            if (project.running) {
+                display().info(
+                    std::format("Projet « {} » en cours : {}", project.name, project.request));
+                return;
+            }
+            display().messages(project.agent->history(), 20);
+        } else if (head == "supprimer") {
+            project.worker.request_stop();
+            projects.erase(found); // attend la fin de son travail
+            display().success(std::format("Projet « {} » supprimé.", rest));
+        } else {
+            project.worker.request_stop();
+            display().info(std::format("Arrêt du projet « {} » demandé.", rest));
+        }
+        return;
+    }
+    if (!agents::is_valid_name(head)) {
+        display().warning("Nom de projet invalide : minuscules sans accent, chiffres, - et _.");
+        return;
+    }
+    if (rest.empty()) {
+        display().warning(std::format("Usage : /projet {} <demande>", head));
+        return;
+    }
+    const auto running = static_cast<std::size_t>(std::ranges::count_if(
+        projects, [](const auto& entry) { return entry.second->running.load(); }));
+    auto& slot = projects[head];
+    if (slot && slot->running) {
+        display().warning(std::format("Le projet « {} » travaille déjà (voir /projets).", head));
+        return;
+    }
+    if (running >= kMaxRunningProjects) {
+        display().warning(std::format("Déjà {} projets en cours : attendez la fin de l'un d'eux.",
+                                      kMaxRunningProjects));
+        return;
+    }
+    if (!slot) {
+        auto coordinator = make_project_agent(head);
+        if (!coordinator) {
+            projects.erase(head);
+            display().error(core::describe(coordinator.error()));
+            return;
+        }
+        slot = std::make_unique<Project>();
+        slot->name = head;
+        slot->ui = std::make_shared<ProjectUi>(head);
+        slot->agent = std::move(*coordinator);
+    }
+    Project* project = slot.get();
+    if (project->worker.joinable()) {
+        project->worker.join(); // travail précédent fini
+    }
+    project->request = std::string(rest);
+    project->running = true;
+    if (const auto audit = spdlog::get("audit")) {
+        audit->info("projet {} : demande « {} »", head, project->request);
+    }
+    project->worker = std::jthread([project](const std::stop_token& stop) {
+        const UiScope scope(*project->ui);
+        t_coordinator = project->agent.get();
+        auto reply = project->agent->handle(project->request, stop);
+        t_coordinator = nullptr;
+        if (reply) {
+            project->ui->assistant(*reply);
+        } else {
+            project->ui->warning(core::describe(reply.error()));
+        }
+        project->running = false;
+    });
+    display().success(std::format("Projet « {} » lancé en arrière-plan : vous pouvez continuer. "
+                                  "Son avancement s'affiche ici ; /projets pour son état.",
+                                  head));
 }
 
 /// /agents : l'équipe de l'utilisateur et les bornes de l'orchestrateur.
@@ -1114,6 +1303,10 @@ Outcome Runtime::State::command(std::string_view line, const std::stop_token& st
                 display().info("Transcription : " + utf8_path(*cleared->transcript));
             }
         }
+    } else if (name == "/projets") {
+        print_projects();
+    } else if (name == "/projet") {
+        project_command(argument);
     } else if (name == "/agents") {
         print_agents();
     } else if (name == "/agent") {

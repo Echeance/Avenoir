@@ -46,6 +46,7 @@ if(AVENOIR_BUILD_TESTS)
     # Ce qui se décide sans terminal ni réseau : création guidée, réglages.
     add_executable(avenoir_daemon_tests
         tests/settings_catalog_test.cpp
+        tests/ui_test.cpp
         tests/setup_plan_test.cpp)
     target_link_libraries(avenoir_daemon_tests PRIVATE
         avenoir_daemon_lib avenoir::options Catch2::Catch2WithMain)

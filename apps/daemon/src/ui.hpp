@@ -154,6 +154,50 @@ class BroadcastUi final : public Ui {
     Clients clients_;
 };
 
+/// Interface d'un projet qui travaille en arrière-plan (/projet) : ce qu'il
+/// fait est annoncé à tous les clients (« [projet x] … ») ; personne n'étant
+/// là pour répondre, toute question vaut « non » et toute action à confirmer
+/// est refusée, ce qui est dit (docs/PROJECT.md : refus automatique hors
+/// présence).
+class ProjectUi final : public Ui {
+  public:
+    explicit ProjectUi(std::string project) : project_(std::move(project)) {}
+
+    void info(std::string_view text) override { note(text); }
+    void notify(std::string_view text) override { note(text); }
+    void success(std::string_view text) override { note(text); }
+    void warning(std::string_view text) override { note(text); }
+    void error(std::string_view text) override { note(text); }
+    void plain(std::string_view text) override { note(text); }
+    void user(std::string_view /*text*/) override {}
+    void assistant(std::string_view markdown) override;
+    void tool_calls(std::span<const core::ToolCall> calls) override;
+    void tool_result(const core::ToolResultMessage& result) override;
+    void messages(std::span<const core::Message> /*messages*/,
+                  std::optional<std::size_t> /*limit*/) override {}
+    void clear() override {}
+    void banner(std::string_view /*llm*/, std::size_t /*tools*/,
+                std::string_view /*conversation*/) override {}
+    void start_thinking() override {}
+    void set_activity(std::string_view /*activity*/) override {}
+    void stop_thinking() override {}
+    void stream_text(std::string_view /*fragment*/) override {}
+    void stream_end(bool /*kept*/) override {}
+    [[nodiscard]] bool streamed() override { return false; }
+    [[nodiscard]] std::optional<std::string> ask(std::string_view question) override;
+    [[nodiscard]] bool ask_yes_no(std::string_view question) override;
+    [[nodiscard]] bool confirm(const core::ToolSpec& spec, const core::ToolCall& call) override;
+
+    /// Dernière réponse du coordinateur du projet.
+    [[nodiscard]] std::string last_reply() const;
+
+  private:
+    void note(std::string_view text) const;
+    std::string project_;
+    mutable std::mutex mutex_;
+    std::string last_reply_;
+};
+
 /// Interface de la requête en cours dans ce fil, sinon celle par défaut
 /// (`set_default_ui`, diffusion à tous les clients).
 [[nodiscard]] Ui& display();
