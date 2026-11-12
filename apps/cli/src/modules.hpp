@@ -12,6 +12,7 @@
 #include "avenoir/storage/store.hpp"
 
 #include "prompt.hpp"
+#include "settings_catalog.hpp"
 
 namespace avenoir::cli {
 
@@ -40,6 +41,8 @@ class ModulesUi {
 
     /// « /meteo »… pour la complétion.
     [[nodiscard]] std::vector<std::string> completion_names() const;
+    /// Modules découverts et leur origine (pour /reglage modules.<id>.enabled).
+    [[nodiscard]] std::vector<KnownModule> known_modules() const;
     /// Lignes d'aide des commandes des modules (vide s'il n'y en a pas).
     [[nodiscard]] std::string help() const;
 

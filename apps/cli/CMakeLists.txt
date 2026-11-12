@@ -7,6 +7,7 @@ add_executable(avenoir_cli
     src/main.cpp
     src/modules.cpp
     src/prompt.cpp
+    src/settings_catalog.cpp
     src/setup.cpp
     src/setup_plan.cpp)
 set_target_properties(avenoir_cli PROPERTIES OUTPUT_NAME avenoir)
@@ -25,7 +26,9 @@ target_link_libraries(avenoir_cli PRIVATE
 # Test de bout en bout (sans LLM ni réseau), lancé par ctest sur Linux et Windows.
 if(AVENOIR_BUILD_TESTS)
     # Création guidée : la partie sans terminal ni réseau.
-    add_executable(avenoir_cli_tests tests/setup_plan_test.cpp src/setup_plan.cpp)
+    add_executable(avenoir_cli_tests
+        tests/settings_catalog_test.cpp tests/setup_plan_test.cpp
+        src/settings_catalog.cpp src/setup_plan.cpp)
     target_include_directories(avenoir_cli_tests PRIVATE src)
     target_link_libraries(avenoir_cli_tests PRIVATE
         avenoir::core avenoir::llm avenoir::options Catch2::Catch2WithMain)

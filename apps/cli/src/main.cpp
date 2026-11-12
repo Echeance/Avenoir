@@ -138,11 +138,11 @@ void attach_audit_file(const std::filesystem::path& data_directory) {
 /// Commandes d'Avenoir (sans « / »), alias compris : un module ne peut pas
 /// en déclarer une du même nom.
 std::vector<std::string> builtin_commands() {
-    return {"aide",      "annuler",    "charger",      "configurer", "conversations", "decharger",
-            "help",      "historique", "recharger",    "memoire",    "modules",       "model",
-            "modele",    "moteur",     "nouvelle",     "ouvrir",     "outils",        "q",
-            "quit",      "quitter",    "raisonnement", "renommer",   "reset",         "risque",
-            "supprimer", "tools",      "transcription"};
+    return {"aide",      "annuler",    "charger",       "configurer", "conversations", "decharger",
+            "help",      "historique", "recharger",     "memoire",    "modules",       "model",
+            "modele",    "moteur",     "nouvelle",      "ouvrir",     "outils",        "q",
+            "quit",      "quitter",    "raisonnement",  "renommer",   "reset",         "risque",
+            "supprimer", "tools",      "transcription", "reglage",    "reglages"};
 }
 
 /// Commandes proposées à la complétion (Tab).
@@ -152,7 +152,7 @@ std::vector<std::string> command_names(const cli::ModulesUi& modules) {
         "/recharger", "/conversations", "/historique", "/modele",     "/moteur",
         "/modules",   "/nouvelle",      "/ouvrir",     "/outils",     "/memoire",
         "/quitter",   "/raisonnement",  "/renommer",   "/reset",      "/risque",
-        "/supprimer", "/transcription"};
+        "/supprimer", "/transcription", "/reglages",   "/reglage"};
     std::ranges::copy(modules.completion_names(), std::back_inserter(names));
     return names;
 }
@@ -182,6 +182,8 @@ void print_help(const cli::ModulesUi& modules) {
     out += command("/recharger [nom]", "le décharger puis le recharger") + "\n";
     out += command("/configurer", "rechercher les modèles et choisir les siens (création guidée)") +
            "\n";
+    out += command("/reglages", "réglages d'Avenoir et leur valeur") + "\n";
+    out += command("/reglage <clé> <valeur>", "changer un réglage (prochain lancement)") + "\n";
     out += command("/quitter", "quitter (ou Ctrl+D)") + "\n";
     out += title("Modules") + "\n";
     out += command("/modules", "modules installés, permissions et outils") + "\n";
@@ -504,6 +506,78 @@ void configure(cli::Prompt& prompt, ConfigFile& file) {
     }
 }
 
+/// /reglages : réglages modifiables et leur valeur.
+void print_settings(const ConfigFile& file, const cli::ModulesUi& modules) {
+    display().plain(paint("Réglages", {.color = Color::White, .bold = true}) + "  " +
+                    paint(cli::utf8_path(file.path), {.color = Color::Gray}));
+    for (const auto& line : cli::list_settings(file.config, modules.known_modules())) {
+        const std::string mark = line.security ? paint("▲", {.color = Color::Yellow}) : " ";
+        display().plain(std::format("  {} {} {}", mark,
+                                    terminal::pad(paint(line.key, {.color = Color::Cyan}), 30),
+                                    paint(line.value, {.bold = true})));
+        display().plain(paint(std::format("      {} ({})", line.description, line.accepted),
+                              {.color = Color::Gray}));
+    }
+    display().plain(paint("Changer : /reglage <clé> <valeur> (appliqué au prochain lancement). "
+                          "▲ : l'affaiblir demande votre accord.",
+                          {.color = Color::Gray}));
+}
+
+/// /reglage <clé> <valeur> : valeur validée, accord « Je sais ce que je fais »
+/// si elle affaiblit la sécurité, écrite par le sceau, notée à l'audit.
+void change_setting_command(cli::Prompt& prompt, ConfigFile& file, const cli::ModulesUi& modules,
+                            std::string_view argument) {
+    const auto space = argument.find(' ');
+    const std::string_view key = argument.substr(0, space);
+    const std::string_view value =
+        space == std::string_view::npos ? std::string_view{} : trim(argument.substr(space + 1));
+    if (key.empty() || value.empty()) {
+        display().warning("Usage : /reglage <clé> <valeur> (voir /reglages)");
+        return;
+    }
+    auto change = cli::change_setting(file.config, key, value, modules.known_modules());
+    if (!change) {
+        display().warning(change.error().message);
+        return;
+    }
+    if (change->before == change->after) {
+        display().info(std::format("{} vaut déjà {}.", change->key, change->after));
+        return;
+    }
+    if (change->weakening) {
+        display().warning(std::format("{} : {} → {} affaiblit la sécurité.", change->key,
+                                      change->before, change->after));
+        display().plain("  " + *change->weakening);
+        display().plain("  " + paint("Tout comportement ayant un impact négatif causé par ce "
+                                     "changement relève de votre seule responsabilité.",
+                                     {.color = Color::Yellow}));
+        const auto answer = prompt.read(
+            std::format("  Pour confirmer, tapez « {} » : ", cli::kAgreementPhrase), false);
+        if (answer.status != cli::Prompt::Status::Line ||
+            trim(answer.text) != cli::kAgreementPhrase) {
+            (void)cli::take_interrupt();
+            display().info("Rien n'a été changé.");
+            return;
+        }
+    }
+    if (auto saved = file.save(change->updated); !saved) {
+        display().error(core::describe(saved.error()));
+        return;
+    }
+    file.config = change->updated;
+    if (const auto audit = spdlog::get("audit")) {
+        audit->info("réglages : {} : {} → {} (/reglage{})", change->key, change->before,
+                    change->after,
+                    change->weakening ? std::format(", accord « {} »", cli::kAgreementPhrase)
+                                      : std::string{});
+    }
+    display().success(std::format("{} : {}", change->key, change->after));
+    display().info(change->strengthens
+                       ? "Appliqué au prochain lancement : relancez Avenoir pour en profiter "
+                         "dès maintenant."
+                       : "Appliqué au prochain lancement.");
+}
+
 bool run_command(core::Agent& agent, cli::Prompt& prompt, cli::Conversations& conversations,
                  cli::ModulesUi& modules, const llm::ModelSwitcher& switcher,
                  const tools::SearchEngines& engines, ConfigFile& config_file,
@@ -533,6 +607,10 @@ bool run_command(core::Agent& agent, cli::Prompt& prompt, cli::Conversations& co
         }
     } else if (command == "/configurer") {
         configure(prompt, config_file);
+    } else if (command == "/reglages") {
+        print_settings(config_file, modules);
+    } else if (command == "/reglage") {
+        change_setting_command(prompt, config_file, modules, argument);
     } else if (command == "/conversations") {
         conversations.list();
     } else if (command == "/ouvrir") {

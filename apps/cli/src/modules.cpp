@@ -108,6 +108,15 @@ void audit(const std::string& message) {
 ModulesUi::ModulesUi(modules::ModuleHost& host, std::vector<modules::ModuleCommand> commands)
     : host_(&host), commands_(std::move(commands)) {}
 
+std::vector<KnownModule> ModulesUi::known_modules() const {
+    std::vector<KnownModule> known;
+    for (const auto& status : host_->statuses()) {
+        known.push_back(
+            KnownModule{.id = status.id, .bundled = status.origin == modules::Origin::Bundled});
+    }
+    return known;
+}
+
 void ModulesUi::print_status() const {
     const auto statuses = host_->statuses();
     if (statuses.empty()) {

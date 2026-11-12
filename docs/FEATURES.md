@@ -160,7 +160,7 @@ Plateformes : **Linux** et **Windows** (sauf mention contraire).
 ## 9. Interface en ligne de commande
 
 - Exécutable `avenoir [chemin/config.toml]` ; sans argument, la configuration de l'utilisateur (jamais celle du dossier courant).
-- **Commandes** : `/aide`, `/outils`, `/annuler`, `/configurer`, `/modules`, `/risque [outil niveau]`, `/modele [nom]`, `/moteur [nom]`, `/memoire`, `/raisonnement`, `/charger`, `/decharger`, `/recharger`, `/nouvelle`, `/reset`, `/conversations`, `/ouvrir`, `/renommer`, `/supprimer`, `/historique`, `/transcription`, `/quitter` (`/q`), et celles des modules.
+- **Commandes** : `/aide`, `/outils`, `/annuler`, `/configurer`, `/reglages`, `/reglage <clé> <valeur>`, `/modules`, `/risque [outil niveau]`, `/modele [nom]`, `/moteur [nom]`, `/memoire`, `/raisonnement`, `/charger`, `/decharger`, `/recharger`, `/nouvelle`, `/reset`, `/conversations`, `/ouvrir`, `/renommer`, `/supprimer`, `/historique`, `/transcription`, `/quitter` (`/q`), et celles des modules.
 - **Saisie** (replxx) : édition de ligne, historique des saisies conservé entre deux lancements, complétion des commandes (Tab), Ctrl+D pour quitter.
 - **Apparence** :
   - barre de saisie fixe en bas du terminal (grandit avec la saisie, suit les redimensionnements, sous Windows aussi) ;
@@ -192,6 +192,12 @@ Plateformes : **Linux** et **Windows** (sauf mention contraire).
   - fichier écrit lisible par l'utilisateur seul (dossier `0700`, fichier `0600`), remplacement atomique ; seules les valeurs qui diffèrent des défauts sont écrites hors modèles ;
   - « aucun » (ou aucun modèle trouvé) : « Continuer sans modèle ? » ; oui : configuration sans modèle enregistrée, la voie rapide seule répond et la création ne revient pas d'elle-même ; non : rien n'est écrit, la création sera proposée de nouveau au prochain lancement.
 - **`/configurer`** : la même création guidée en cours de session, questions posées dans la barre de saisie ; seuls les modèles et « local uniquement » changent, les autres réglages du fichier en usage sont gardés ; confirmation avant de réécrire un fichier existant (ses commentaires sont perdus) ; Ctrl+C ou Ctrl+D abandonne sans rien changer ; appliquée au prochain lancement.
+- **`/reglages`** : réglages modifiables avec leur valeur, ce qu'ils font et les valeurs acceptées ; « ▲ » pour ceux qui touchent à la sécurité. **`/reglage <clé> <valeur>`** :
+  - clés : `agent.local_only`, `agent.verify_replies`, `agent.fast_path`, `agent.max_steps` (1 à 100), `agent.unload_on_switch`, `permissions.read_only` / `reversible` / `sensitive` (autoriser, confirmer, refuser ; aussi allow, confirm, deny), `web.local_searxng`, `web.searxng_idle_minutes` (1 à 1440), `web.searxng_url` (adresse ou « aucune »), `modules.<id>.enabled` (modules découverts) ; booléens : oui / non ;
+  - valeur validée avec les mêmes règles que le fichier ; clé inconnue, prompt système et modèles refusés (les modèles : `/configurer`) ;
+  - `permissions.sensitive` ne peut jamais valoir « autoriser » ;
+  - **affaiblir** (permissions plus larges, `local_only` ou `verify_replies` coupé, `searxng_url` vers une instance, module installé par l'utilisateur activé) : avertissement, ce que le changement retire, mention de responsabilité, puis saisie exacte de « Je sais ce que je fais » ; sinon rien ne change ;
+  - écrit par le sceau, noté au journal d'audit (`réglages : clé : avant → après`, avec l'accord le cas échéant) ; appliqué au prochain lancement (renforcer : invitation à relancer tout de suite).
 - Sections : `[models.<nom>]` (un par modèle, dans l'ordre voulu : fournisseur, modèle, adresse, nom de la variable de la clé, `temperature`, `reasoning_effort`, `max_tokens`, commande, délai et `persistent` de Claude Code, `local`) ; l'ancienne section `[llm]` est refusée avec un message qui indique la nouvelle forme ; `[agent]` (`max_steps`, `fast_path`, `system_prompt`, `unload_on_switch`, `local_only`, `verify_replies`), `[web]` (`local_searxng`, `searxng_idle_minutes`, `searxng_url`, `engine`), `[permissions]` (politique par niveau), `[modules.<id>]` (`enabled`, `risk` par outil).
 - Dossier de données : `~/.local/share/avenoir` (ou `$XDG_DATA_HOME`), `%LOCALAPPDATA%\avenoir` sous Windows.
 
