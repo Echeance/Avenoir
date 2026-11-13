@@ -76,12 +76,13 @@ std::string_view trim(std::string_view text) {
 /// Commandes d'Avenoir (sans « / »), alias compris : un module ne peut pas
 /// en déclarer une du même nom.
 std::vector<std::string> builtin_commands() {
-    return {"agent",      "agents",        "aide",      "annuler",      "arreter",  "charger",
-            "configurer", "conversations", "decharger", "demarrage",    "help",     "historique",
-            "memoire",    "model",         "modele",    "modules",      "moteur",   "nouvelle",
-            "ouvrir",     "outils",        "q",         "quit",         "quitter",  "raisonnement",
-            "recharger",  "redemarrer",    "reglage",   "reglages",     "renommer", "reset",
-            "risque",     "supprimer",     "tools",     "transcription"};
+    return {
+        "agent",        "agents",        "aide",       "annuler",   "arreter",  "charger",
+        "configurer",   "conversations", "decharger",  "demarrage", "help",     "historique",
+        "memoire",      "model",         "modele",     "modules",   "moteur",   "nouvelle",
+        "ouvrir",       "outils",        "parametres", "q",         "quit",     "quitter",
+        "raisonnement", "recharger",     "redemarrer", "reglage",   "reglages", "renommer",
+        "reset",        "risque",        "settings",   "supprimer", "tools",    "transcription"};
 }
 
 /// Coordinateur de la requête en cours dans ce fil (Avenoir, ou un projet) :
@@ -643,6 +644,14 @@ std::string Runtime::describe_conversation() const {
     return state_->conversations->describe_current();
 }
 
+std::string Runtime::model_status() const {
+    return model_label(*state_->switcher);
+}
+
+std::vector<SettingLine> Runtime::settings() const {
+    return list_settings(state_->file.config, state_->modules_ui->known_modules());
+}
+
 void Runtime::finish_input() {
     if (auto note = state_->switcher->finish_request()) {
         display().info(*note);
@@ -793,6 +802,7 @@ void Runtime::State::print_help() const {
     out += command("/recharger [nom]", "le décharger puis le recharger") + "\n";
     out += command("/configurer", "rechercher les modèles et choisir les siens (création guidée)") +
            "\n";
+    out += command("/settings", "menu des réglages (aussi /parametres), dans la CLI") + "\n";
     out += command("/reglages", "réglages d'Avenoir et leur valeur") + "\n";
     out += command("/reglage <clé> <valeur>", "changer un réglage") + "\n";
     out += command("/agents", "équipe d'agents et bornes de l'orchestrateur") + "\n";
@@ -1410,7 +1420,8 @@ Outcome Runtime::State::command(std::string_view line, const std::stop_token& st
         startup(argument);
     } else if (name == "/configurer") {
         configure(stop);
-    } else if (name == "/reglages") {
+    } else if (name == "/settings" || name == "/parametres" || name == "/paramètres") {
+        // Le menu se dessine dans la CLI ; un autre client a la liste.
         print_settings();
     } else if (name == "/reglage") {
         change_setting(argument);

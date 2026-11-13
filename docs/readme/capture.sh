@@ -19,7 +19,7 @@ config="$(cd "$(dirname "$config")" && pwd)/$(basename "$config")"
 avenoir="$root/build/debug/apps/cli/avenoir"
 [[ -x "$avenoir" ]] || { echo "Compilez d'abord : scripts/build.sh" >&2; exit 1; }
 
-rows=42
+rows=50
 columns=120
 work="$(mktemp -d)"
 trap 'rm -rf "$work"' EXIT
@@ -32,7 +32,8 @@ type_session() {
     printf 'Décris mon ordinateur en 3 puces courtes, avec le nom de la distribution en gras.\r'
     sleep 20
     printf 'Ouvre la documentation de std::expected'
-    sleep 3
+    # Entrée gardée ouverte : la capture s'arrête en plein écran, avant l'au revoir.
+    sleep 10
 }
 
 echo "Enregistrement de la session (environ 30 s)…"

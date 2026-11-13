@@ -251,6 +251,21 @@ class Server {
         peer->on_request("input", [this, raw_ui](const json& params, const std::stop_token& stop) {
             return handle_input(*raw_ui, params, stop);
         });
+        peer->on_request("settings/list", [this](const json&, const std::stop_token&) {
+            const std::scoped_lock lock(runtime_mutex_);
+            if (!runtime_) {
+                return core::Result<json>(core::make_error(core::ErrorCode::Config, build_error_));
+            }
+            json list = json::array();
+            for (const auto& line : runtime_->settings()) {
+                list.push_back({{"key", line.key},
+                                {"value", line.value},
+                                {"accepted", line.accepted},
+                                {"description", line.description},
+                                {"security", line.security}});
+            }
+            return core::Result<json>(json{{"settings", std::move(list)}});
+        });
         peer->on_request("session/describe", [this](const json&, const std::stop_token&) {
             const std::scoped_lock lock(runtime_mutex_);
             return core::Result<json>(
@@ -339,7 +354,10 @@ class Server {
             return json{{"quit", true}, {"conversation", conversation}};
         }
         }
-        return json{{"quit", false}};
+        // Modèle et conversation actuels : l'en-tête du client suit.
+        return json{{"quit", false},
+                    {"llm", runtime_->model_status()},
+                    {"conversation", runtime_->describe_conversation()}};
     }
 
     /// Toutes les secondes : clients partis retirés, arrêt quand il le faut ;

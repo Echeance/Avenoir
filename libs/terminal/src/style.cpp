@@ -224,6 +224,71 @@ std::vector<std::string> wrap(std::string_view text, std::size_t width) {
     return lines;
 }
 
+std::vector<std::string> layout(std::string_view text, std::size_t width) {
+    std::vector<std::string> rows;
+    std::string active; // séquences SGR en vigueur (depuis le dernier « reset »)
+    std::string row;
+    std::size_t columns = 0;
+    const auto close_row = [&] {
+        if (!active.empty()) {
+            row += "\x1b[0m";
+        }
+        rows.push_back(std::move(row));
+        row = active;
+        columns = 0;
+    };
+    std::size_t i = 0;
+    while (i < text.size()) {
+        const auto byte = static_cast<unsigned char>(text[i]);
+        if (byte == 0x1BU) {
+            // Séquence « ESC [ … lettre » recopiée telle quelle.
+            std::size_t end = i + 1;
+            const auto letter = [](char c) {
+                return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z');
+            };
+            while (end < text.size() && !letter(text[end])) {
+                ++end;
+            }
+            end = std::min(end + 1, text.size());
+            const std::string_view sequence = text.substr(i, end - i);
+            row += sequence;
+            if (sequence.ends_with('m')) {
+                if (sequence == "\x1b[0m" || sequence == "\x1b[m") {
+                    active.clear();
+                } else {
+                    active += sequence;
+                }
+            }
+            i = end;
+            continue;
+        }
+        if (byte == '\n') {
+            close_row();
+            ++i;
+            continue;
+        }
+        // Un caractère UTF-8 entier (une colonne).
+        std::size_t end = i + 1;
+        while (end < text.size() && (static_cast<unsigned char>(text[end]) & 0xC0U) == 0x80U) {
+            ++end;
+        }
+        if (width > 0 && columns == width) {
+            close_row();
+        }
+        row += text.substr(i, end - i);
+        ++columns;
+        i = end;
+    }
+    // Dernière ligne, sauf si rien ne s'affiche après le dernier « \n ».
+    if (columns > 0 || rows.empty()) {
+        if (!active.empty()) {
+            row += "\x1b[0m";
+        }
+        rows.push_back(std::move(row));
+    }
+    return rows;
+}
+
 std::string ellipsize(std::string_view text, std::size_t width) {
     if (display_width(text) <= width) {
         return std::string(text);

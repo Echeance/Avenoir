@@ -16,7 +16,7 @@
 | **3. Résident** | Démon en arrière-plan, IPC, journal structuré, permissions durables et révocables, magasin de modèles | ⬜ |
 | **4. Tâches et modules** | Orchestrateur multi-agents (agents en parallèle, plusieurs projets isolés), fichiers, mémoire, contexte long, appels entre modules, fonctions de fond | ⬜ |
 | **5. Voix** | Mot de réveil, STT, TTS, confirmations vocales | ⬜ |
-| **6. Interface graphique** | Widget en haut de l'écran (pingouin animé), application principale, onglets de modules | ⬜ |
+| **6. Interface graphique** | Widget en haut de l'écran (loup animé), application principale, onglets de modules | ⬜ |
 | **7. Identité et présence** | Propriétaire et liste blanche, vérification par la voix et le visage, verrouillage et connexion automatiques | ⬜ |
 
 L'ordre suit un principe : **chaque jalon produit un assistant utilisable**, plus capable que le précédent. La voix et l'UI viennent tard parce qu'elles reposent sur un cœur stable (PROJECT.md, décision 7).
@@ -123,7 +123,7 @@ L'ordre suit un principe : **chaque jalon produit un assistant utilisable**, plu
 - ✅ Tests : ordre inverse, refus si l'état a changé (sans écraser), remontée des requêtes, requête interrompue, outils en lecture seule non journalisés
 - ✅ Saisie avec **replxx** : édition de ligne, historique des saisies conservé (`cli_history.txt` dans le dossier de données), complétion des commandes (Tab), Ctrl+C distingué de Ctrl+D
 - ⬜ Essai interactif de Ctrl+C sous Windows (le code n'est vérifié que par la CI) — à faire en 1.8
-- ✅ Apparence (PROJECT.md § 2.9) : barre de saisie fixe en bas du terminal (zone de défilement DECSTBM ; grandit pour les saisies longues ; suit les redimensionnements, même pendant la frappe ; confirmations dans la barre ; terminal restauré à la sortie ; Linux et Windows, avec ou sans couleurs), toupie avec les réponses, réponses découpées aux mots ; test de bout en bout de la CLI lancé par ctest sur Linux et Windows, accueil en thème bleu (titre « AVENOIR » en grandes lettres, cadre en deux colonnes : pingouin, modèle et conversation à gauche, outils par famille, modules, équipe et projets à droite ; ligne d'état avec le modèle sous la saisie) et cadre d'au revoir (terminal vidé à la sortie) avec pingouin en pixel art (demi-blocs colorés ; ASCII sans couleurs), styles distincts (requête `›`, réponse `◆ Avenoir`, action `» … ✓/✗` en direct, confirmation encadrée, badges de risque, erreurs), Markdown rendu, toupie « Réflexion… » ; bibliothèque `avenoir::terminal` (11 tests) ; couleurs désactivées hors terminal et avec `NO_COLOR` ; journal d'audit masqué par défaut (`AVENOIR_LOG=info`)
+- ✅ Apparence (PROJECT.md § 2.9) : barre de saisie fixe en bas du terminal (zone de défilement DECSTBM ; grandit pour les saisies longues ; suit les redimensionnements, même pendant la frappe ; confirmations dans la barre ; terminal restauré à la sortie ; Linux et Windows, avec ou sans couleurs), toupie avec les réponses, réponses découpées aux mots ; test de bout en bout de la CLI lancé par ctest sur Linux et Windows, accueil en thème bleu (titre « AVENOIR » en grandes lettres, cadre en deux colonnes : pingouin, modèle et conversation à gauche, outils par famille, modules, équipe et projets à droite ; ligne d'état avec le modèle sous la saisie) et cadre d'au revoir (terminal vidé à la sortie) avec la mascotte (le pingouin à l’origine, le loup depuis la décision 57), styles distincts (requête `›`, réponse `◆ Avenoir`, action `» … ✓/✗` en direct, confirmation encadrée, badges de risque, erreurs), Markdown rendu, toupie « Réflexion… » ; bibliothèque `avenoir::terminal` (11 tests) ; couleurs désactivées hors terminal et avec `NO_COLOR` ; journal d'audit masqué par défaut (`AVENOIR_LOG=info`)
 - ⬜ P3 : `/config`
 
 ### 1.8 Essais avec de vrais modèles — P1 ✅
@@ -238,6 +238,8 @@ L'ordre suit un principe : **chaque jalon produit un assistant utilisable**, plu
 - ⬜ **P1** Journal structuré (dans la base de l'étape 1.9) : actions, décisions de permission, module concerné ; historique par conversation et global ; le démon devient le seul à écrire dans la base
 - ⬜ **P1** Permissions durables (« toujours autoriser cet outil de ce module ») et révocables ; permissions de module accordées à l'installation, révocables
 - ✅ **P2** Réévaluer le modèle de concurrence (décision 12) pour le démon : on garde le modèle synchrone (un fil par client et par requête reçue, `std::stop_token`), décision 53
+- ✅ **P1** CLI plein écran (décision 57) : en-tête fixe (le loup d'Avenoir en ASCII, assis, qui hurle, une épée dans la gueule, « AVENOIR », modèle, conversation, outils, modules, équipe, projets ; complet, compact ou une ligne selon la place), barre de saisie fixe, conversation défilable gardée par la CLI (molette par replxx patché, `ports/replxx` ; PgUp/PgDn, Ctrl+↑/↓ ; aussi pendant une requête, texte tapé gardé pour la saisie suivante), durée des actions, écran du terminal rendu à la sortie
+- ✅ **P1** Menu des réglages `/settings` (`/parametres`) : réglages par famille, filtre, valeur choisie ou tapée, changement par le démon (`/reglage` : sceau, accord, audit) ; requête IPC `settings/list` ; modèle et conversation renvoyés après chaque saisie (en-tête à jour)
 - ⬜ **P2** Raccourci clavier global qui ouvre une saisie rapide
 - ⬜ **P2** **Mémoire vidéo partagée avec les jeux** (déjà possible à la main : `/decharger`, « libère la carte graphique », 2.6) : le démon libère la carte graphique quand une application exigeante passe en plein écran (déchargement du modèle local, `keep_alive = 0` d'Ollama) ou bascule sur le modèle léger réglé par l'utilisateur, puis revient au modèle habituel ensuite ; jamais de changement silencieux (notification, journal) ; réglable (désactivé, décharger, basculer). Mesures de départ : Gemma 4 26B-A4B ~21 Go, Ministral 3 8B ~11 Go, rechargement en 19 s et 6 s (RX 7900 XTX)
 - ✅ **P2** Mode « local uniquement » : refuse tout fournisseur distant (directive de sécurité n° 10) — fait avec 2.6 (`[agent] local_only`)
@@ -300,7 +302,7 @@ L'ordre suit un principe : **chaque jalon produit un assistant utilisable**, plu
 ### 6.2 Widget principal — P1
 - ⬜ Fenêtre sans bordure, transparente, au premier plan, en haut au centre ; layer-shell sous Wayland (niri, KDE, Hyprland, Sway)
 - ⬜ Barre pliée ; widget déplié au survol, avec animations
-- ⬜ Pingouin animé (Rive ou Lottie) qui reflète l'état de l'assistant (repos, écoute, réflexion, action)
+- ⬜ Loup animé (Rive ou Lottie) qui reflète l'état de l'assistant (repos, écoute, réflexion, action)
 - ⬜ Onglets : activités en cours, historique défilable, informations système, version et mises à jour, chatbox, consommation et limites Claude Code
 - ⬜ Confirmations dessinées par Avenoir (`ConfirmationHandler` graphique), hors de tout contenu de module
 - ⬜ Bouton « Arrêter » (équivalent de Ctrl+C) et proposition d'annulation ; bouton « Annuler » sur la dernière requête (équivalent de `/annuler`)

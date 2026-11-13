@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="docs/readme/avenoir-penguin.svg" alt="Le pingouin d'Avenoir en pixel art" width="140">
+<img src="docs/readme/avenoir-wolf.svg" alt="Le loup d'Avenoir, assis, qui hurle, une épée dans la gueule, en ASCII" width="252">
 
 # Avenoir
 
@@ -27,7 +27,7 @@ Sûr par défaut, extensible par des modules, avec le LLM de votre choix — loc
 > Avenoir est en développement actif (jalon 1, versions `0.x`). La CLI et les modules sont utilisables ; le démon résident, la voix et l'interface graphique arrivent dans les prochains jalons.
 
 <div align="center">
-  <img src="docs/readme/cli-demo.png" alt="Avenoir dans un terminal : titre AVENOIR, accueil en deux colonnes (pingouin, modèle, outils par famille), une requête par la voie rapide, une requête au LLM qui appelle un outil, et la barre de saisie fixe en bas" width="900">
+  <img src="docs/readme/cli-demo.png" alt="Avenoir dans un terminal, en plein écran : en-tête fixe avec le loup et l'état, conversation défilable, une requête par la voie rapide, une requête au LLM qui appelle un outil, et la barre de saisie fixe en bas" width="900">
 </div>
 
 ---
@@ -56,7 +56,7 @@ La liste complète, sans rien omettre : **[docs/FEATURES.md](docs/FEATURES.md)**
 - 🧱 **Modules avancés** : onglets d'interface, fonctions de fond, appels entre modules, magasin de modules.
 - 🌙 **Assistant résident** : démon en arrière-plan, raccourci clavier global, journal des actions, et la carte graphique libérée (ou le modèle léger choisi) quand vous lancez un jeu.
 - 🎙️ **Voix** : mot de réveil, reconnaissance et synthèse vocales, en local.
-- 🖥️ **Interface graphique** : un widget discret en haut de l'écran (avec le pingouin animé) et une application de réglages.
+- 🖥️ **Interface graphique** : un widget discret en haut de l'écran (avec le loup animé) et une application de réglages.
 - 🧠 **Magasin de modèles** pour en installer en un geste.
 - 🔐 **Identité et présence** : seuls vous et les personnes que vous autorisez peuvent l'utiliser (voix, visage, ou les deux), verrouillage quand vous partez et déverrouillage à votre retour. Tout est optionnel et réglable, la biométrie reste sur votre machine.
 
@@ -129,7 +129,7 @@ La configuration est enregistrée dans `~/.config/avenoir/config.toml` (ou `$XDG
 - un sceau supprimé, falsifié ou plus ancien que le dernier émis : le fichier est mis de côté (`config.toml.rejected`) et la création guidée reprend ;
 - tout est noté au journal d'audit.
 
-Une configuration existante est scellée au premier lancement. Sans trousseau, la clé est gardée dans un fichier lisible par vous seul : protection plus faible, signalée à chaque lancement. Un fichier donné en argument (`avenoir chemin/config.toml`) n'est pas scellé : c'est le mode développement, signalé lui aussi. Pour changer un réglage : `/reglages` les montre avec leur valeur, `/reglage <clé> <valeur>` en change un (appliqué au prochain lancement) ; les modèles se choisissent avec `/configurer`. Un changement qui **affaiblit** la sécurité (permissions plus larges, « local uniquement » ou vérification des réponses coupés, instance SearXNG externe, module installé par vous activé) demande, après un avertissement, de taper **« Je sais ce que je fais »** ; une action sensible n'est jamais autorisée sans confirmation.
+Une configuration existante est scellée au premier lancement. Sans trousseau, la clé est gardée dans un fichier lisible par vous seul : protection plus faible, signalée à chaque lancement. Un fichier donné en argument (`avenoir chemin/config.toml`) n'est pas scellé : c'est le mode développement, signalé lui aussi. Pour changer un réglage : le menu `/settings` les présente par famille, `/reglages` les montre avec leur valeur, `/reglage <clé> <valeur>` en change un (appliqué au prochain lancement) ; les modèles se choisissent avec `/configurer`. Un changement qui **affaiblit** la sécurité (permissions plus larges, « local uniquement » ou vérification des réponses coupés, instance SearXNG externe, module installé par vous activé) demande, après un avertissement, de taper **« Je sais ce que je fais »** ; une action sensible n'est jamais autorisée sans confirmation.
 
 > Le sceau est une **preuve de falsification** : il arrête les éditions à la main, les scripts et les programmes sans accès à votre trousseau, pas un logiciel malveillant qui tourne sous votre compte et peut le lire.
 
@@ -245,6 +245,7 @@ Plusieurs **projets** peuvent avancer en même temps, en arrière-plan : `/proje
 | `/raisonnement [niveau] [modèle]` | effort de réflexion du modèle : `aucun` (le plus rapide), `faible`, `moyen`, `élevé`, `défaut` ; appliqué tout de suite, sans recharger le modèle, et retenu (aussi : *« mets le raisonnement à élevé »*, *« désactive le raisonnement »*) |
 | `/memoire [nom]` | modèles chargés en mémoire et mémoire vidéo occupée (aussi : *« quels modèles sont chargés ? »*) ; un modèle chargé ou déchargé hors d'Avenoir (Ollama le décharge après 5 min d'inactivité) est annoncé, même pendant la saisie |
 | `/charger [nom]` · `/decharger [nom]` · `/recharger [nom]` | charger un modèle local en mémoire, le décharger (libère la mémoire vidéo, par exemple avant un jeu) ou le recharger ; le modèle actif par défaut (aussi : *« décharge le modèle »*, *« libère la carte graphique »*, *« allume le modèle gemma »*) |
+| `/settings` (ou `/parametres`) | **menu des réglages** : choisir un réglage avec les flèches (taper filtre la liste), puis sa valeur dans une liste ou en la tapant ; mêmes règles que `/reglage` |
 | `/reglages` · `/reglage <clé> <valeur>` | voir les réglages et leur valeur, en changer un (ex. `/reglage agent.local_only oui`) ; écrit par le sceau, noté au journal d'audit, appliqué par `/redemarrer` ; affaiblir la sécurité demande de taper « Je sais ce que je fais » |
 | `/configurer` | refaire la création guidée des modèles (recherche des serveurs, choix, « aucun ») ; les autres réglages sont gardés, le fichier réécrit après confirmation ; appliqué par `/redemarrer` |
 | `/projet <nom> <demande>` · `/projets` | travailler en arrière-plan sur un projet isolé (son contexte, ses équipes), plusieurs à la fois ; `/projet voir|arreter|supprimer <nom>` ; en arrière-plan, une action à confirmer est refusée |
@@ -273,6 +274,10 @@ Plusieurs **projets** peuvent avancer en même temps, en arrière-plan : `/proje
 | <kbd>Ctrl</kbd>+<kbd>D</kbd> | quitte |
 | <kbd>↑</kbd> / <kbd>↓</kbd> | saisies précédentes (conservées entre deux lancements) |
 | <kbd>Tab</kbd> | complète les commandes |
+| molette · <kbd>PgUp</kbd> / <kbd>PgDn</kbd> · <kbd>Ctrl</kbd>+<kbd>↑</kbd> / <kbd>↓</kbd> | remonte dans la conversation (aussi pendant une réponse) ; une nouvelle requête ramène en bas |
+| <kbd>Maj</kbd> + glisser | sélectionne du texte (la souris sert au défilement) |
+
+Dans un terminal, Avenoir s'ouvre **en plein écran**, comme vim ou htop : l'en-tête (le loup, le modèle, la conversation, les outils) reste en haut, la barre de saisie en bas, et la conversation défile entre les deux. À la sortie, le terminal retrouve son contenu d'avant. Le texte tapé pendant une réponse ouvre la saisie suivante.
 
 Les conversations sont enregistrées dans `avenoir.db`, dans le dossier de données d'Avenoir (`~/.local/share/avenoir` sous Linux, `%LOCALAPPDATA%\avenoir` sous Windows), lisible par vous seul. Le **journal d'audit** (chaque action exécutée, refusée, échouée ou annulée, avec ses arguments) est écrit dans `logs/audit.log` de ce même dossier, lisible par vous seul : 5 fichiers de 5 Mo au plus, le plus ancien effacé. Pour le voir aussi à l'écran : `AVENOIR_LOG=info`.
 
@@ -310,7 +315,7 @@ Le cœur est écrit en **C++23**, découpé en bibliothèques indépendantes :
 | `avenoir::tools` | outils natifs ; code propre à chaque système isolé |
 | `avenoir::modules` | hôte de modules : manifestes, processus JSON-RPC, compatibilité MCP |
 | `avenoir::storage` | conversations persistantes (SQLite) |
-| `avenoir::terminal` | rendu dans le terminal : couleurs, cadres, Markdown, pixel art |
+| `avenoir::terminal` | rendu dans le terminal : couleurs, cadres, Markdown, pixel art, découpe en lignes d'écran |
 | `apps/cli` | l'interface en ligne de commande |
 | `modules/meteo` | module météo fourni (programme séparé) |
 | `evals` | banc d'essai avec de vrais modèles (`avenoir-evals`) |
@@ -341,7 +346,7 @@ Sous Windows, `scripts\build.ps1` offre les mêmes options et charge tout seul l
 ./build/debug/evals/avenoir-evals --config ollama.toml --prompt essai.txt --only injection-meteo
 ```
 
-Les images de ce README sont générées par les scripts de [`docs/readme/`](docs/readme/) : `penguin.py` (pingouin) et `capture.sh` (enregistre une vraie session de la CLI et la dessine en PNG).
+Les images de ce README sont générées par les scripts de [`docs/readme/`](docs/readme/) : `wolf.py` (loup, lu dans `apps/cli/src/wolf.cpp` ; « Wolf », [asciiart.eu](https://www.asciiart.eu/animals/wolves), artiste inconnu, tel quel ; seule l'épée est ajoutée) et `capture.sh` (enregistre une vraie session de la CLI et la dessine en PNG).
 
 <details>
 <summary><b>Publier une version</b></summary>
@@ -374,7 +379,7 @@ Le workflow `release` vérifie que le numéro du tag correspond à la version du
 | **3 · Résident** | démon, journal, permissions durables, réglages scellés | ⬜ |
 | **4 · Tâches et modules** | orchestrateur multi-agents, plusieurs projets en parallèle, fichiers, mémoire, appels entre modules | ⬜ |
 | **5 · Voix** | mot de réveil, reconnaissance et synthèse vocales | ⬜ |
-| **6 · Interface graphique** | widget avec le pingouin animé, application principale | ⬜ |
+| **6 · Interface graphique** | widget avec le loup animé, application principale | ⬜ |
 | **7 · Identité et présence** | propriétaire et liste blanche, voix et visage, verrouillage automatique | ⬜ |
 
 Le détail, étape par étape : **[docs/ROADMAP.md](docs/ROADMAP.md)**.
@@ -389,6 +394,6 @@ Pour toute autre utilisation (modification, fork, contribution, usage commercial
 
 <div align="center">
 <br>
-<img src="docs/readme/avenoir-penguin.svg" alt="" width="40"><br>
+<img src="docs/readme/avenoir-wolf-icon.svg" alt="" width="114"><br>
 <sub>Avenoir · conçu et développé par <a href="https://github.com/echeance">@echeance</a>, assisté par IA.</sub>
 </div>

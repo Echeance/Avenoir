@@ -1,0 +1,100 @@
+diff --git a/include/replxx.hxx b/include/replxx.hxx
+index ab3c5e5..4c4677d 100644
+--- a/include/replxx.hxx
++++ b/include/replxx.hxx
+@@ -132,6 +132,8 @@ public:
+ 		static char32_t const MOUSE        = F24       + 1;
+ 		static char32_t const PASTE_START  = MOUSE     + 1;
+ 		static char32_t const PASTE_FINISH = PASTE_START + 1;
++		static char32_t const WHEEL_UP     = PASTE_FINISH + 1; /* Avenoir : molette (mode souris SGR ou console Windows) */
++		static char32_t const WHEEL_DOWN   = WHEEL_UP  + 1;
+ 		static constexpr char32_t shift( char32_t key_ ) {
+ 			return ( key_ | BASE_SHIFT );
+ 		}
+diff --git a/src/escape.cxx b/src/escape.cxx
+index dda1ab0..04153d0 100644
+--- a/src/escape.cxx
++++ b/src/escape.cxx
+@@ -808,6 +808,34 @@ static char32_t escLeftBracket9Routine(char32_t c) {
+ 	return escFailureRoutine(c);
+ }
+ 
++// Avenoir : ESC [ < bouton ; x ; y M|m, événement de souris en mode SGR
++// (DECSET 1006). La molette donne WHEEL_UP / WHEEL_DOWN, tout autre événement
++// MOUSE (à ignorer) : sans cela, la séquence serait tapée comme du texte.
++static char32_t sgrMouseRoutine(char32_t) {
++	unsigned int button = 0;
++	int field = 0;
++	for (int i = 0; i < 32; ++i) {
++		char32_t c = read_unicode_character();
++		if (c == 0) return 0;
++		if (c == 'M' || c == 'm') {
++			if (c == 'M' && field == 2) {
++				switch (button & ~0x1cU) { // sans Maj, Méta, Ctrl
++					case 64: return Replxx::KEY::WHEEL_UP;
++					case 65: return Replxx::KEY::WHEEL_DOWN;
++					default: break;
++				}
++			}
++			return Replxx::KEY::MOUSE;
++		}
++		if (c == ';') {
++			++field;
++		} else if (field == 0 && c >= '0' && c <= '9' && button < 1000) {
++			button = button * 10 + static_cast<unsigned int>(c - '0');
++		}
++	}
++	return Replxx::KEY::MOUSE;
++}
++
+ // Handle ESC [ <more stuff> escape sequences
+ //
+ static CharacterDispatchRoutine escLeftBracketRoutines[] = {
+@@ -817,9 +845,9 @@ static CharacterDispatchRoutine escLeftBracketRoutines[] = {
+ 	escLeftBracket0Routine, escLeftBracket1Routine, escLeftBracket2Routine,
+ 	escLeftBracket3Routine, escLeftBracket4Routine, escLeftBracket5Routine,
+ 	escLeftBracket6Routine, escLeftBracket7Routine, escLeftBracket8Routine,
+-	escLeftBracket9Routine, escFailureRoutine
++	escLeftBracket9Routine, sgrMouseRoutine,        escFailureRoutine
+ };
+-static CharacterDispatch escLeftBracketDispatch = {17, "ABCDHFZ0123456789",
++static CharacterDispatch escLeftBracketDispatch = {18, "ABCDHFZ0123456789<",
+ 																									 escLeftBracketRoutines};
+ 
+ // Handle ESC O <char> escape sequences
+diff --git a/src/terminal.cxx b/src/terminal.cxx
+index 75b0e59..53276f3 100644
+--- a/src/terminal.cxx
++++ b/src/terminal.cxx
+@@ -263,7 +263,9 @@ int Terminal::reset_raw_mode( void ) {
+ #ifdef _WIN32
+ 	SetConsoleMode(
+ 		_consoleIn,
+-		( _origInMode & ~( ENABLE_LINE_INPUT | ENABLE_ECHO_INPUT | ENABLE_PROCESSED_INPUT ) ) | ENABLE_QUICK_EDIT_MODE 
++		( _origInMode & ~( ENABLE_LINE_INPUT | ENABLE_ECHO_INPUT | ENABLE_PROCESSED_INPUT ) )
++		// Avenoir : sélection rapide gardée seulement si l'application ne lit pas la souris.
++		| ( ( _origInMode & ENABLE_MOUSE_INPUT ) != 0 ? 0 : ENABLE_QUICK_EDIT_MODE ) 
+ 	);
+ 	SetConsoleCP( 65001 );
+ 	enable_out();
+@@ -382,6 +384,10 @@ char32_t Terminal::read_char( void ) {
+ 			}
+ 		}
+ #endif
++		// Avenoir : molette de la souris (console en mode ENABLE_MOUSE_INPUT).
++		if ( ( rec.EventType == MOUSE_EVENT ) && ( rec.Event.MouseEvent.dwEventFlags == MOUSE_WHEELED ) ) {
++			return ( static_cast<short>( HIWORD( rec.Event.MouseEvent.dwButtonState ) ) > 0 ? Replxx::KEY::WHEEL_UP : Replxx::KEY::WHEEL_DOWN );
++		}
+ 		if ( rec.EventType != KEY_EVENT ) {
+ 			continue;
+ 		}
+@@ -572,6 +578,9 @@ Terminal::EVENT_TYPE Terminal::wait_for_input( int long timeout_ ) {
+ 				DWORD count;
+ 				PeekConsoleInputW( _consoleIn, &rec, 1, &count );
+ 
++				if ( ( rec.EventType == MOUSE_EVENT ) && ( rec.Event.MouseEvent.dwEventFlags == MOUSE_WHEELED ) ) {
++					return ( EVENT_TYPE::KEY_PRESS ); // Avenoir : molette, lue par read_char
++				}
+ 				if (
+ 					( rec.EventType != KEY_EVENT )
+ 					|| ( !rec.Event.KeyEvent.bKeyDown && ( rec.Event.KeyEvent.wVirtualKeyCode != VK_MENU ) )

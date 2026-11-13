@@ -1,0 +1,19 @@
+{
+  "name": "replxx",
+  "version": "0.0.4",
+  "port-version": 101,
+  "description": "replxx (BSD), avec le patch de la molette de la souris d'Avenoir.",
+  "homepage": "https://github.com/AmokHuginnsson/replxx",
+  "license": "BSD-3-Clause",
+  "supports": "!uwp",
+  "dependencies": [
+    {
+      "name": "vcpkg-cmake",
+      "host": true
+    },
+    {
+      "name": "vcpkg-cmake-config",
+      "host": true
+    }
+  ]
+}

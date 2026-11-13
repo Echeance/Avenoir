@@ -11,6 +11,8 @@
 
 #include <replxx.hxx>
 
+#include "scroll.hpp"
+
 namespace avenoir::cli {
 
 /// Saisie de ligne (replxx) : édition, historique conservé entre deux
@@ -52,11 +54,25 @@ class Prompt {
         /// Montre un message de `poll` ; appelée dans le thread de replxx,
         /// jamais en même temps que l'affichage de la saisie.
         std::function<void(const std::string& message)> notify;
+        /// Molette, PgUp/PgDn, Ctrl+↑/↓ : défilement de la conversation.
+        std::function<void(ScrollStep step)> scroll;
     };
     void set_hooks(Hooks hooks);
     /// Commandes proposées à la complétion (connues du démon une fois
     /// connecté). Hors saisie seulement.
     void set_commands(std::vector<std::string> commands) { commands_ = std::move(commands); }
+
+    /// Texte tapé pendant une requête : il ouvre la saisie suivante.
+    void type_ahead(std::string text) { type_ahead_ = std::move(text); }
+
+    /// Saisie d'un menu (/settings) : ↑/↓, PgUp/PgDn et la molette déplacent
+    /// la sélection (`move`), le texte tapé la filtre (`filter`) ; Entrée
+    /// valide, Ctrl+C ou Ctrl+D ferment le menu.
+    struct Menu {
+        std::function<void(int delta)> move;
+        std::function<void(const std::string& filter)> filter;
+    };
+    [[nodiscard]] Input read_menu(const std::string& prompt, const Menu& menu);
 
     /// Pose une question fermée ; seuls « o », « oui », « y », « yes » valent
     /// oui. Ctrl+C vaut non et lève une demande d'interruption.
@@ -70,6 +86,8 @@ class Prompt {
     void watch_size(const std::stop_token& stop);
     /// Thread qui appelle `hooks_.poll` et fait montrer ses messages.
     void watch_events(const std::stop_token& stop);
+    /// Liaisons des touches de défilement et de menu.
+    void bind_navigation();
 
     replxx::Replxx replxx_;
     std::vector<std::string> commands_;
@@ -82,6 +100,8 @@ class Prompt {
     bool restart_ = false;   ///< Saisie à relancer après un redimensionnement (Windows).
     std::mutex notes_mutex_;
     std::vector<std::string> notes_; ///< Messages de `poll` pas encore montrés.
+    std::string type_ahead_;         ///< Texte tapé pendant la requête précédente.
+    const Menu* menu_ = nullptr;     ///< Menu en cours de saisie, ou aucun.
 };
 
 } // namespace avenoir::cli

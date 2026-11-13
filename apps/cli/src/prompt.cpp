@@ -117,12 +117,17 @@ Prompt::Prompt(std::vector<std::string> commands, std::optional<std::filesystem:
         return {input + "\n" + hooks_.border()};
 #endif
     });
-    // Chaque modification du texte : la barre s'agrandit si besoin.
+    // Chaque modification du texte : la barre s'agrandit si besoin ; dans
+    // un menu, le texte filtre la liste.
     replxx_.set_modify_callback([this](std::string& line, int& /*cursor*/) {
         if (hooks_.changed) {
             hooks_.changed(current_prompt_, line);
         }
+        if (menu_ != nullptr && menu_->filter) {
+            menu_->filter(line);
+        }
     });
+    bind_navigation();
     // Touche simulée par le thread de surveillance quand le terminal change
     // de taille : la barre est recalée, puis replxx redessine l'invite et la
     // saisie depuis la position du curseur.
@@ -193,6 +198,52 @@ Prompt::Prompt(std::vector<std::string> commands, std::optional<std::filesystem:
     if (history_file_) {
         replxx_.history_load(history_file_->string());
     }
+}
+
+void Prompt::bind_navigation() {
+    using Key = replxx::Replxx::KEY;
+    using Action = replxx::Replxx::ACTION;
+    using Result = replxx::Replxx::ACTION_RESULT;
+    // Dans un menu : déplace la sélection ; sinon `fallback` (historique ou
+    // défilement de la conversation).
+    const auto bind = [this](char32_t key, int menu_delta, auto fallback) {
+        replxx_.bind_key(key, [this, menu_delta, fallback](char32_t code) {
+            if (menu_ != nullptr) {
+                if (menu_->move && menu_delta != 0) {
+                    menu_->move(menu_delta);
+                }
+                return Result::CONTINUE;
+            }
+            return fallback(code);
+        });
+    };
+    const auto scroll = [this](ScrollStep step) {
+        return [this, step](char32_t /*code*/) {
+            if (hooks_.scroll) {
+                hooks_.scroll(step);
+            }
+            return Result::CONTINUE;
+        };
+    };
+    bind(Key::UP, -1,
+         [this](char32_t code) { return replxx_.invoke(Action::HISTORY_PREVIOUS, code); });
+    bind(Key::DOWN, 1,
+         [this](char32_t code) { return replxx_.invoke(Action::HISTORY_NEXT, code); });
+    bind(Key::PAGE_UP, -10, scroll(ScrollStep::PageUp));
+    bind(Key::PAGE_DOWN, 10, scroll(ScrollStep::PageDown));
+    bind(Key::WHEEL_UP, -3, scroll(ScrollStep::WheelUp));
+    bind(Key::WHEEL_DOWN, 3, scroll(ScrollStep::WheelDown));
+    bind(Key::control(Key::UP), -1, scroll(ScrollStep::LineUp));
+    bind(Key::control(Key::DOWN), 1, scroll(ScrollStep::LineDown));
+    // Clic et autres événements de souris : ignorés.
+    replxx_.bind_key(Key::MOUSE, [](char32_t /*code*/) { return Result::CONTINUE; });
+}
+
+Prompt::Input Prompt::read_menu(const std::string& prompt, const Menu& menu) {
+    menu_ = &menu;
+    auto input = read(prompt, /*remember=*/false);
+    menu_ = nullptr;
+    return input;
 }
 
 void Prompt::set_hooks(Hooks hooks) {
@@ -309,6 +360,11 @@ void Prompt::retype(const std::string& text, int cursor) {
 }
 
 Prompt::Input Prompt::read_line(const std::string& prompt, bool remember) {
+    if (!type_ahead_.empty() && menu_ == nullptr) {
+        // Texte tapé pendant la requête précédente : retapé dans la saisie.
+        retype(type_ahead_, -1);
+        type_ahead_.clear();
+    }
     errno = 0;
     const char* line = replxx_.input(prompt);
     // Saisie interrompue par un redimensionnement (Windows) : la barre est

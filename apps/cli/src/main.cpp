@@ -52,6 +52,7 @@
 #include "display.hpp"
 #include "launcher.hpp"
 #include "prompt.hpp"
+#include "settings_menu.hpp"
 
 namespace {
 
@@ -189,6 +190,12 @@ class Client {
         (void)cli::take_interrupt();
         std::optional<core::Result<json>> result;
         std::atomic<bool> done{false};
+        // Plein écran : la molette et PgUp/PgDn font défiler la conversation
+        // pendant la requête ; le texte tapé ouvre la saisie suivante.
+        std::optional<cli::KeyReader> keys;
+        if (display().full_screen()) {
+            keys.emplace();
+        }
         {
             std::jthread worker([this, method, &params, &result,
                                  &done](const std::stop_token& stop) {
@@ -205,8 +212,21 @@ class Client {
                 for (const auto& note : take_notes()) {
                     display().notify(note);
                 }
+                // Pas pendant une question : la saisie lit le clavier.
+                while (keys && !questioning_) {
+                    const auto step = keys->poll();
+                    if (!step) {
+                        break;
+                    }
+                    display().scroll(*step);
+                }
                 display().tick();
                 std::this_thread::sleep_for(50ms);
+            }
+        }
+        if (keys && prompt_ != nullptr) {
+            if (auto typed = keys->take_typed(); !typed.empty()) {
+                prompt_->type_ahead(std::move(typed));
             }
         }
         if (!result) {
@@ -302,7 +322,22 @@ class Client {
         }
     }
 
+    /// Le temps d'une question : le clavier est à la saisie.
+    class Questioning {
+      public:
+        explicit Questioning(std::atomic<bool>& flag) : flag_(flag) { flag_ = true; }
+        ~Questioning() { flag_ = false; }
+        Questioning(const Questioning&) = delete;
+        Questioning& operator=(const Questioning&) = delete;
+        Questioning(Questioning&&) = delete;
+        Questioning& operator=(Questioning&&) = delete;
+
+      private:
+        std::atomic<bool>& flag_;
+    };
+
     std::optional<std::string> ask(const std::string& question) {
+        const Questioning questioning(questioning_);
         display().suspend_thinking();
         std::optional<std::string> answer;
         if (prompt_ != nullptr) {
@@ -318,6 +353,7 @@ class Client {
     }
 
     bool ask_yes_no(const std::string& question) {
+        const Questioning questioning(questioning_);
         display().suspend_thinking();
         const bool yes = prompt_ != nullptr && prompt_->ask_yes_no(shown(question) + " ");
         display().resume_thinking();
@@ -332,6 +368,7 @@ class Client {
         spec.risk = core::risk_level_from_string(spec_json.value("risk", "sensitive"))
                         .value_or(core::RiskLevel::Sensitive);
         const core::ToolCall call = call_from(params.value("call", json::object()));
+        const Questioning questioning(questioning_);
         display().suspend_thinking();
         display().confirmation(spec, call);
         const bool approved =
@@ -347,6 +384,7 @@ class Client {
     std::mutex notes_mutex_;
     std::deque<std::string> notes_;
     std::atomic<bool> lost_{false};
+    std::atomic<bool> questioning_{false}; ///< Une question est posée (saisie en cours).
 };
 
 std::string_view trim(std::string_view text) {
@@ -405,6 +443,7 @@ int run(int argc, char** argv) {
         .border = [] { return display().status_rule(); },
         .poll = [&client] { return client.take_notes(); },
         .notify = [](const std::string& message) { display().notify(message); },
+        .scroll = [](cli::ScrollStep step) { display().scroll(step); },
     });
     client.attach(prompt);
     ipc::Peer peer(std::move(*connection));
@@ -456,6 +495,31 @@ int run(int argc, char** argv) {
         if (line.empty()) {
             continue;
         }
+        if (line == "/settings" || line == "/parametres" || line == "/paramètres") {
+            // Menu des réglages, dessiné ici ; chaque changement passe par le
+            // démon (/reglage), seul à écrire les réglages.
+            cli::run_settings_menu(
+                prompt,
+                cli::SettingsBackend{
+                    .fetch = [&client] -> std::optional<std::vector<cli::SettingEntry>> {
+                        auto list = client.run("settings/list", json::object());
+                        if (!list) {
+                            display().error(core::describe(list.error()));
+                            return std::nullopt;
+                        }
+                        return cli::settings_from_json(list->value("settings", json()));
+                    },
+                    .apply =
+                        [&client](const std::string& key, const std::string& value) {
+                            if (auto done = client.run(
+                                    "input", {{"line", std::format("/reglage {} {}", key, value)}});
+                                !done) {
+                                display().error(core::describe(done.error()));
+                            }
+                        },
+                });
+            continue;
+        }
         auto result = client.run("input", {{"line", std::string(line)}});
         if (!result) {
             if (client.lost()) {
@@ -467,6 +531,11 @@ int run(int argc, char** argv) {
         if (result->value("quit", false)) {
             conversation = result->value("conversation", conversation);
             break;
+        }
+        // Modèle et conversation à jour dans l'en-tête et la ligne d'état.
+        if (result->contains("llm")) {
+            display().set_status(shown(result->value("llm", "")),
+                                 shown(result->value("conversation", "")));
         }
     }
     if (client.lost()) {

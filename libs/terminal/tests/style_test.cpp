@@ -1,4 +1,6 @@
+#include <format>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include <catch2/catch_test_macros.hpp>
@@ -87,4 +89,26 @@ TEST_CASE("strip_styles : couleurs retirées, texte gardé", "[style]") {
     CHECK(strip_styles("sans couleur") == "sans couleur");
     CHECK(strip_styles("\x1b[") == "");
     set_enabled(false);
+}
+
+TEST_CASE("lignes d'écran : découpe, style rouvert à chaque ligne", "[style]") {
+    // Sans style : découpe aux « \n » et toutes les `width` colonnes.
+    CHECK(layout("abcdef\ngh\n", 4) == std::vector<std::string>{"abcd", "ef", "gh"});
+    CHECK(layout("", 4) == std::vector<std::string>{""});
+    CHECK(layout("\n\n", 4) == std::vector<std::string>{"", ""});
+    CHECK(layout("éèàç", 2) == std::vector<std::string>{"éè", "àç"});
+    // Sans largeur : seulement les « \n ».
+    CHECK(layout("abcdef", 0) == std::vector<std::string>{"abcdef"});
+    // Le style ouvert sur plusieurs lignes est refermé puis rouvert.
+    const std::string red = "\x1b[31m";
+    const std::string reset = "\x1b[0m";
+    const auto styled = [&](std::string_view text) {
+        return std::format("{}{}{}", red, text, reset);
+    };
+    CHECK(layout(std::format("{}abc\ndef{}\n", red, reset), 0) ==
+          std::vector<std::string>{styled("abc"), styled("def")});
+    CHECK(layout(std::format("{}abcd{}x", red, reset), 2) ==
+          std::vector<std::string>{styled("ab"), styled("cd"), "x"});
+    // Les séquences ne comptent pas dans la largeur.
+    CHECK(layout(styled("ab"), 2) == std::vector<std::string>{styled("ab")});
 }

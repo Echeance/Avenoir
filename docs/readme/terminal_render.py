@@ -82,8 +82,15 @@ class Screen:
                     color = tuple(params[i + 2:i + 5])
                     i += 4
                 else:
-                    n = params[i + 2] - 16
-                    color = (n // 36 * 51, n // 6 % 6 * 51, n % 6 * 51)
+                    n = params[i + 2]
+                    levels = (0, 95, 135, 175, 215, 255)  # cube 6×6×6 de xterm
+                    if n >= 232:  # niveaux de gris
+                        color = (8 + (n - 232) * 10,) * 3
+                    elif n >= 16:
+                        n -= 16
+                        color = (levels[n // 36], levels[n // 6 % 6], levels[n % 6])
+                    else:
+                        color = FOREGROUND
                     i += 2
                 if p == 38:
                     self.fg = color
@@ -120,6 +127,14 @@ class Screen:
         elif command == "T":
             for _ in range(n or 1):
                 self.scroll_down()
+        elif private == "?" and 1049 in params and command in "hl":
+            # Écran alterné : l'écran principal est mis de côté, puis rendu.
+            if command == "h":
+                self.main_screen = [list(line) for line in self.cells]
+                self.cells = [self.blank_line() for _ in range(self.rows)]
+            elif getattr(self, "main_screen", None) is not None:
+                self.cells = self.main_screen
+                self.main_screen = None
         elif command == "r" and not private:
             self.top = (params[0] - 1) if params and params[0] else 0
             self.bottom = min(self.rows - 1, (params[1] - 1) if len(params) > 1 and params[1] else self.rows - 1)

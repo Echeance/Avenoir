@@ -11,6 +11,7 @@
 #include "avenoir/core/config.hpp"
 #include "avenoir/core/error.hpp"
 
+#include "settings_catalog.hpp"
 #include "setup.hpp"
 
 // Ce que fait Avenoir, une fois sa configuration lue : agent, outils, modules,
@@ -63,6 +64,10 @@ class Runtime {
     [[nodiscard]] std::vector<std::string> completions() const;
     /// « « titre » (n° 3) », pour l'au revoir du client.
     [[nodiscard]] std::string describe_conversation() const;
+    /// Modèle actif, tel que l'accueil le montre (« gemma : gemma4…, local »).
+    [[nodiscard]] std::string model_status() const;
+    /// Réglages modifiables et leur valeur (menu /settings de la CLI).
+    [[nodiscard]] std::vector<SettingLine> settings() const;
     [[nodiscard]] const ConfigFile& config() const;
 
   private:

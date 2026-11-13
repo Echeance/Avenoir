@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="252" height="306" role="img" aria-label="Le loup d'Avenoir, une épée dans la gueule, en ASCII">
+  <title>Avenoir</title>
+  <g font-family="DejaVu Sans Mono, Menlo, Consolas, monospace" font-size="14" xml:space="preserve">
+    <text x="0" y="13">                            <tspan fill="#ffffff" font-weight="bold">/\</tspan></text>
+    <text x="0" y="30">                           <tspan fill="#ffffff" font-weight="bold">/</tspan> <tspan fill="#afd7ff">/</tspan></text>
+    <text x="0" y="47">                          <tspan fill="#ffffff" font-weight="bold">/</tspan> <tspan fill="#afd7ff">/</tspan> </text>
+    <text x="0" y="64">                         <tspan fill="#ffffff" font-weight="bold">/</tspan> <tspan fill="#afd7ff">/</tspan>  </text>
+    <text x="0" y="81">                        <tspan fill="#ffffff" font-weight="bold">/</tspan> <tspan fill="#afd7ff">/</tspan>   </text>
+    <text x="0" y="98">                       <tspan fill="#ffffff" font-weight="bold">/</tspan> <tspan fill="#afd7ff">/</tspan>    </text>
+    <text x="0" y="115">                     <tspan fill="#d7af5f" font-weight="bold">=##=</tspan>     </text>
+    <text x="0" y="132">                     <tspan fill="#87afd7">.</tspan><tspan fill="#875f00">/</tspan>       </text>
+    <text x="0" y="149">                    <tspan fill="#87afd7">/</tspan> <tspan fill="#87afd7">V\</tspan>      </text>
+    <text x="0" y="166">                  <tspan fill="#87afd7">/</tspan> <tspan fill="#87afd7">`</tspan>  <tspan fill="#87afd7">/</tspan>      </text>
+    <text x="0" y="183">                 <tspan fill="#87afd7">&lt;&lt;</tspan>   <tspan fill="#87afd7">|</tspan>       </text>
+    <text x="0" y="200">                 <tspan fill="#87afd7">/</tspan>    <tspan fill="#87afd7">|</tspan>       </text>
+    <text x="0" y="217">               <tspan fill="#87afd7">/</tspan>      <tspan fill="#87afd7">|</tspan>       </text>
+    <text x="0" y="234">             <tspan fill="#87afd7">/</tspan>        <tspan fill="#87afd7">|</tspan>       </text>
+    <text x="0" y="251">           <tspan fill="#87afd7">/</tspan>    <tspan fill="#87afd7">\</tspan>  <tspan fill="#87afd7">\</tspan> <tspan fill="#87afd7">/</tspan>        </text>
+    <text x="0" y="268">          <tspan fill="#87afd7">(</tspan>      <tspan fill="#87afd7">)</tspan> <tspan fill="#87afd7">|</tspan> <tspan fill="#87afd7">|</tspan>        </text>
+    <text x="0" y="285">  <tspan fill="#87afd7">________|</tspan>   <tspan fill="#87afd7">_/_</tspan>  <tspan fill="#87afd7">|</tspan> <tspan fill="#87afd7">|</tspan>        </text>
+    <text x="0" y="302"><tspan fill="#87afd7">&lt;__________\______)\__)</tspan>       </text>
+  </g>
+</svg>

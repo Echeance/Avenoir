@@ -68,6 +68,13 @@ void set_enabled(bool enabled) noexcept;
 /// plus long que `width` est coupé). Les retours à la ligne sont conservés.
 [[nodiscard]] std::vector<std::string> wrap(std::string_view text, std::size_t width);
 
+/// Lignes d'écran d'un texte mis en forme : découpé à chaque « \n », puis
+/// toutes les `width` colonnes (0 : jamais). Chaque ligne se suffit à
+/// elle-même : le style en cours (séquences SGR « ESC [ … m ») est rouvert au
+/// début de la ligne suivante et refermé à la fin. Un « \n » final ne donne
+/// pas de ligne vide de plus. Sert à l'historique défilable de la CLI.
+[[nodiscard]] std::vector<std::string> layout(std::string_view text, std::size_t width);
+
 /// Raccourcit `text` à `width` colonnes au plus, avec « … » s'il est coupé.
 [[nodiscard]] std::string ellipsize(std::string_view text, std::size_t width);
 
