@@ -38,6 +38,12 @@ TEST_CASE("annonces des outils natifs", "[claims]") {
     // Ministral, cas `changer-moteur` (série 9).
     CHECK(check("Je vais utiliser **SearXNG** pour mes recherches web.", none));
 
+    // Ministral (essai réel, 13 novembre 2026) : mise en veille par `power`,
+    // puis « verrouillé » annoncé sans `lock_screen`.
+    const std::vector suspended{call("power")};
+    CHECK(check("L'écran est maintenant verrouillé (mode veille).", suspended));
+    CHECK_FALSE(check("L'écran n'est pas verrouillé : aucun verrouilleur n'a répondu.", none));
+
     // Fait par l'outil (même refusé) : rien à redire.
     const std::vector power{call("power")};
     CHECK_FALSE(check("L'outil va éteindre l'ordinateur.", power));

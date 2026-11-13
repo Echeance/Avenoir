@@ -596,7 +596,7 @@ core::Result<void> register_system_rules(core::FastRouter& router) {
          "set_dark_mode",
          "",
          {{"dark", false}}},
-        {R"(^verrouille\s+(?:l'ordinateur|l'écran|la\s+session|le\s+pc|mon\s+ordinateur)$)",
+        {R"(^verr?ouille\s+(?:l'ordinateur|l'écran|la\s+session|le\s+pc|mon\s+ordinateur)$)",
          "lock_screen", "", none},
         {R"(^mets\s+(?:l'ordinateur|le\s+pc|mon\s+ordinateur)\s+en\s+veille$)",
          "power",

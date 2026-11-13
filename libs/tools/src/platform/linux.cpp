@@ -594,30 +594,47 @@ bool is_running(std::string_view name) {
     return status == 0;
 }
 
-/// Lance le premier verrouilleur Wayland installé, détaché (il tourne jusqu'au
-/// déverrouillage). Succès seulement s'il tourne encore un instant après :
-/// un verrouilleur qui ne peut pas prendre l'écran s'arrête aussitôt.
+/// Lance les verrouilleurs Wayland installés, l'un après l'autre, détachés (un
+/// verrouilleur tourne jusqu'au déverrouillage). Succès dès que l'un tourne
+/// encore un instant après son lancement : un verrouilleur qui ne peut pas
+/// prendre l'écran (hyprlock sans ~/.config/hypr/hyprlock.conf, par exemple)
+/// s'arrête aussitôt, et le suivant est essayé.
 std::expected<void, std::string> run_wayland_locker() {
     using namespace std::chrono_literals;
+    std::vector<std::string> stopped;
     for (const auto locker : kWaylandLockers) {
         const std::string name(locker);
         if (!is_in_path(name)) {
             continue;
         }
-        if (run_and_wait({"setsid", "-f", name}, 5s) != 0) {
-            return std::unexpected("verrouillage : impossible de lancer « " + name + " »");
+        if (run_and_wait({"setsid", "-f", name}, 5s) == 0) {
+            std::this_thread::sleep_for(1s);
+            if (is_running(name)) {
+                return {};
+            }
         }
-        std::this_thread::sleep_for(1s);
-        if (is_running(name)) {
-            return {};
-        }
-        return std::unexpected("verrouillage : « " + name +
-                               " » s'est arrêté aussitôt, l'écran n'est pas verrouillé");
+        stopped.push_back(name);
     }
-    return std::unexpected(
-        "verrouillage demandé, mais aucun écran de verrouillage n'a répondu : le bureau ne "
-        "gère pas le verrouillage de logind et aucun verrouilleur (swaylock, hyprlock, gtklock, "
-        "waylock) n'est installé. L'écran n'est pas verrouillé.");
+    if (stopped.empty()) {
+        return std::unexpected(
+            "verrouillage demandé, mais aucun écran de verrouillage n'a répondu : le bureau ne "
+            "gère pas le verrouillage de logind et aucun verrouilleur (swaylock, hyprlock, "
+            "gtklock, waylock) n'est installé. L'écran n'est pas verrouillé.");
+    }
+    std::string names;
+    for (const auto& name : stopped) {
+        names += (names.empty() ? "« " : ", « ") + name + " »";
+    }
+    std::string hint;
+    if (std::ranges::contains(stopped, std::string("hyprlock"))) {
+        hint = " (hyprlock demande un fichier ~/.config/hypr/hyprlock.conf)";
+    }
+    return std::unexpected("l'écran n'est pas verrouillé : le bureau ne répond pas au "
+                           "verrouillage de logind, et " +
+                           names + (stopped.size() > 1 ? " se sont arrêtés" : " s'est arrêté") +
+                           " aussitôt" + hint +
+                           ". Installer swaylock (sans configuration) ou configurer le "
+                           "verrouilleur règle le problème.");
 }
 
 } // namespace

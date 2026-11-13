@@ -70,6 +70,8 @@ TEST_CASE("voie rapide : écran, session, alimentation", "[system]") {
     REQUIRE(route("désactive le mode sombre") ==
             core::FastRoute{.tool = "set_dark_mode", .arguments = {{"dark", false}}});
     REQUIRE(route("verrouille l'ordinateur") == core::FastRoute{.tool = "lock_screen"});
+    CHECK(route("Verrouille l'écran") == core::FastRoute{.tool = "lock_screen"});
+    CHECK(route("Verouille l'écran") == core::FastRoute{.tool = "lock_screen"}); // faute courante
     REQUIRE(route("mets l'ordinateur en veille") ==
             core::FastRoute{.tool = "power", .arguments = {{"action", "suspend"}}});
 
