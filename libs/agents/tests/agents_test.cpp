@@ -196,7 +196,11 @@ TEST_CASE("run_plan : parallèle, dépendances transmises comme données", "[age
         // a et b : chacune attend que l'autre ait commencé (5 s au plus) ;
         // elles ne se rejoignent que si elles tournent en même temps.
         const int now = ++running;
-        peak = std::max(peak.load(), now);
+        // Maximum atomique : un simple « peak = max(peak, now) » peut perdre
+        // le 2 de l'autre tâche (vu sous ASan).
+        int seen = peak.load();
+        while (seen < now && !peak.compare_exchange_weak(seen, now)) {
+        }
         const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
         while (peak < 2 && std::chrono::steady_clock::now() < deadline) {
             std::this_thread::sleep_for(std::chrono::milliseconds(5));

@@ -52,7 +52,7 @@ Ink zone_ink(char zone) {
 
 /// Petite police 5 × 7 pour les seuls caractères du loup.
 struct Glyph {
-    char character;
+    char character = '\0';
     std::array<std::string_view, 7> rows;
 };
 constexpr std::array<Glyph, 12> kFont{{
@@ -97,8 +97,15 @@ class Canvas {
 
     /// Un caractère du loup dans la cellule (`x`, `y`) en pixels.
     void glyph(char character, int x, int y, Ink ink) {
-        const auto* found = std::ranges::find(kFont, character, &Glyph::character);
-        if (found == kFont.end()) {
+        // Boucle simple : l'itérateur de std::array n'est pas un pointeur sous MSVC.
+        const Glyph* found = nullptr;
+        for (const auto& candidate : kFont) {
+            if (candidate.character == character) {
+                found = &candidate;
+                break;
+            }
+        }
+        if (found == nullptr) {
             return;
         }
         for (int row = 0; row < 7; ++row) {
