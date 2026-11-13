@@ -354,6 +354,12 @@ void run_settings_menu(Prompt& prompt, const SettingsBackend& backend) {
                 },
             .filter =
                 [&](const std::string& text) {
+                    // replxx rappelle ce rappel à chaque rafraîchissement
+                    // (Entrée comprise) : la sélection ne revient en tête
+                    // que si le filtre change vraiment.
+                    if (text == filter) {
+                        return;
+                    }
                     filter = text;
                     visible = filter_settings(*entries, filter);
                     selected = 0;
