@@ -540,11 +540,114 @@ bool supports_lock() {
     return is_in_path("loginctl");
 }
 
+namespace {
+
+/// Verrouilleurs Wayland lancés directement quand le bureau ne répond pas au
+/// signal de verrouillage de logind (niri, sway… sans swayidle).
+constexpr std::array<std::string_view, 4> kWaylandLockers{"swaylock", "hyprlock", "gtklock",
+                                                          "waylock"};
+
+/// Session graphique de l'utilisateur, d'après logind. Ce n'est pas forcément
+/// celle du démon : lancé depuis un terminal distant ou un tty, il est dans une
+/// session sans écran, et `loginctl lock-session` sans argument la
+/// « verrouillerait » sans effet visible.
+std::optional<std::string> graphical_session() {
+    const auto display =
+        run_tool({"loginctl", "show-user", std::to_string(getuid()), "-p", "Display", "--value"},
+                 "verrouillage");
+    if (!display || display->empty() || display->size() > 32 ||
+        !std::ranges::all_of(*display, [](char c) {
+            return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z');
+        })) {
+        return std::nullopt;
+    }
+    return *display;
+}
+
+std::string session_property(const std::string& session, const std::string& property) {
+    return run_tool({"loginctl", "show-session", session, "-p", property, "--value"},
+                    "verrouillage")
+        .value_or("");
+}
+
+/// Attend que logind signale la session verrouillée (indice posé par
+/// l'écran de verrouillage du bureau), au plus `timeout`.
+bool wait_locked(const std::string& session, std::chrono::milliseconds timeout) {
+    using namespace std::chrono_literals;
+    const auto deadline = std::chrono::steady_clock::now() + timeout;
+    while (true) {
+        if (session_property(session, "LockedHint") == "yes") {
+            return true;
+        }
+        if (std::chrono::steady_clock::now() >= deadline) {
+            return false;
+        }
+        std::this_thread::sleep_for(200ms);
+    }
+}
+
+/// Vrai si un processus nommé exactement `name` tourne pour l'utilisateur.
+bool is_running(std::string_view name) {
+    using namespace std::chrono_literals;
+    const auto status =
+        run_and_wait({"pgrep", "-x", "-u", std::to_string(getuid()), std::string(name)}, 3s);
+    return status == 0;
+}
+
+/// Lance le premier verrouilleur Wayland installé, détaché (il tourne jusqu'au
+/// déverrouillage). Succès seulement s'il tourne encore un instant après :
+/// un verrouilleur qui ne peut pas prendre l'écran s'arrête aussitôt.
+std::expected<void, std::string> run_wayland_locker() {
+    using namespace std::chrono_literals;
+    for (const auto locker : kWaylandLockers) {
+        const std::string name(locker);
+        if (!is_in_path(name)) {
+            continue;
+        }
+        if (run_and_wait({"setsid", "-f", name}, 5s) != 0) {
+            return std::unexpected("verrouillage : impossible de lancer « " + name + " »");
+        }
+        std::this_thread::sleep_for(1s);
+        if (is_running(name)) {
+            return {};
+        }
+        return std::unexpected("verrouillage : « " + name +
+                               " » s'est arrêté aussitôt, l'écran n'est pas verrouillé");
+    }
+    return std::unexpected(
+        "verrouillage demandé, mais aucun écran de verrouillage n'a répondu : le bureau ne "
+        "gère pas le verrouillage de logind et aucun verrouilleur (swaylock, hyprlock, gtklock, "
+        "waylock) n'est installé. L'écran n'est pas verrouillé.");
+}
+
+} // namespace
+
 std::expected<void, std::string> lock_screen() {
-    if (auto done = run_tool({"loginctl", "lock-session"}, "verrouillage"); !done) {
+    using namespace std::chrono_literals;
+    const auto session = graphical_session();
+    if (!session) {
+        return std::unexpected(
+            "verrouillage : aucune session graphique trouvée (logind), l'écran n'est pas "
+            "verrouillé");
+    }
+    if (session_property(*session, "LockedHint") == "yes" ||
+        std::ranges::any_of(kWaylandLockers, is_running)) {
+        return {}; // déjà verrouillée
+    }
+    // GNOME, KDE, Xfce… répondent au signal de logind et posent l'indice.
+    if (auto done = run_tool({"loginctl", "lock-session", *session}, "verrouillage"); !done) {
         return std::unexpected(done.error());
     }
-    return {};
+    if (wait_locked(*session, 3s)) {
+        return {};
+    }
+    // Pas de réponse : sous Wayland, un verrouilleur lancé directement.
+    if (session_property(*session, "Type") == "wayland") {
+        return run_wayland_locker();
+    }
+    return std::unexpected(
+        "verrouillage demandé, mais l'écran de verrouillage du bureau n'a pas répondu : "
+        "l'écran n'est pas verrouillé");
 }
 
 bool supports_notify() {

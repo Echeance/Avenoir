@@ -20,51 +20,112 @@ std::size_t find_closing(std::string_view text, std::size_t from, std::string_vi
     return end == from ? std::string_view::npos : end; // contenu vide refusé
 }
 
-/// Éléments en ligne : gras, italique, code, liens (non imbriqués).
-std::string render_inline(std::string_view text) {
+/// `style` complété par `base` : effets cumulés, couleur propre d'abord.
+Style combined(Style style, Style base) {
+    return {.color = style.color != Color::Default ? style.color : base.color,
+            .bold = style.bold || base.bold,
+            .dim = style.dim || base.dim,
+            .italic = style.italic || base.italic,
+            .underline = style.underline || base.underline};
+}
+
+/// Éléments en ligne : gras, italique, code, liens, imbricables (« [Lire sur
+/// *LeMagIT*](…) », « **gras *italique*** »). Un seul parcours : chaque
+/// style ouvert retient où il se ferme ; chaque morceau est peint avec tous
+/// les styles en cours et `base` (titre, citation), si bien qu'un style
+/// intérieur ne coupe pas celui qui l'entoure.
+std::string render_inline(std::string_view text, Style base = {}) {
+    constexpr auto kNone = std::string_view::npos;
     std::string out;
+    std::string plain; // texte en attente, peint d'un seul trait
+    std::size_t bold_end = kNone;
+    std::size_t italic_end = kNone;
+    std::size_t link_end = kNone; // position du « ](»
+    std::size_t url_end = kNone;  // position de la « ) »
+    const auto current = [&] {
+        return combined({.bold = bold_end != kNone,
+                         .italic = italic_end != kNone,
+                         .underline = link_end != kNone},
+                        base);
+    };
+    const auto flush = [&] {
+        out += paint(plain, current());
+        plain.clear();
+    };
     std::size_t i = 0;
     while (i < text.size()) {
         const std::string_view rest = text.substr(i);
 
+        // Fermetures des styles ouverts.
+        if (i == bold_end) {
+            flush();
+            bold_end = kNone;
+            i += 2;
+            continue;
+        }
+        if (i == italic_end) {
+            flush();
+            italic_end = kNone;
+            i += 1;
+            continue;
+        }
+        if (i == link_end) {
+            flush();
+            link_end = kNone;
+            out += paint(" ", base);
+            out += paint("(" + std::string(text.substr(i + 2, url_end - i - 2)) + ")",
+                         combined(kMuted, base));
+            i = url_end + 1;
+            continue;
+        }
+
+        // Ouvertures.
         if (rest.starts_with('`')) {
-            if (const auto end = find_closing(text, i + 1, "`"); end != std::string_view::npos) {
-                out += paint(text.substr(i + 1, end - i - 1), kCode);
+            if (const auto end = find_closing(text, i + 1, "`"); end != kNone) {
+                flush();
+                out += paint(text.substr(i + 1, end - i - 1), combined(kCode, current()));
                 i = end + 1;
                 continue;
             }
         }
-        if (rest.starts_with("**")) {
-            if (const auto end = find_closing(text, i + 2, "**"); end != std::string_view::npos) {
-                out += paint(text.substr(i + 2, end - i - 2), {.bold = true});
-                i = end + 2;
+        if (bold_end == kNone && rest.starts_with("**")) {
+            if (auto end = find_closing(text, i + 2, "**"); end != kNone) {
+                // « *** » : le gras se ferme sur les deux dernières étoiles.
+                while (end + 2 < text.size() && text[end + 2] == '*') {
+                    ++end;
+                }
+                flush();
+                bold_end = end;
+                i += 2;
                 continue;
             }
         }
         // Italique : « *mot* » seulement (pas « 2 * 3 » ni les puces).
-        if (rest.starts_with('*') && rest.size() > 1 && rest[1] != ' ' && rest[1] != '*') {
+        if (italic_end == kNone && rest.starts_with('*') && rest.size() > 1 && rest[1] != ' ' &&
+            rest[1] != '*') {
             if (const auto end = find_closing(text, i + 1, "*");
-                end != std::string_view::npos && text[end - 1] != ' ') {
-                out += paint(text.substr(i + 1, end - i - 1), {.italic = true});
-                i = end + 1;
+                end != kNone && text[end - 1] != ' ' && end != bold_end) {
+                flush();
+                italic_end = end;
+                i += 1;
                 continue;
             }
         }
-        if (rest.starts_with('[')) {
+        if (link_end == kNone && rest.starts_with('[')) {
             const auto close = text.find("](", i);
-            const auto paren = close == std::string_view::npos ? close : text.find(')', close);
-            if (close != std::string_view::npos && paren != std::string_view::npos) {
-                out += paint(text.substr(i + 1, close - i - 1), {.underline = true});
-                out +=
-                    " " + paint("(" + std::string(text.substr(close + 2, paren - close - 2)) + ")",
-                                kMuted);
-                i = paren + 1;
+            const auto paren = close == kNone ? close : text.find(')', close);
+            if (close != kNone && paren != kNone) {
+                flush();
+                link_end = close;
+                url_end = paren;
+                i += 1;
                 continue;
             }
         }
-        out += text[i];
+        plain += text[i];
         ++i;
     }
+    flush();
     return out;
 }
 
@@ -127,8 +188,8 @@ std::vector<std::string> render_markdown(std::string_view text) {
                 ++level;
             }
             if (level < content.size() && content[level] == ' ') {
-                lines.push_back(paint(render_inline(content.substr(level + 1)),
-                                      {.color = Color::White, .bold = true}));
+                lines.push_back(render_inline(content.substr(level + 1),
+                                              {.color = Color::White, .bold = true}));
                 continue;
             }
         }
@@ -145,7 +206,7 @@ std::vector<std::string> render_markdown(std::string_view text) {
         if (content.starts_with("> ") || content == ">") {
             lines.push_back(
                 margin + paint("▌", kMuted) + " " +
-                paint(render_inline(content.substr(content.size() > 1 ? 2 : 1)), {.italic = true}));
+                render_inline(content.substr(content.size() > 1 ? 2 : 1), {.italic = true}));
             continue;
         }
         lines.push_back(margin + render_inline(content));

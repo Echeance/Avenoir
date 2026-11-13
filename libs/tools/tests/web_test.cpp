@@ -221,6 +221,7 @@ TEST_CASE("outil web_search", "[web]") {
     CHECK_FALSE(web.private_allowed->back()); // DuckDuckGo : public seulement
     CHECK(result->content.contains("1. METEO Lyon"));
     CHECK_FALSE(result->content.contains("2. ")); // max_results = 1
+    CHECK(result->content.starts_with("1 résultat pour"));
 
     // SearXNG : l'instance de la configuration, locale permise.
     REQUIRE(engines.select("searxng").has_value());
@@ -235,6 +236,14 @@ TEST_CASE("outil web_search", "[web]") {
     CHECK(searx.asked->back() == "http://127.0.0.1:8888/search?q=linux&format=json&language=fr");
     CHECK(searx.private_allowed->back());
     CHECK(found->content.contains("SearXNG"));
+    // Moins de résultats que demandé : le compte réel est annoncé en tête.
+    const auto fewer =
+        find(with_searx, "web_search")->call({{"query", "linux"}, {"max_results", 10}}, {});
+    REQUIRE(fewer.has_value());
+    CHECK(fewer->content.starts_with("1 résultat pour « linux » (SearXNG"));
+    CHECK(fewer->content.contains("), 10 demandés :"));
+    CHECK(fewer->content.contains(
+        "Seulement 1 résultat : une autre recherche n'en donnera pas plus"));
 
     CHECK_FALSE(search->call({{"query", "   "}}, {}).has_value());
     CHECK_FALSE(search->call({{"q", "x"}}, {}).has_value());
