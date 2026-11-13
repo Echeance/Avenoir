@@ -1,20 +1,21 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="227" height="255" role="img" aria-label="Le loup d'Avenoir, une épée dans la gueule, en ASCII">
+<svg xmlns="http://www.w3.org/2000/svg" width="263" height="291" viewBox="0 0 263 291" role="img" aria-label="Avenoir : le loup, une épée dans la gueule, en ASCII">
   <title>Avenoir</title>
-  <g font-family="DejaVu Sans Mono, Menlo, Consolas, monospace" font-size="14" xml:space="preserve">
-    <text x="0" y="13">                         <tspan fill="#ffffff" font-weight="bold">/\</tspan></text>
-    <text x="0" y="30">                        <tspan fill="#ffffff" font-weight="bold">/</tspan> <tspan fill="#afd7ff">/</tspan></text>
-    <text x="0" y="47">                       <tspan fill="#ffffff" font-weight="bold">/</tspan> <tspan fill="#afd7ff">/</tspan> </text>
-    <text x="0" y="64">                     <tspan fill="#d7af5f" font-weight="bold">=##=</tspan>  </text>
-    <text x="0" y="81">                     <tspan fill="#87afd7">.</tspan><tspan fill="#875f00">/</tspan>    </text>
-    <text x="0" y="98">                    <tspan fill="#87afd7">/</tspan> <tspan fill="#87afd7">V\</tspan>   </text>
-    <text x="0" y="115">                  <tspan fill="#87afd7">/</tspan> <tspan fill="#87afd7">`</tspan>  <tspan fill="#87afd7">/</tspan>   </text>
-    <text x="0" y="132">                 <tspan fill="#87afd7">&lt;&lt;</tspan>   <tspan fill="#87afd7">|</tspan>    </text>
-    <text x="0" y="149">                 <tspan fill="#87afd7">/</tspan>    <tspan fill="#87afd7">|</tspan>    </text>
-    <text x="0" y="166">               <tspan fill="#87afd7">/</tspan>      <tspan fill="#87afd7">|</tspan>    </text>
-    <text x="0" y="183">             <tspan fill="#87afd7">/</tspan>        <tspan fill="#87afd7">|</tspan>    </text>
-    <text x="0" y="200">           <tspan fill="#87afd7">/</tspan>    <tspan fill="#87afd7">\</tspan>  <tspan fill="#87afd7">\</tspan> <tspan fill="#87afd7">/</tspan>     </text>
-    <text x="0" y="217">          <tspan fill="#87afd7">(</tspan>      <tspan fill="#87afd7">)</tspan> <tspan fill="#87afd7">|</tspan> <tspan fill="#87afd7">|</tspan>     </text>
-    <text x="0" y="234">  <tspan fill="#87afd7">________|</tspan>   <tspan fill="#87afd7">_/_</tspan>  <tspan fill="#87afd7">|</tspan> <tspan fill="#87afd7">|</tspan>     </text>
-    <text x="0" y="251"><tspan fill="#87afd7">&lt;__________\______)\__)</tspan>    </text>
+  <rect width="100%" height="100%" rx="12" fill="#1e1e2e"/>
+  <g font-family="JetBrains Mono, DejaVu Sans Mono, Menlo, Consolas, monospace" font-size="14" xml:space="preserve" style="white-space: pre">
+    <text x="228.0" y="31.0" textLength="16.8" lengthAdjust="spacingAndGlyphs"><tspan fill="#ffffff" font-weight="bold">/\</tspan></text>
+    <text x="219.6" y="48.0" textLength="25.2" lengthAdjust="spacingAndGlyphs"><tspan fill="#ffffff" font-weight="bold">/</tspan> <tspan fill="#afd7ff">/</tspan></text>
+    <text x="211.2" y="65.0" textLength="25.2" lengthAdjust="spacingAndGlyphs"><tspan fill="#ffffff" font-weight="bold">/</tspan> <tspan fill="#afd7ff">/</tspan></text>
+    <text x="194.4" y="82.0" textLength="33.6" lengthAdjust="spacingAndGlyphs"><tspan fill="#f9e2af" font-weight="bold">=##=</tspan></text>
+    <text x="194.4" y="99.0" textLength="16.8" lengthAdjust="spacingAndGlyphs"><tspan fill="#87afff">.</tspan><tspan fill="#958769">/</tspan></text>
+    <text x="186.0" y="116.0" textLength="33.6" lengthAdjust="spacingAndGlyphs"><tspan fill="#87afff">/</tspan> <tspan fill="#87afff">V\</tspan></text>
+    <text x="169.2" y="133.0" textLength="50.4" lengthAdjust="spacingAndGlyphs"><tspan fill="#87afff">/</tspan> <tspan fill="#87afff">`</tspan>  <tspan fill="#87afff">/</tspan></text>
+    <text x="160.8" y="150.0" textLength="50.4" lengthAdjust="spacingAndGlyphs"><tspan fill="#87afff">&lt;&lt;</tspan>   <tspan fill="#87afff">|</tspan></text>
+    <text x="160.8" y="167.0" textLength="50.4" lengthAdjust="spacingAndGlyphs"><tspan fill="#87afff">/</tspan>    <tspan fill="#87afff">|</tspan></text>
+    <text x="144.0" y="184.0" textLength="67.2" lengthAdjust="spacingAndGlyphs"><tspan fill="#87afff">/</tspan>      <tspan fill="#87afff">|</tspan></text>
+    <text x="127.2" y="201.0" textLength="84.0" lengthAdjust="spacingAndGlyphs"><tspan fill="#87afff">/</tspan>        <tspan fill="#87afff">|</tspan></text>
+    <text x="110.4" y="218.0" textLength="92.4" lengthAdjust="spacingAndGlyphs"><tspan fill="#87afff">/</tspan>    <tspan fill="#87afff">\</tspan>  <tspan fill="#87afff">\</tspan> <tspan fill="#87afff">/</tspan></text>
+    <text x="102.0" y="235.0" textLength="100.8" lengthAdjust="spacingAndGlyphs"><tspan fill="#87afff">(</tspan>      <tspan fill="#87afff">)</tspan> <tspan fill="#87afff">|</tspan> <tspan fill="#87afff">|</tspan></text>
+    <text x="34.8" y="252.0" textLength="168.0" lengthAdjust="spacingAndGlyphs"><tspan fill="#87afff">________|</tspan>   <tspan fill="#87afff">_/_</tspan>  <tspan fill="#87afff">|</tspan> <tspan fill="#87afff">|</tspan></text>
+    <text x="18.0" y="269.0" textLength="193.2" lengthAdjust="spacingAndGlyphs"><tspan fill="#87afff">&lt;__________\______)\__)</tspan></text>
   </g>
 </svg>

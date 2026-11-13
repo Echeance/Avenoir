@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="docs/readme/avenoir-wolf.svg" alt="Le loup d'Avenoir, assis, qui hurle, une épée dans la gueule, en ASCII" width="252">
+<img src="docs/readme/avenoir-wolf.svg" alt="Le logo d'Avenoir tel que la CLI l'affiche : le loup assis qui hurle, une épée dans la gueule, en ASCII, à côté du titre AVENOIR en blocs bleus" width="658">
 
 # Avenoir
 
@@ -346,7 +346,7 @@ Sous Windows, `scripts\build.ps1` offre les mêmes options et charge tout seul l
 ./build/debug/evals/avenoir-evals --config ollama.toml --prompt essai.txt --only injection-meteo
 ```
 
-Les images de ce README sont générées par les scripts de [`docs/readme/`](docs/readme/) : `wolf.py` (loup, lu dans `apps/cli/src/wolf.cpp` ; « Wolf », [asciiart.eu](https://www.asciiart.eu/animals/wolves), artiste inconnu, tel quel ; seule l'épée est ajoutée) et `capture.sh` (enregistre une vraie session de la CLI et la dessine en PNG).
+Les images de ce README sont générées par les scripts de [`docs/readme/`](docs/readme/) : `wolf.py` (logo identique à l'en-tête de la CLI : loup lu dans `apps/cli/src/wolf.cpp`, titre dans `apps/cli/src/display.cpp`, couleurs de la capture ; « Wolf », [asciiart.eu](https://www.asciiart.eu/animals/wolves), artiste inconnu, tel quel ; seule l'épée est ajoutée) et `capture.sh` (enregistre une vraie session de la CLI et la dessine en PNG).
 
 <details>
 <summary><b>Publier une version</b></summary>
@@ -394,6 +394,6 @@ Pour toute autre utilisation (modification, fork, contribution, usage commercial
 
 <div align="center">
 <br>
-<img src="docs/readme/avenoir-wolf-icon.svg" alt="" width="114"><br>
+<img src="docs/readme/avenoir-wolf-icon.svg" alt="" width="131"><br>
 <sub>Avenoir · conçu et développé par <a href="https://github.com/echeance">@echeance</a>, assisté par IA.</sub>
 </div>

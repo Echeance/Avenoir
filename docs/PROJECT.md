@@ -505,7 +505,7 @@ La **confidentialité** et la **sécurité** sont les aspects primordiaux d'Aven
 - Branches courtes, messages de commit au format *Conventional Commits* (`feat:`, `fix:`, `refactor:`…).
 - Toute décision d'architecture notable : ajout d'une entrée dans la section 7 (« Journal des décisions »).
 - `docs/FEATURES.md` liste toutes les fonctionnalités existantes, de façon exhaustive : chaque fonctionnalité ajoutée, modifiée ou retirée y est reportée dans le même commit.
-- Images du README dans `docs/readme/`, avec leurs générateurs : `wolf.py` (loup SVG, grille et palette lues dans `apps/cli/src/wolf.cpp`), `capture.sh` + `terminal_render.py` (capture réelle de la CLI rendue en PNG).
+- Images du README dans `docs/readme/`, avec leurs générateurs : `wolf.py` (logo SVG identique à l'en-tête de la CLI : loup et zones lus dans `apps/cli/src/wolf.cpp`, titre en blocs dans `apps/cli/src/display.cpp`, fond et couleurs de la capture), `capture.sh` + `terminal_render.py` (capture réelle de la CLI rendue en PNG).
 
 ---
 
