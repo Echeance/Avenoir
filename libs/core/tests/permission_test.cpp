@@ -13,10 +13,11 @@ TEST_CASE("politique par défaut", "[permission]") {
     CHECK(policy.for_risk(RiskLevel::Sensitive) == Policy::Confirm);
 }
 
-TEST_CASE("sensitive ne peut jamais être allow", "[permission]") {
+TEST_CASE("sensitive allow : choisi par l'utilisateur, respecté", "[permission]") {
+    // Le réglage n'est accepté qu'après « Je sais ce que je fais » (décision 59).
     const PermissionPolicy policy{
         .read_only = Policy::Allow, .reversible = Policy::Allow, .sensitive = Policy::Allow};
-    CHECK(policy.for_risk(RiskLevel::Sensitive) == Policy::Confirm);
+    CHECK(policy.for_risk(RiskLevel::Sensitive) == Policy::Allow);
 }
 
 TEST_CASE("deny reste deny", "[permission]") {

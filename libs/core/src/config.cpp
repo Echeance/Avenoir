@@ -182,8 +182,9 @@ Result<AgentConfig> parse_agent(const toml::table& agent) {
     auto unload_on_switch = optional_value<bool>(agent, kSection, "unload_on_switch");
     auto local_only = optional_value<bool>(agent, kSection, "local_only");
     auto verify_replies = optional_value<bool>(agent, kSection, "verify_replies");
+    auto shell = optional_value<bool>(agent, kSection, "shell");
     if (auto error = first_error(max_steps, prompt, fast_path, unload_on_switch, local_only,
-                                 verify_replies)) {
+                                 verify_replies, shell)) {
         return std::unexpected(std::move(*error));
     }
     if (max_steps->has_value()) {
@@ -194,6 +195,7 @@ Result<AgentConfig> parse_agent(const toml::table& agent) {
     config.unload_on_switch = unload_on_switch->value_or(config.unload_on_switch);
     config.local_only = local_only->value_or(config.local_only);
     config.verify_replies = verify_replies->value_or(config.verify_replies);
+    config.shell = shell->value_or(config.shell);
     return config;
 }
 

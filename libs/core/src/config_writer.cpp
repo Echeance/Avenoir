@@ -143,6 +143,9 @@ std::string format_agent(const AgentConfig& agent) {
     if (agent.verify_replies != defaults.verify_replies) {
         line(body, "verify_replies", boolean(agent.verify_replies));
     }
+    if (agent.shell != defaults.shell) {
+        line(body, "shell", boolean(agent.shell));
+    }
     return body;
 }
 

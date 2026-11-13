@@ -16,6 +16,7 @@ avenoir_add_library(tools
         src/claims.cpp
         src/register.cpp
         src/searxng.cpp
+        src/shell.cpp
         src/system.cpp
         src/system_control.cpp
         src/time.cpp
@@ -41,6 +42,7 @@ avenoir_add_tests(tools
         tests/app_index_test.cpp
         tests/claims_test.cpp
         tests/searxng_test.cpp
+        tests/shell_test.cpp
         tests/system_control_test.cpp
         tests/system_test.cpp
         tests/time_test.cpp

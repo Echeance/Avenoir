@@ -81,6 +81,9 @@ struct AgentConfig {
     /// Vérifier les réponses du modèle : une action annoncée sans l'appel
     /// d'outil correspondant relance le modèle, puis est signalée.
     bool verify_replies = true;
+    /// Commandes shell (outil `run_command`) : désactivées par défaut ; chaque
+    /// commande est analysée et toujours confirmée (décision 60).
+    bool shell = false;
 
     bool operator==(const AgentConfig&) const = default;
 };

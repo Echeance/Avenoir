@@ -162,6 +162,11 @@ std::vector<SettingLine> list_settings(const core::AppConfig& config,
          .accepted = std::string(kBooleans),
          .description = "vérifier qu'une action annoncée par le modèle a bien été faite",
          .security = true},
+        {.key = "agent.shell",
+         .value = std::string(yes_no(agent.shell)),
+         .accepted = std::string(kBooleans),
+         .description = "commandes shell (run_command) : analysées, toujours confirmées",
+         .security = true},
         {.key = "agent.fast_path",
          .value = std::string(yes_no(agent.fast_path)),
          .accepted = std::string(kBooleans),
@@ -189,8 +194,9 @@ std::vector<SettingLine> list_settings(const core::AppConfig& config,
          .security = true},
         {.key = "permissions.sensitive",
          .value = std::string(policy_label(permissions.sensitive)),
-         .accepted = "confirmer | refuser",
-         .description = "actions sensibles (jamais sans confirmation)",
+         .accepted = std::string(kPolicies),
+         .description = "actions sensibles (éteindre, redémarrer…) ; « autoriser » : sans "
+                        "confirmation",
          .security = true},
         {.key = "web.local_searxng",
          .value = std::string(yes_no(config.web.local_searxng)),
@@ -268,6 +274,18 @@ core::Result<SettingChange> change_setting(const core::AppConfig& config, std::s
                            "Une action annoncée par le modèle sans avoir été faite ne sera plus "
                            "détectée.",
                            true);
+    } else if (key == "agent.shell") {
+        const bool before = agent.shell;
+        done = change_bool(change, agent.shell, value, std::nullopt, false);
+        if (done && !before && agent.shell) {
+            change.weakening =
+                "Le modèle pourra proposer des commandes shell, exécutées avec VOS droits sur "
+                "vos fichiers : supprimer, modifier, envoyer des données. Chaque commande est "
+                "analysée (élévation de droits et commandes destructrices refusées, alertes "
+                "sinon) et TOUJOURS confirmée, même si les actions sensibles sont autorisées ; "
+                "lisez-la avant d'accepter. Vous assumez les conséquences de ce choix.";
+        }
+        change.strengthens = before && !agent.shell;
     } else if (key == "agent.fast_path") {
         done = change_bool(change, agent.fast_path, value, std::nullopt, false);
     } else if (key == "agent.unload_on_switch") {
@@ -343,17 +361,24 @@ core::Result<SettingChange> change_setting(const core::AppConfig& config, std::s
         if (!parsed) {
             return setting_error(std::format("{} : autoriser, confirmer ou refuser attendu", key));
         }
-        if (key == "permissions.sensitive" && *parsed == core::Policy::Allow) {
-            return setting_error("permissions.sensitive : une action sensible demande toujours "
-                                 "confirmation (« autoriser » est refusé)");
-        }
         change.before = policy_label(*field);
         change.after = policy_label(*parsed);
         if (permissiveness(*parsed) > permissiveness(*field)) {
-            change.weakening = *parsed == core::Policy::Allow
-                                   ? "Ces actions s'exécuteront sans vous demander de confirmation."
-                                   : "Ces actions, aujourd'hui refusées, deviendront possibles "
-                                     "(avec confirmation).";
+            if (key == "permissions.sensitive" && *parsed == core::Policy::Allow) {
+                change.weakening =
+                    "Les actions SENSIBLES (éteindre, redémarrer, mettre en veille, et celles "
+                    "des modules jugées sensibles) s'exécuteront SANS vous demander : le modèle "
+                    "pourra les lancer seul, y compris s'il se trompe ou s'il est trompé. "
+                    "Restent confirmées : une action dont un argument vient d'une page web ou "
+                    "d'un module (injection possible), et les commandes shell. Vous assumez "
+                    "les conséquences de ce choix ; « confirmer » le défait.";
+            } else {
+                change.weakening =
+                    *parsed == core::Policy::Allow
+                        ? "Ces actions s'exécuteront sans vous demander de confirmation."
+                        : "Ces actions, aujourd'hui refusées, deviendront possibles (avec "
+                          "confirmation).";
+            }
         }
         change.strengthens = permissiveness(*parsed) < permissiveness(*field);
         *field = *parsed;

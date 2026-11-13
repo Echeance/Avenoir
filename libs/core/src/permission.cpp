@@ -3,8 +3,6 @@
 #include <optional>
 #include <string_view>
 
-#include <spdlog/spdlog.h>
-
 namespace avenoir::core {
 
 std::string_view to_string(Policy policy) noexcept {
@@ -39,10 +37,9 @@ Policy PermissionPolicy::for_risk(RiskLevel risk) const {
     case RiskLevel::Reversible:
         return reversible;
     case RiskLevel::Sensitive:
-        if (sensitive == Policy::Allow) {
-            spdlog::warn("`sensitive = \"allow\"` ignoré : confirmation imposée");
-            return Policy::Confirm;
-        }
+        // « allow » n'arrive ici qu'après l'avertissement et « Je sais ce que
+        // je fais » (réglages scellés, décision 59) ; la provenance et les
+        // outils à confirmation obligatoire (run_command) confirment quand même.
         return sensitive;
     }
     return Policy::Deny;

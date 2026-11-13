@@ -83,9 +83,14 @@ TEST_CASE("change_setting : permissions", "[reglages]") {
     REQUIRE(reopened.has_value());
     CHECK(reopened->weakening.has_value()); // refusé → possible : affaiblit
 
-    // Une action sensible n'est jamais autorisée sans confirmation.
-    CHECK_FALSE(daemon::change_setting(config, "permissions.sensitive", "autoriser", known()));
-    CHECK_FALSE(daemon::change_setting(config, "permissions.sensitive", "allow", known()));
+    // « autoriser » pour les actions sensibles : possible, mais seulement comme
+    // un affaiblissement (avertissement puis « Je sais ce que je fais »).
+    auto allowed = daemon::change_setting(config, "permissions.sensitive", "autoriser", known());
+    REQUIRE(allowed.has_value());
+    CHECK(allowed->updated.permissions.sensitive == core::Policy::Allow);
+    const std::string warning = allowed->weakening.value_or("");
+    CHECK(warning.contains("SANS vous demander"));
+    CHECK(warning.contains("commandes shell"));
 }
 
 TEST_CASE("change_setting : modules", "[reglages]") {

@@ -72,6 +72,15 @@ struct ToolOutput {
 
 /// Tout ce que l'assistant peut *faire*. Les outils natifs et ceux des
 /// modules externes implémentent la même interface.
+/// Examen d'un appel par son outil, avant la décision des permissions
+/// (`Tool::review`) : refus d'office, alertes montrées dans le cadre de
+/// confirmation, confirmation imposée quelle que soit la politique.
+struct ToolReview {
+    std::optional<std::string> refusal; ///< Refusé sans même demander (raison).
+    std::vector<std::string> warnings;  ///< Ajoutées au cadre de confirmation.
+    bool always_confirm = false;        ///< Confirmé même si la politique autorise.
+};
+
 class Tool {
   public:
     Tool() = default;
@@ -87,6 +96,12 @@ class Tool {
     /// s'interrompre (sans laisser d'état incohérent).
     [[nodiscard]] virtual ToolResult call(const nlohmann::json& arguments,
                                           const std::stop_token& stop) const = 0;
+    /// Examen de l'appel avant les permissions (rien par défaut). Une alerte
+    /// impose la confirmation ; elle ne peut jamais la lever.
+    [[nodiscard]] virtual ToolReview review(const nlohmann::json& /*arguments*/,
+                                            const std::stop_token& /*stop*/) const {
+        return {};
+    }
 };
 
 /// Désérialise les arguments JSON d'un outil vers une structure typée

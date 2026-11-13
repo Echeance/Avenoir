@@ -65,7 +65,7 @@ L'ordre suit un principe : **chaque jalon produit un assistant utilisable**, plu
 ### 1.3 Cœur (`avenoir::core`) — P1 ✅
 - ✅ Messages (`User`, `Assistant`, `ToolResult`) et `ToolCall`
 - ✅ `Tool`, `ToolSpec`, `RiskLevel`, `ToolRegistry` (refus des doublons)
-- ✅ `PermissionPolicy` (`sensitive` jamais `allow`), `ConfirmationHandler`, `AutoReject`
+- ✅ `PermissionPolicy` (`sensitive` jamais `allow` ; levable par l'utilisateur depuis la décision 59), `ConfirmationHandler`, `AutoReject`
 - ✅ `FastRouter` : règles « ouvre <url> », « lance <app> », « quelle heure est-il »
 - ✅ `Agent::handle` : voie rapide, boucle LLM ↔ outils, `max_steps`, résultats tronqués, erreurs renvoyées au LLM en texte, audit
 - ✅ `AppConfig` lu depuis TOML ; test qui charge `config.example.toml`
@@ -171,6 +171,8 @@ L'ordre suit un principe : **chaque jalon produit un assistant utilisable**, plu
 - ✅ Programmes du système lancés par `reproc` (tableau d'arguments) plutôt que D-Bus par `sdbus-c++` : aucune dépendance de plus (PROJECT.md, décision 41)
 - ✅ Annulation du volume, de la luminosité et du mode sombre, refusée si l'état a changé depuis
 - ✅ Règles de voie rapide associées (« monte le son », « coupe le son », « pause », « verrouille l'ordinateur », « mode sombre »…) ; extinction et redémarrage jamais par la voie rapide
+- ✅ Commandes shell `run_command` (décision 60) : désactivées par défaut, analysées (refus d'office, alertes, recherche `whatis`, avis à part du modèle), toujours confirmées, auditées ; `Tool::review` dans le cœur
+- ✅ `permissions.sensitive = autoriser` possible avec « Je sais ce que je fais » (décision 59)
 - ✅ Verrouillage vérifié sous Linux (session graphique de logind, verrouilleurs Wayland essayés l'un après l'autre, jamais de « verrouillé » non vérifié) ; écran de verrouillage d'Avenoir pour swaylock, installé par la création guidée ou `/verrouillage` (décision 58)
 - ✅ Un outil indisponible sur un OS ou une machine n'est pas enregistré (PROJECT.md § 4.3) : pas de sortie audio, pas d'écran réglable, programme absent
 - ✅ Banc d'essai : 6 cas de plus (contrôle, refus d'extinction, injection par un titre de morceau), prompt v5 (evals/resultats/COMPARAISON.md, série 6)

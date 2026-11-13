@@ -286,6 +286,23 @@ Agent::Execution Agent::execute(const ToolCall& call, const std::stop_token& sto
         }
     }
 
+    // Examen par l'outil (run_command : analyse de la commande) : refus
+    // d'office, ou alertes qui imposent la confirmation.
+    if (policy != Policy::Deny) {
+        const ToolReview review = tool->review(call.arguments, stop);
+        if (review.refusal) {
+            audit()->warn("{}refusé par l'examen : {} : {}", audit_prefix(), call.name,
+                          *review.refusal);
+            return {.content = "Refusé par Avenoir : " + *review.refusal, .is_error = true};
+        }
+        for (const auto& warning : review.warnings) {
+            spec.description += "\n▲ " + warning;
+        }
+        if (review.always_confirm || !review.warnings.empty()) {
+            policy = Policy::Confirm;
+        }
+    }
+
     switch (policy) {
     case Policy::Allow:
         break;
