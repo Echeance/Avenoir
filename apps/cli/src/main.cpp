@@ -51,6 +51,7 @@
 #include "console.hpp"
 #include "display.hpp"
 #include "launcher.hpp"
+#include "packages.hpp"
 #include "prompt.hpp"
 #include "settings_menu.hpp"
 
@@ -169,6 +170,9 @@ class Client {
         });
         peer_->on_request("confirm", [this](const json& params, const std::stop_token&) {
             return core::Result<json>(confirm(params));
+        });
+        peer_->on_request("install_package", [this](const json& params, const std::stop_token&) {
+            return core::Result<json>(install_package(params.value("package", "")));
         });
         peer_->on_closed([this] { lost_ = true; });
     }
@@ -377,6 +381,45 @@ class Client {
                 "  " + paint("Autoriser ?", {.color = Color::Yellow, .bold = true}) + " [o/N] ");
         display().resume_thinking();
         return approved;
+    }
+
+    /// Installe un paquet de la liste fermée (packages.hpp) dans ce terminal :
+    /// le plein écran est quitté le temps de la commande (sudo, questions du
+    /// gestionnaire de paquets), puis retrouvé. Le démon ne donne qu'un nom.
+    json install_package(const std::string& package) {
+        if (!cli::installable_package(package)) {
+            return {{"ok", false}, {"message", "paquet refusé par la CLI : " + package}};
+        }
+        const auto command = cli::install_command(package, cli::executable_in_path);
+        if (!command) {
+            return {
+                {"ok", false},
+                {"message", std::format("gestionnaire de paquets non reconnu (ou sudo absent) : "
+                                        "installez « {} » vous-même",
+                                        package)}};
+        }
+        std::string shown_command;
+        for (const auto& argument : *command) {
+            shown_command += (shown_command.empty() ? "" : " ") + argument;
+        }
+        const Questioning questioning(questioning_);
+        display().suspend_thinking();
+        const bool full_screen = display().full_screen();
+        display().shutdown(); // écran principal du terminal, le temps de la commande
+        display().info(std::format("Installation de {} : {}", package, shown_command));
+        const auto status = cli::run_in_terminal(*command);
+        if (full_screen) {
+            display().enable_pinned_bar(true);
+        }
+        display().resume_thinking();
+        if (!status) {
+            return {{"ok", false}, {"message", "impossible de lancer « " + shown_command + " »"}};
+        }
+        if (*status != 0) {
+            return {{"ok", false},
+                    {"message", std::format("« {} » a échoué (code {})", shown_command, *status)}};
+        }
+        return {{"ok", true}, {"message", package + " installé"}};
     }
 
     ipc::Peer* peer_ = nullptr;

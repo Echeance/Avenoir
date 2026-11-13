@@ -17,6 +17,7 @@
 
 #include "avenoir/core/version.hpp"
 #include "avenoir/terminal/markdown.hpp"
+#include "avenoir/terminal/mascot.hpp"
 #include "avenoir/terminal/style.hpp"
 
 #include "console.hpp"
@@ -104,21 +105,12 @@ std::string duration_label(std::chrono::steady_clock::duration elapsed) {
 /// « AVENOIR » en grandes lettres (5 lignes, 42 colonnes), du bleu clair au
 /// bleu nuit.
 std::vector<std::string> title_art() {
-    static const std::array<std::array<std::string_view, 5>, 7> letters{{
-        {" ███ ", "█   █", "█████", "█   █", "█   █"}, // A
-        {"█   █", "█   █", "█   █", " █ █ ", "  █  "}, // V
-        {"█████", "█    ", "████ ", "█    ", "█████"}, // E
-        {"█   █", "██  █", "█ █ █", "█  ██", "█   █"}, // N
-        {" ███ ", "█   █", "█   █", "█   █", " ███ "}, // O
-        {"█████", "  █  ", "  █  ", "  █  ", "█████"}, // I
-        {"████ ", "█   █", "████ ", "█  █ ", "█   █"}, // R
-    }};
     static const std::array<Color, 5> shades{Color::Ice, Color::Sky, Color::Azure, Color::Azure,
                                              Color::Navy};
     std::vector<std::string> lines;
     for (std::size_t row = 0; row < 5; ++row) {
         std::string line;
-        for (const auto& letter : letters) {
+        for (const auto& letter : terminal::title_letters()) {
             line += std::string(letter.at(row)) + " ";
         }
         lines.push_back(paint(line, {.color = shades.at(row), .bold = true}));

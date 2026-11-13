@@ -76,13 +76,13 @@ std::string_view trim(std::string_view text) {
 /// Commandes d'Avenoir (sans « / »), alias compris : un module ne peut pas
 /// en déclarer une du même nom.
 std::vector<std::string> builtin_commands() {
-    return {
-        "agent",        "agents",        "aide",       "annuler",   "arreter",  "charger",
-        "configurer",   "conversations", "decharger",  "demarrage", "help",     "historique",
-        "memoire",      "model",         "modele",     "modules",   "moteur",   "nouvelle",
-        "ouvrir",       "outils",        "parametres", "q",         "quit",     "quitter",
-        "raisonnement", "recharger",     "redemarrer", "reglage",   "reglages", "renommer",
-        "reset",        "risque",        "settings",   "supprimer", "tools",    "transcription"};
+    return {"agent",        "agents",        "aide",       "annuler",   "arreter",  "charger",
+            "configurer",   "conversations", "decharger",  "demarrage", "help",     "historique",
+            "memoire",      "model",         "modele",     "modules",   "moteur",   "nouvelle",
+            "ouvrir",       "outils",        "parametres", "q",         "quit",     "quitter",
+            "raisonnement", "recharger",     "redemarrer", "reglage",   "reglages", "renommer",
+            "reset",        "risque",        "settings",   "supprimer", "tools",    "transcription",
+            "verrouillage"};
 }
 
 /// Coordinateur de la requête en cours dans ce fil (Avenoir, ou un projet) :
@@ -802,6 +802,8 @@ void Runtime::State::print_help() const {
     out += command("/recharger [nom]", "le décharger puis le recharger") + "\n";
     out += command("/configurer", "rechercher les modèles et choisir les siens (création guidée)") +
            "\n";
+    out +=
+        command("/verrouillage", "installer swaylock et l'écran de verrouillage d'Avenoir") + "\n";
     out += command("/settings", "menu des réglages (aussi /parametres), dans la CLI") + "\n";
     out += command("/reglages", "réglages d'Avenoir et leur valeur") + "\n";
     out += command("/reglage <clé> <valeur>", "changer un réglage") + "\n";
@@ -891,6 +893,7 @@ void Runtime::State::configure(const std::stop_token& stop) {
         file.config = result->config;
         display().info("Pour l'utiliser dès maintenant : /redemarrer.");
     }
+    run_lock_setup(ask, /*requested=*/false);
 }
 
 void Runtime::State::print_settings() const {
@@ -1420,6 +1423,9 @@ Outcome Runtime::State::command(std::string_view line, const std::stop_token& st
         startup(argument);
     } else if (name == "/configurer") {
         configure(stop);
+    } else if (name == "/verrouillage") {
+        const SetupAsk ask = [](const std::string& question) { return display().ask(question); };
+        run_lock_setup(ask, /*requested=*/true);
     } else if (name == "/settings" || name == "/parametres" || name == "/paramètres") {
         // Le menu se dessine dans la CLI ; un autre client a la liste.
         print_settings();

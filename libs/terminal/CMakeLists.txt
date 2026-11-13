@@ -1,8 +1,10 @@
-# avenoir::terminal — rendu dans le terminal : couleurs, cadres, Markdown léger.
+# avenoir::terminal — rendu dans le terminal : couleurs, cadres, Markdown léger ;
+# dessins d'Avenoir (loup, titre) en données.
 
 avenoir_add_library(terminal
     SOURCES
         src/markdown.cpp
+        src/mascot.cpp
         src/style.cpp
     DEPS
         avenoir::core)

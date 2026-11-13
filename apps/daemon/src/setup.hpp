@@ -34,6 +34,15 @@ struct SetupResult {
                                                    const SaveSettings& writer,
                                                    const std::stop_token& stop);
 
+/// Étape de l'écran de verrouillage (Linux, session Wayland d'un compositeur
+/// qui ne verrouille pas lui-même : niri, sway…) : installer swaylock par le
+/// terminal du client (sudo, après accord), puis poser l'écran de
+/// verrouillage d'Avenoir (configuration et fond dans ~/.config/swaylock), une
+/// configuration existante n'étant remplacée que sur accord, et gardée.
+/// `requested` : lancée par /verrouillage (dit pourquoi elle ne sert à rien
+/// ici, au lieu de se taire).
+void run_lock_setup(const SetupAsk& io, bool requested);
+
 /// Création guidée au premier lancement (aucun fichier à `path`, terminal
 /// interactif), questions posées au client qui se connecte. Renvoie la
 /// configuration à utiliser ; rien si l'utilisateur abandonne.

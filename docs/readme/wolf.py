@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Génère le logo d'Avenoir en SVG, tel que l'en-tête de la CLI le dessine.
 
-Le loup, ses zones et le petit loup sont lus dans apps/cli/src/wolf.cpp, le
-titre « AVENOIR » en blocs dans apps/cli/src/display.cpp (title_art) : le
+Le loup, ses zones, le petit loup et le titre « AVENOIR » en blocs sont lus
+dans libs/terminal/src/mascot.cpp, source unique des dessins : le
 logo du README et celui du terminal restent identiques. Le loup est « Wolf »
 (asciiart.eu, artiste inconnu), tel quel, avec une épée ajoutée pour Avenoir.
 
@@ -18,7 +18,7 @@ import re
 from html import escape
 from pathlib import Path
 
-CLI = Path(__file__).resolve().parents[2] / "apps" / "cli" / "src"
+MASCOT = Path(__file__).resolve().parents[2] / "libs" / "terminal" / "src" / "mascot.cpp"
 
 # Fond et couleurs du terminal de la capture (terminal_render.py).
 BACKGROUND = "#1e1e2e"
@@ -46,7 +46,7 @@ def read_array(text: str, name: str) -> list[str]:
 
 
 def read_title(text: str) -> list[str]:
-    block = re.search(r"letters\{\{(.*?)\}\};", text, re.S).group(1)
+    block = re.search(r"kTitleLetters\{\{(.*?)\}\};", text, re.S).group(1)
     letters = [re.findall(r'"([^"]*)"', item) for item in re.findall(r"\{([^{}]*)\}", block)]
     return ["".join(letter[row] + " " for letter in letters).rstrip() for row in range(5)]
 
@@ -133,8 +133,8 @@ def icon(art: list[str], zones: list[str]) -> str:
 
 
 if __name__ == "__main__":
-    wolf = (CLI / "wolf.cpp").read_text(encoding="utf-8")
-    title = read_title((CLI / "display.cpp").read_text(encoding="utf-8"))
+    wolf = MASCOT.read_text(encoding="utf-8")
+    title = read_title(wolf)
     outputs = {
         "avenoir-wolf.svg": logo(read_array(wolf, "kArt"), read_array(wolf, "kArtZones"), title),
         "avenoir-wolf-icon.svg": icon(read_array(wolf, "kIcon"), read_array(wolf, "kIconZones")),

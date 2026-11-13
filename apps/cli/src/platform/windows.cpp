@@ -6,6 +6,7 @@
 #define NOMINMAX
 #endif
 #include <filesystem>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -90,6 +91,10 @@ core::Result<void> start_daemon(const std::vector<std::string>& arguments) {
     CloseHandle(process.hThread);
     CloseHandle(process.hProcess);
     return {};
+}
+
+std::optional<int> run_in_terminal(const std::vector<std::string>& /*arguments*/) {
+    return std::nullopt; // seulement sous Linux (installation de swaylock)
 }
 
 } // namespace avenoir::cli

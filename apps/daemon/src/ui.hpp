@@ -13,6 +13,7 @@
 
 #include <nlohmann/json.hpp>
 
+#include "avenoir/core/error.hpp"
 #include "avenoir/core/message.hpp"
 #include "avenoir/core/tool.hpp"
 #include "avenoir/ipc/peer.hpp"
@@ -79,6 +80,10 @@ class Ui {
     [[nodiscard]] virtual bool ask_yes_no(std::string_view question) = 0;
     /// Cadre de confirmation d'une action puis « Autoriser ? ».
     [[nodiscard]] virtual bool confirm(const core::ToolSpec& spec, const core::ToolCall& call) = 0;
+    /// Installe un paquet du système dans le terminal du client (sudo, après
+    /// accord de l'utilisateur) ; seuls les paquets de la liste de la CLI sont
+    /// acceptés. Par défaut : impossible (aucun terminal).
+    [[nodiscard]] virtual core::Result<void> install_package(std::string_view package);
 };
 
 /// Interface d'un client connecté : chaque appel devient un message JSON-RPC
@@ -110,6 +115,7 @@ class RemoteUi final : public Ui {
     [[nodiscard]] std::optional<std::string> ask(std::string_view question) override;
     [[nodiscard]] bool ask_yes_no(std::string_view question) override;
     [[nodiscard]] bool confirm(const core::ToolSpec& spec, const core::ToolCall& call) override;
+    [[nodiscard]] core::Result<void> install_package(std::string_view package) override;
 
   private:
     void send(std::string_view op, std::string_view text);

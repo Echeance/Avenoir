@@ -11,6 +11,7 @@ endif()
 add_library(avenoir_cli_lib STATIC
     src/console.cpp
     src/display.cpp
+    src/packages.cpp
     src/prompt.cpp
     src/settings_menu.cpp
     src/wolf.cpp
@@ -35,7 +36,7 @@ add_dependencies(avenoir_cli avenoird)
 # Test de bout en bout (sans LLM ni réseau), lancé par ctest sur Linux et Windows.
 if(AVENOIR_BUILD_TESTS)
     # Ce qui se décide sans terminal : menu des réglages, loup.
-    add_executable(avenoir_cli_tests tests/settings_menu_test.cpp)
+    add_executable(avenoir_cli_tests tests/settings_menu_test.cpp tests/packages_test.cpp)
     target_link_libraries(avenoir_cli_tests PRIVATE
         avenoir_cli_lib avenoir::options Catch2::Catch2WithMain)
     avenoir_utf8_manifest(avenoir_cli_tests)

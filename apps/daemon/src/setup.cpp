@@ -5,6 +5,9 @@
 #include <cstddef>
 #include <filesystem>
 #include <format>
+#include <fstream>
+#include <ios>
+#include <iterator>
 #include <optional>
 #include <stop_token>
 #include <string>
@@ -16,8 +19,10 @@
 #include "avenoir/core/config.hpp"
 #include "avenoir/core/env.hpp"
 #include "avenoir/llm/discovery.hpp"
+#include "avenoir/terminal/style.hpp"
 
 #include "conversations.hpp"
+#include "lock_theme.hpp"
 #include "setup_plan.hpp"
 #include "ui.hpp"
 
@@ -261,7 +266,179 @@ std::optional<SetupResult> without_models(const std::filesystem::path& path,
     return result;
 }
 
+// ─── Écran de verrouillage ──────────────────────────────────────────────────
+
+/// Dossier de configuration de l'utilisateur ($XDG_CONFIG_HOME, sinon
+/// ~/.config) ; rien sans dossier personnel.
+std::optional<std::filesystem::path> config_home() {
+    if (const auto xdg = core::read_env("XDG_CONFIG_HOME")) {
+        std::filesystem::path path(*xdg);
+        if (path.is_absolute()) {
+            return path; // relatif : ignoré (spécification XDG)
+        }
+    }
+    if (const auto home = core::read_env("HOME"); home && !home->empty()) {
+        return std::filesystem::path(*home) / ".config";
+    }
+    return std::nullopt;
+}
+
+std::optional<std::string> read_text(const std::filesystem::path& path) {
+    std::ifstream in(path, std::ios::binary);
+    if (!in) {
+        return std::nullopt;
+    }
+    return std::string(std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>());
+}
+
+/// Écrit `content` à `path` d'un coup (fichier temporaire, puis renommage) :
+/// jamais de fichier à moitié écrit.
+core::Result<void> write_whole(const std::filesystem::path& path, std::string_view content) {
+    const auto temporary = std::filesystem::path(path).concat(".avenoir-tmp");
+    {
+        std::ofstream out(temporary, std::ios::binary | std::ios::trunc);
+        out.write(content.data(), static_cast<std::streamsize>(content.size()));
+        if (!out) {
+            return core::make_error(core::ErrorCode::Config,
+                                    "écriture impossible : " + utf8_path(temporary));
+        }
+    }
+    std::error_code error;
+    std::filesystem::rename(temporary, path, error);
+    if (error) {
+        std::filesystem::remove(temporary, error);
+        return core::make_error(core::ErrorCode::Config,
+                                "écriture impossible : " + utf8_path(path));
+    }
+    return {};
+}
+
+/// Copie de sauvegarde libre : « config.avant-avenoir », puis « …-2 »…
+std::filesystem::path free_backup(const std::filesystem::path& config) {
+    std::filesystem::path backup = std::filesystem::path(config).concat(".avant-avenoir");
+    std::error_code error;
+    for (int n = 2; std::filesystem::exists(backup, error); ++n) {
+        backup = std::filesystem::path(config).concat(std::format(".avant-avenoir-{}", n));
+    }
+    return backup;
+}
+
+/// Pose l'écran de verrouillage d'Avenoir (fond, puis configuration), après
+/// avoir gardé une configuration de l'utilisateur.
+core::Result<void> install_lock_theme(const std::filesystem::path& directory,
+                                      LockConfigState state) {
+    std::error_code error;
+    std::filesystem::create_directories(directory, error);
+    if (error) {
+        return core::make_error(core::ErrorCode::Config,
+                                "dossier impossible à créer : " + utf8_path(directory));
+    }
+    const auto config = directory / "config";
+    const auto image = directory / "avenoir.png";
+    if (state == LockConfigState::Other) {
+        const auto backup = free_backup(config);
+        std::filesystem::copy_file(config, backup, error);
+        if (error) {
+            return core::make_error(core::ErrorCode::Config,
+                                    "sauvegarde impossible : " + utf8_path(backup));
+        }
+        display().info(std::format("Votre configuration est gardée : {}", utf8_path(backup)));
+    }
+    if (auto written = write_whole(image, lock_image_png()); !written) {
+        return written;
+    }
+    return write_whole(config, swaylock_config(utf8_path(image)));
+}
+
 } // namespace
+
+void run_lock_setup(const SetupAsk& io, bool requested) {
+#ifdef __linux__
+    const std::string type = core::read_env("XDG_SESSION_TYPE").value_or("");
+    const std::string desktop = core::read_env("XDG_CURRENT_DESKTOP").value_or("");
+    if (!lock_step_relevant(type, desktop)) {
+        if (requested) {
+            display().info(desktop_locks_itself(desktop)
+                               ? std::format("Votre bureau ({}) verrouille lui-même la session : "
+                                             "rien à installer.",
+                                             desktop)
+                               : "L'écran de verrouillage d'Avenoir sert aux sessions Wayland "
+                                 "sans verrouillage propre (niri, sway…) : rien à faire ici.");
+        }
+        return;
+    }
+    display().plain("");
+    display().plain(
+        terminal::paint("Écran de verrouillage", {.color = terminal::Color::Azure, .bold = true}));
+    if (!in_path("swaylock")) {
+        display().info(std::format(
+            "{} ne verrouille pas lui-même la session : pour « verrouille l'écran », Avenoir "
+            "lance un verrouilleur, swaylock.",
+            desktop.empty() ? "Votre bureau" : desktop));
+        const auto install = ask_yes_no(
+            io, "Installer swaylock maintenant ? (sudo : votre mot de passe est demandé dans le "
+                "terminal)");
+        if (!install) {
+            return;
+        }
+        if (!*install) {
+            display().info("Sans verrouilleur, « verrouille l'écran » ne peut pas aboutir. Pour y "
+                           "revenir : /verrouillage.");
+            return;
+        }
+        if (auto done = display().install_package("swaylock"); !done) {
+            display().error(core::describe(done.error()));
+            return;
+        }
+        if (!in_path("swaylock")) {
+            display().warning("swaylock reste introuvable dans le PATH.");
+            return;
+        }
+        display().success("swaylock installé.");
+    }
+
+    const auto home = config_home();
+    if (!home) {
+        display().warning("Dossier personnel introuvable : configuration de swaylock non posée.");
+        return;
+    }
+    const auto directory = *home / "swaylock";
+    const auto config = directory / "config";
+    const auto state = lock_config_state(read_text(config));
+    std::string question;
+    switch (state) {
+    case LockConfigState::Missing:
+        question = std::format("Utiliser l'écran de verrouillage d'Avenoir ? Fond bleu nuit, le "
+                               "loup à l'épée, anneau bleu ({}).",
+                               utf8_path(config));
+        break;
+    case LockConfigState::Avenoir:
+        question = "L'écran de verrouillage d'Avenoir est déjà en place. Le réécrire (dernière "
+                   "version) ?";
+        break;
+    case LockConfigState::Other:
+        question = std::format("Vous avez déjà une configuration swaylock ({}). La remplacer par "
+                               "celle d'Avenoir ? L'actuelle sera gardée à côté.",
+                               utf8_path(config));
+        break;
+    }
+    const auto wanted = ask_yes_no(io, question);
+    if (!wanted || !*wanted) {
+        return;
+    }
+    if (auto installed = install_lock_theme(directory, state); !installed) {
+        display().error(core::describe(installed.error()));
+        return;
+    }
+    display().success(std::format("Écran de verrouillage d'Avenoir posé : {}", utf8_path(config)));
+    display().info("Essayez : « verrouille l'écran ».");
+#else
+    (void)io;
+    if (requested) {
+        display().info("Le verrouillage de ce système ne demande rien à installer.");
+    }
+#endif
+}
 
 std::optional<SetupResult> run_setup(const std::filesystem::path& path, const core::AppConfig& base,
                                      const SetupAsk& io, const SaveSettings& writer,
@@ -359,6 +536,7 @@ std::optional<core::AppConfig> run_first_setup(const std::filesystem::path& path
     if (!result) {
         return std::nullopt;
     }
+    run_lock_setup(ask, /*requested=*/false);
     return std::move(result->config);
 }
 

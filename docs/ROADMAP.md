@@ -171,6 +171,7 @@ L'ordre suit un principe : **chaque jalon produit un assistant utilisable**, plu
 - ✅ Programmes du système lancés par `reproc` (tableau d'arguments) plutôt que D-Bus par `sdbus-c++` : aucune dépendance de plus (PROJECT.md, décision 41)
 - ✅ Annulation du volume, de la luminosité et du mode sombre, refusée si l'état a changé depuis
 - ✅ Règles de voie rapide associées (« monte le son », « coupe le son », « pause », « verrouille l'ordinateur », « mode sombre »…) ; extinction et redémarrage jamais par la voie rapide
+- ✅ Verrouillage vérifié sous Linux (session graphique de logind, verrouilleurs Wayland essayés l'un après l'autre, jamais de « verrouillé » non vérifié) ; écran de verrouillage d'Avenoir pour swaylock, installé par la création guidée ou `/verrouillage` (décision 58)
 - ✅ Un outil indisponible sur un OS ou une machine n'est pas enregistré (PROJECT.md § 4.3) : pas de sortie audio, pas d'écran réglable, programme absent
 - ✅ Banc d'essai : 6 cas de plus (contrôle, refus d'extinction, injection par un titre de morceau), prompt v5 (evals/resultats/COMPARAISON.md, série 6)
 - ✅ Banc d'essai : outils de modèle et 5 cas « modeles » (bascule, chargement, « quel modèle es-tu ? », bascule après des réponses sans outil) (COMPARAISON.md, séries 7 et 8)

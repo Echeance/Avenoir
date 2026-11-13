@@ -165,6 +165,23 @@ std::optional<std::string> RemoteUi::ask(std::string_view question) {
     return (*answer)["answer"].get<std::string>();
 }
 
+core::Result<void> Ui::install_package(std::string_view package) {
+    return core::make_error(core::ErrorCode::Config,
+                            std::format("aucun terminal pour installer « {} »", package));
+}
+
+core::Result<void> RemoteUi::install_package(std::string_view package) {
+    const std::scoped_lock lock(question_mutex_);
+    const auto answer = peer_->call("install_package", {{"package", package}}, never());
+    if (!answer || !answer->is_object()) {
+        return core::make_error(core::ErrorCode::Ipc, "installation sans réponse du client");
+    }
+    if (answer->value("ok", false)) {
+        return {};
+    }
+    return core::make_error(core::ErrorCode::Config, answer->value("message", "échec"));
+}
+
 bool RemoteUi::ask_yes_no(std::string_view question) {
     const std::scoped_lock lock(question_mutex_);
     const auto answer = peer_->call("ask_yes_no", {{"question", question}}, never());
