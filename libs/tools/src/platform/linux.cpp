@@ -4,6 +4,7 @@
 
 #include <algorithm>
 #include <array>
+#include <cerrno>
 #include <charconv>
 #include <chrono>
 #include <cmath>
@@ -62,6 +63,42 @@ std::optional<int> run_and_wait(const std::vector<std::string>& arguments,
         return std::nullopt;
     }
     return status;
+}
+
+/// Lance `arguments` détaché par `setsid -f`, sans lui laisser aucun
+/// descripteur du démon. Avec reproc, le programme lancé hériterait du tube
+/// par lequel reproc détecte la fin du processus : l'attente de `setsid`
+/// durerait alors autant que le programme (un verrouilleur, une application)
+/// et finirait en échec. Vrai si `setsid` a rendu 0 (programme lancé).
+bool spawn_detached(const std::vector<std::string>& arguments) {
+    std::vector<std::string> copies{"setsid", "-f"};
+    copies.insert(copies.end(), arguments.begin(), arguments.end());
+    std::vector<char*> argv;
+    argv.reserve(copies.size() + 1);
+    for (auto& argument : copies) {
+        argv.push_back(argument.data());
+    }
+    argv.push_back(nullptr);
+    posix_spawn_file_actions_t actions;
+    posix_spawn_file_actions_init(&actions);
+    posix_spawn_file_actions_addopen(&actions, STDIN_FILENO, "/dev/null", O_RDONLY, 0);
+    posix_spawn_file_actions_addopen(&actions, STDOUT_FILENO, "/dev/null", O_WRONLY, 0);
+    posix_spawn_file_actions_addopen(&actions, STDERR_FILENO, "/dev/null", O_WRONLY, 0);
+    posix_spawn_file_actions_addclosefrom_np(&actions, 3);
+    pid_t pid = 0;
+    const int spawned = posix_spawnp(&pid, argv.front(), &actions, nullptr, argv.data(), environ);
+    posix_spawn_file_actions_destroy(&actions);
+    if (spawned != 0) {
+        return false;
+    }
+    // `setsid -f` rend la main aussitôt après son fork.
+    int status = 0;
+    while (waitpid(pid, &status, 0) < 0) {
+        if (errno != EINTR) {
+            return false;
+        }
+    }
+    return WIFEXITED(status) && WEXITSTATUS(status) == 0;
 }
 
 /// Lance `arguments`, attend la fin (au plus `timeout`) et renvoie le code de
@@ -192,15 +229,14 @@ std::expected<void, std::string> launch_app(const std::string& name) {
         return std::unexpected("application « " + name +
                                " » introuvable (ni application installée, ni exécutable du PATH)");
     }
-    if (const auto status = run_and_wait({"setsid", "-f", name}, 5s); status == 0) {
+    if (spawn_detached({name})) {
         return {};
     }
     return std::unexpected("impossible de lancer « " + name + " »");
 }
 
 std::expected<void, std::string> open_url(const std::string& url) {
-    using namespace std::chrono_literals;
-    if (const auto status = run_and_wait({"setsid", "-f", "xdg-open", url}, 5s); status == 0) {
+    if (spawn_detached({"xdg-open", url})) {
         return {};
     }
     return std::unexpected("impossible d'ouvrir l'adresse (xdg-open est-il installé ?)");
@@ -607,7 +643,7 @@ std::expected<void, std::string> run_wayland_locker() {
         if (!is_in_path(name)) {
             continue;
         }
-        if (run_and_wait({"setsid", "-f", name}, 5s) == 0) {
+        if (spawn_detached({name})) {
             std::this_thread::sleep_for(1s);
             if (is_running(name)) {
                 return {};
