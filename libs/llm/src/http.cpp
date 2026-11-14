@@ -98,12 +98,18 @@ post_stream(const HttpRequest& request,
             if (line.ends_with('\r')) {
                 line.remove_suffix(1);
             }
-            if (!line.starts_with("data:")) {
-                continue; // « event: … », commentaires, lignes vides
-            }
-            line.remove_prefix(5);
-            if (line.starts_with(' ')) {
-                line.remove_prefix(1);
+            if (request.ndjson) {
+                if (line.empty()) {
+                    continue;
+                }
+            } else {
+                if (!line.starts_with("data:")) {
+                    continue; // « event: … », commentaires, lignes vides
+                }
+                line.remove_prefix(5);
+                if (line.starts_with(' ')) {
+                    line.remove_prefix(1);
+                }
             }
             if (auto handled = on_data(line); !handled) {
                 failure = std::move(handled.error());
@@ -142,6 +148,26 @@ post_stream(const HttpRequest& request,
         return core::make_error(core::ErrorCode::Llm,
                                 "connexion à " + request.url +
                                     " impossible : " + response.error.message);
+    }
+    return {};
+}
+
+core::Result<void> delete_json(const HttpRequest& request) {
+    cpr::Header header{{"Content-Type", "application/json"}};
+    for (const auto& [key, value] : request.headers) {
+        header[key] = value;
+    }
+    const cpr::Response response = cpr::Delete(
+        cpr::Url{request.url}, header, cpr::Body{request.body}, cpr::Timeout{request.timeout});
+    if (response.error.code != cpr::ErrorCode::OK) {
+        return core::make_error(core::ErrorCode::Llm,
+                                "connexion à " + request.url +
+                                    " impossible : " + response.error.message);
+    }
+    if (response.status_code < 200 || response.status_code >= 300) {
+        return core::make_error(core::ErrorCode::Llm, "HTTP " +
+                                                          std::to_string(response.status_code) +
+                                                          " : " + excerpt(response.text));
     }
     return {};
 }

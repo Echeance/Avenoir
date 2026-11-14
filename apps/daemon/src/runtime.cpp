@@ -36,6 +36,7 @@
 #include "avenoir/core/router.hpp"
 #include "avenoir/llm/factory.hpp"
 #include "avenoir/llm/models.hpp"
+#include "avenoir/llm/store.hpp"
 #include "avenoir/modules/discovery.hpp"
 #include "avenoir/modules/host.hpp"
 #include "avenoir/storage/store.hpp"
@@ -86,7 +87,8 @@ std::vector<std::string> builtin_commands() {
             "ouvrir",       "outils",        "parametres", "q",         "quit",     "quitter",
             "raisonnement", "recharger",     "redemarrer", "reglage",   "reglages", "renommer",
             "reset",        "risque",        "settings",   "supprimer", "tools",    "transcription",
-            "verrouillage", "permissions",   "revoquer",   "accorder",  "journal",  "cle"};
+            "verrouillage", "permissions",   "revoquer",   "accorder",  "journal",  "cle",
+            "modeles"};
 }
 
 /// Coordinateur de la requête en cours dans ce fil (Avenoir, ou un projet) :
@@ -388,6 +390,7 @@ struct Runtime::State {
     void change_setting(std::string_view argument);
     void print_permissions() const;
     void key_command(std::string_view argument) const;
+    void store_command(std::string_view argument, const std::stop_token& stop);
     /// Journal structuré : enregistre une action ; `in_conversation` faux
     /// pour un projet (aucune conversation).
     void record_action(const core::ActionEvent& event, bool in_conversation) const;
@@ -961,6 +964,9 @@ void Runtime::State::print_help() const {
     out += command("/outils", "outils disponibles et leur niveau de risque") + "\n";
     out += command("/annuler", "annuler les actions de la dernière requête (répétable)") + "\n";
     out += command("/modele [nom]", "modèles disponibles, ou changer de modèle") + "\n";
+    out += command("/modeles [installer|retirer nom]",
+                   "magasin : modèles conseillés par le banc, installés par Ollama") +
+           "\n";
     out += command("/moteur [nom]", "moteur de la recherche web (duckduckgo, searxng)") + "\n";
     out +=
         command("/memoire [nom]", "modèles chargés en mémoire, et la mémoire vidéo occupée") + "\n";
@@ -1294,6 +1300,247 @@ void Runtime::State::key_command(std::string_view argument) const {
     display().success(std::format("{} rangée dans le {}.", variable, secrets->description()));
     display().info("Elle sert aux modèles créés désormais ; pour le modèle actif : /redemarrer. "
                    "Vous pouvez retirer la variable de votre environnement.");
+}
+
+namespace {
+
+/// « 3,4 Go » (virgule décimale).
+std::string gigabytes(std::uint64_t bytes) {
+    std::string text = std::format("{:.1f} Go", static_cast<double>(bytes) / 1e9);
+    std::ranges::replace(text, '.', ',');
+    return text;
+}
+
+void audit_line(const std::string& message) {
+    if (const auto audit = spdlog::get("audit")) {
+        audit->info("{}", message);
+    }
+}
+
+} // namespace
+
+/// /modeles : le magasin (décision 65). Sans argument, le catalogue conseillé
+/// par le banc et ce qui est installé sur le serveur Ollama ; `installer` et
+/// `retirer` téléchargent ou suppriment un modèle (confirmé) et l'ajoutent à
+/// la configuration ou l'en retirent.
+void Runtime::State::store_command(std::string_view argument, const std::stop_token& stop) {
+    const auto gray = [](std::string_view text) { return paint(text, {.color = Color::Gray}); };
+    const std::string server = llm::ollama_server(file.config);
+    const auto space = argument.find(' ');
+    const std::string_view action = argument.substr(0, space);
+    const std::string target = space == std::string_view::npos
+                                   ? std::string{}
+                                   : std::string(trim(argument.substr(space + 1)));
+    auto installed = llm::installed_models(server);
+    const auto is_installed = [&installed](std::string_view tag) {
+        return installed && std::ranges::any_of(*installed, [tag](const llm::InstalledModel& m) {
+                   return m.tag == tag || m.tag == std::string(tag) + ":latest";
+               });
+    };
+    const auto configured = [this](std::string_view tag) -> const core::NamedLlm* {
+        for (const auto& model : file.config.models) {
+            if (const auto* openai = std::get_if<core::OpenAiCompatibleConfig>(&model.config);
+                openai != nullptr && openai->model == tag) {
+                return &model;
+            }
+        }
+        return nullptr;
+    };
+
+    if (action.empty()) {
+        display().plain(paint("Magasin de modèles", {.bold = true}) +
+                        gray("  conseillés par le banc d'essai · serveur " + server));
+        if (!installed) {
+            display().warning("Ollama ne répond pas sur " + server + " : " +
+                              core::describe(installed.error()));
+        }
+        for (const auto& model : llm::model_catalog()) {
+            std::string state = gray("non installé");
+            if (configured(model.tag) != nullptr) {
+                state = paint("dans vos modèles", {.color = Color::Green});
+            } else if (is_installed(model.tag)) {
+                state = paint("installé", {.color = Color::Cyan});
+            }
+            display().plain(std::format("  {} {}  {}",
+                                        terminal::pad(paint(model.name, {.bold = true}), 14),
+                                        terminal::pad(model.label, 18), state));
+            display().plain(
+                "    " +
+                gray(std::format("banc : {} · mémoire vidéo ≈ {} Go · disque ≈ "
+                                 "{} Go · {}",
+                                 model.score, model.video_memory_gb, model.disk_gb, model.note)));
+        }
+        if (installed) {
+            for (const auto& model : *installed) {
+                if (llm::find_catalog_model(model.tag) != nullptr) {
+                    continue;
+                }
+                display().plain(
+                    std::format("  {} {}", terminal::pad(paint(model.tag, {.bold = true}), 34),
+                                paint("non évalué par le banc", {.color = Color::Yellow}) +
+                                    gray(" · " + gigabytes(model.size_bytes))));
+            }
+        }
+        display().plain(gray("Installer : /modeles installer <nom ou étiquette Ollama> · retirer : "
+                             "/modeles retirer <nom> · fournisseur distant : /configurer, sa clé : "
+                             "/cle"));
+        return;
+    }
+    if ((action != "installer" && action != "retirer") || target.empty()) {
+        display().warning("Usage : /modeles [installer <nom|étiquette> | retirer <nom|étiquette>]");
+        return;
+    }
+    const auto* known = llm::find_catalog_model(target);
+    std::string tag = known != nullptr ? std::string(known->tag) : target;
+    if (const auto* entry = configured(target); entry == nullptr && known == nullptr) {
+        // Un nom de la configuration (`/modeles retirer qwen3-4b`).
+        for (const auto& model : file.config.models) {
+            const auto* openai = std::get_if<core::OpenAiCompatibleConfig>(&model.config);
+            if (model.name == target && openai != nullptr) {
+                tag = openai->model;
+            }
+        }
+    }
+    if (!llm::is_valid_model_tag(tag)) {
+        display().warning(
+            std::format("« {} » n'est pas une étiquette de modèle Ollama valide.", tag));
+        return;
+    }
+    if (!installed) {
+        display().error("Ollama ne répond pas sur " + server + " : " +
+                        core::describe(installed.error()));
+        return;
+    }
+
+    if (action == "retirer") {
+        const auto* entry = configured(tag);
+        if (entry != nullptr && switcher->active() != nullptr &&
+            switcher->active()->name == entry->name) {
+            display().warning(std::format("« {} » est le modèle actif : passez d'abord à un autre "
+                                          "(/modele).",
+                                          entry->name));
+            return;
+        }
+        if (!is_installed(tag) && entry == nullptr) {
+            display().info(std::format("« {} » n'est ni installé ni dans vos modèles.", tag));
+            return;
+        }
+        if (!display().ask_yes_no(
+                std::format("Supprimer {} du serveur {} et de vos modèles ? [o/N]", tag, server))) {
+            display().info("Rien n'a été changé.");
+            return;
+        }
+        if (is_installed(tag)) {
+            if (auto removed = llm::delete_model(server, tag); !removed) {
+                display().error(core::describe(removed.error()));
+                return;
+            }
+        }
+        core::AppConfig updated = file.config;
+        std::erase_if(updated.models, [&tag](const core::NamedLlm& model) {
+            const auto* openai = std::get_if<core::OpenAiCompatibleConfig>(&model.config);
+            return openai != nullptr && openai->model == tag;
+        });
+        if (updated.models.size() != file.config.models.size()) {
+            if (auto saved = file.save(updated); !saved) {
+                display().error(core::describe(saved.error()));
+                return;
+            }
+            file.config = std::move(updated);
+        }
+        audit_line(std::format("magasin : {} retiré ({})", tag, server));
+        display().success(std::format("{} retiré.", tag));
+        display().info("Pour mettre à jour la liste des modèles : /redemarrer.");
+        return;
+    }
+
+    // Installer.
+    if (known != nullptr) {
+        display().plain(std::format("  {} · banc : {} · mémoire vidéo ≈ {} Go · disque ≈ {} Go",
+                                    known->label, known->score, known->video_memory_gb,
+                                    known->disk_gb));
+    } else {
+        display().warning(std::format(
+            "« {} » n'est pas évalué par le banc d'essai : sa façon d'utiliser les outils et sa "
+            "résistance aux injections (pages, modules) ne sont pas vérifiées. Les protections "
+            "d'Avenoir (permissions, confirmations, provenance) restent les mêmes.",
+            tag));
+    }
+    if (!is_installed(tag)) {
+        if (!display().ask_yes_no(std::format("Télécharger {} depuis le registre d'Ollama sur {} ? "
+                                              "[o/N]",
+                                              tag, server))) {
+            display().info("Rien n'a été changé.");
+            return;
+        }
+        audit_line(std::format("magasin : téléchargement de {} ({})", tag, server));
+        display().start_thinking();
+        display().set_activity("Téléchargement de " + tag);
+        auto pulled = llm::pull_model(
+            server, tag,
+            [&tag](std::string_view status, std::uint64_t completed, std::uint64_t total) {
+                if (total > 0) {
+                    display().set_activity(std::format("Téléchargement de {} : {} %, {} sur {}",
+                                                       tag, (completed * 100) / total,
+                                                       gigabytes(completed), gigabytes(total)));
+                } else if (!status.empty()) {
+                    display().set_activity(std::format("Téléchargement de {} : {}", tag,
+                                                       terminal::ellipsize(status, 40)));
+                }
+            },
+            stop);
+        display().stop_thinking();
+        if (!pulled) {
+            if (pulled.error().code == core::ErrorCode::Cancelled) {
+                display().info("Téléchargement arrêté (Ollama le reprendra où il en était).");
+            } else {
+                display().error("téléchargement impossible : " + core::describe(pulled.error()));
+            }
+            return;
+        }
+        display().success(tag + " téléchargé.");
+    }
+    if (configured(tag) != nullptr) {
+        display().info(std::format("{} est déjà dans vos modèles (/modele).", tag));
+        return;
+    }
+    // Ajouté à la configuration, sur le même serveur que les autres modèles
+    // Ollama (et avec leur caractère « local »).
+    core::AppConfig updated = file.config;
+    std::string name = llm::config_name_for(tag);
+    for (int suffix = 2; std::ranges::any_of(
+             updated.models, [&name](const core::NamedLlm& m) { return m.name == name; });
+         ++suffix) {
+        name = llm::config_name_for(tag) + "-" + std::to_string(suffix);
+    }
+    std::optional<bool> local;
+    for (const auto& model : updated.models) {
+        if (const auto* openai = std::get_if<core::OpenAiCompatibleConfig>(&model.config);
+            openai != nullptr && openai->base_url.starts_with(server)) {
+            local = model.local;
+            break;
+        }
+    }
+    updated.models.push_back(
+        core::NamedLlm{.name = name,
+                       .config = core::OpenAiCompatibleConfig{.base_url = server + "/v1",
+                                                              .model = tag,
+                                                              .api_key_env = std::nullopt,
+                                                              .temperature = 0.2,
+                                                              .reasoning_effort = "none"},
+                       .local = local});
+    if (auto reread = core::parse_config(core::format_config(updated)); !reread) {
+        display().error(core::describe(reread.error()));
+        return;
+    }
+    if (auto saved = file.save(updated); !saved) {
+        display().error(core::describe(saved.error()));
+        return;
+    }
+    file.config = std::move(updated);
+    audit_line(std::format("magasin : {} ajouté aux modèles sous « {} »", tag, name));
+    display().success(std::format("{} ajouté à vos modèles sous le nom « {} ».", tag, name));
+    display().info(std::format("Pour l'utiliser : /redemarrer, puis /modele {}.", name));
 }
 
 void Runtime::State::record_action(const core::ActionEvent& event, bool in_conversation) const {
@@ -2003,6 +2250,8 @@ Outcome Runtime::State::command(std::string_view line, const std::stop_token& st
                      core::ToolCall{.id = {}, .name = tool, .arguments = std::move(arguments)},
                      stop, [label = std::move(label)] { return label; });
         }
+    } else if (name == "/modeles" || name == "/modèles") {
+        store_command(argument, stop);
     } else if (name == "/memoire" || name == "/mémoire") {
         if (const auto text = switcher->status(argument)) {
             for (const auto& row : std::views::split(*text, '\n')) {

@@ -20,6 +20,9 @@ struct HttpRequest {
     std::vector<std::pair<std::string, std::string>> headers; ///< Peuvent contenir une clé.
     std::string body;
     std::chrono::seconds timeout{180};
+    /// `post_stream` : lignes JSON brutes (NDJSON, comme `/api/pull`
+    /// d'Ollama) au lieu d'événements `data: …`.
+    bool ndjson = false;
 };
 
 /// POST JSON. Renvoie le corps de la réponse si le statut est 2xx ; sinon une
@@ -36,6 +39,10 @@ struct HttpRequest {
 post_stream(const HttpRequest& request,
             const std::function<core::Result<void>(std::string_view data)>& on_data,
             const std::stop_token& stop);
+
+/// DELETE avec un corps JSON (`/api/delete` d'Ollama) ; mêmes règles
+/// d'erreur que `post_json`, réponse ignorée.
+[[nodiscard]] core::Result<void> delete_json(const HttpRequest& request);
 
 /// GET JSON, court délai (questions rapides à un serveur local, comme la
 /// liste des modèles chargés). Mêmes règles d'erreur que `post_json`.

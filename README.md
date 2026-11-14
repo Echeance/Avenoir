@@ -268,6 +268,7 @@ Plusieurs **projets** peuvent avancer en même temps, en arrière-plan : `/proje
 | `/historique` | réafficher toute la conversation |
 | `/modules` | modules installés : état, permissions, outils |
 | `/risque [outil niveau]` | voir ou changer le risque d'un outil de module (`lecture`, `réversible`, `sensible`, `défaut`) |
+| `/modeles [installer\|retirer nom]` | magasin : modèles conseillés par le banc (score, mémoire vidéo, disque), les installer ou les retirer par Ollama |
 | `/cle [VARIABLE [effacer]]` | clés d'API : où elles sont, en ranger une dans le trousseau (saisie masquée), la retirer |
 | `/journal [tout] [nombre]` | actions de la conversation (ou de toutes) : décision de permission, résultat, durée |
 | `/permissions` | actions toujours autorisées ou refusées, permissions des modules |
