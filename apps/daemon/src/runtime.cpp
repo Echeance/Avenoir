@@ -31,6 +31,7 @@
 #include "avenoir/core/agent.hpp"
 #include "avenoir/core/claims.hpp"
 #include "avenoir/core/config.hpp"
+#include "avenoir/core/env.hpp"
 #include "avenoir/core/permission.hpp"
 #include "avenoir/core/router.hpp"
 #include "avenoir/llm/factory.hpp"
@@ -85,7 +86,7 @@ std::vector<std::string> builtin_commands() {
             "ouvrir",       "outils",        "parametres", "q",         "quit",     "quitter",
             "raisonnement", "recharger",     "redemarrer", "reglage",   "reglages", "renommer",
             "reset",        "risque",        "settings",   "supprimer", "tools",    "transcription",
-            "verrouillage", "permissions",   "revoquer",   "accorder",  "journal"};
+            "verrouillage", "permissions",   "revoquer",   "accorder",  "journal",  "cle"};
 }
 
 /// Coordinateur de la requête en cours dans ce fil (Avenoir, ou un projet) :
@@ -363,6 +364,8 @@ struct Runtime::State {
         std::atomic<bool> running{false};
         std::jthread worker; ///< Dernier membre : arrêté et attendu en premier.
     };
+    /// Clés d'API du trousseau (décision 63), pour chaque fournisseur créé.
+    llm::KeyLookup keys;
     std::mutex projects_mutex;
     /// Déclarés en dernier : arrêtés avant tout le reste d'Avenoir.
     std::map<std::string, std::unique_ptr<Project>> projects;
@@ -384,6 +387,7 @@ struct Runtime::State {
     static void startup(std::string_view argument);
     void change_setting(std::string_view argument);
     void print_permissions() const;
+    void key_command(std::string_view argument) const;
     /// Journal structuré : enregistre une action ; `in_conversation` faux
     /// pour un projet (aucune conversation).
     void record_action(const core::ActionEvent& event, bool in_conversation) const;
@@ -411,6 +415,20 @@ core::Result<void> add_tools(core::ToolRegistry& registry,
 core::Result<std::unique_ptr<Runtime>> Runtime::create(ConfigFile file) {
     auto s = std::make_unique<State>();
     s->file = std::move(file);
+    if (s->file.secrets != nullptr) {
+        // Le trousseau n'est pas fait pour des appels simultanés (agents en
+        // parallèle) : un à la fois.
+        s->keys = [secrets = s->file.secrets, mutex = std::make_shared<std::mutex>()](
+                      std::string_view variable) -> std::optional<std::string> {
+            const auto name = api_key_secret(variable);
+            if (!name) {
+                return std::nullopt;
+            }
+            const std::scoped_lock lock(*mutex);
+            auto value = secrets->read(*name);
+            return value ? *value : std::nullopt;
+        };
+    }
     const core::AppConfig& config = s->file.config;
 
     core::AgentOptions options;
@@ -531,8 +549,9 @@ core::Result<std::unique_ptr<Runtime>> Runtime::create(ConfigFile file) {
 
     // Modèles entre lesquels basculer ; passer à un modèle distant se
     // confirme (directive n° 17).
-    s->switcher =
-        std::make_unique<llm::ModelSwitcher>(llm::models_from(config), &s->switch_confirmer);
+    s->switcher = std::make_unique<llm::ModelSwitcher>(
+        llm::models_from(config), &s->switch_confirmer,
+        [keys = s->keys](const core::LlmConfig& model) { return llm::make_provider(model, keys); });
     s->switcher->set_unload_on_switch(config.agent.unload_on_switch);
     s->switcher->set_local_only(config.agent.local_only);
     s->load_watch = std::make_unique<LoadWatch>(*s->switcher);
@@ -570,6 +589,14 @@ core::Result<std::unique_ptr<Runtime>> Runtime::create(ConfigFile file) {
                                              : std::nullopt);
     if (!llm) {
         return std::unexpected(std::move(llm.error()));
+    }
+    for (const auto& problem : s->switcher->take_start_problems()) {
+        s->startup_warnings.push_back("modèle passé au démarrage : " + problem);
+    }
+    if (*llm == nullptr && !s->switcher->models().empty() && !s->switcher->local_only()) {
+        s->startup_warnings.emplace_back(
+            "aucun modèle utilisable : seule la voie rapide répond (/cle pour ranger une clé "
+            "d'API, puis /redemarrer)");
     }
     if (s->switcher->local_only() && s->switcher->active() == nullptr &&
         !s->switcher->models().empty()) {
@@ -963,6 +990,9 @@ void Runtime::State::print_help() const {
     out += command("/demarrage [oui|non]", "lancer Avenoir à l'ouverture de session") + "\n";
     out += command("/quitter", "quitter cette fenêtre (ou Ctrl+D) ; Avenoir continue") + "\n";
     out += title("Permissions") + "\n";
+    out += command("/cle [VARIABLE [effacer]]", "clés d'API dans le trousseau du système "
+                                                "(saisie masquée)") +
+           "\n";
     out += command("/journal [tout] [nombre]", "actions de la conversation (tout : toutes), "
                                                "décision et résultat") +
            "\n";
@@ -1160,6 +1190,112 @@ void Runtime::State::print_permissions() const {
                          "<module>"));
 }
 
+std::optional<std::string> api_key_secret(std::string_view variable) {
+    const bool valid =
+        !variable.empty() && variable.size() <= 64 && std::ranges::all_of(variable, [](char c) {
+            return (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '_';
+        });
+    if (!valid) {
+        return std::nullopt;
+    }
+    std::string name = "api-key-";
+    for (const char c : variable) {
+        if (c == '_') {
+            name += '-';
+        } else if (c >= 'A' && c <= 'Z') {
+            name += static_cast<char>(c - 'A' + 'a');
+        } else {
+            name += c;
+        }
+    }
+    return name;
+}
+
+/// /cle : sans argument, où se trouve chaque clé des modèles configurés ;
+/// `/cle VARIABLE` la range dans le trousseau (saisie masquée) ;
+/// `/cle VARIABLE effacer` l'en retire. La valeur n'est jamais affichée ni
+/// journalisée.
+void Runtime::State::key_command(std::string_view argument) const {
+    storage::SecretStore* secrets = file.secrets;
+    const auto gray = [](std::string_view text) { return paint(text, {.color = Color::Gray}); };
+    if (argument.empty()) {
+        std::vector<std::string> variables;
+        for (const auto& model : file.config.models) {
+            if (const auto* openai = std::get_if<core::OpenAiCompatibleConfig>(&model.config);
+                openai != nullptr && openai->api_key_env) {
+                variables.push_back(*openai->api_key_env);
+            } else if (const auto* anthropic = std::get_if<core::AnthropicConfig>(&model.config)) {
+                variables.push_back(anthropic->api_key_env);
+            }
+        }
+        std::ranges::sort(variables);
+        const auto [first, last] = std::ranges::unique(variables);
+        variables.erase(first, last);
+        if (variables.empty()) {
+            display().info("Aucun modèle configuré n'a besoin de clé d'API.");
+        }
+        for (const auto& variable : variables) {
+            std::string place = paint("absente", {.color = Color::Red});
+            if (keys && keys(variable)) {
+                place = paint("dans le trousseau", {.color = Color::Green});
+            } else if (core::read_env(variable)) {
+                place = paint("dans l'environnement", {.color = Color::Yellow});
+            }
+            display().plain(
+                std::format("  {} {}", terminal::pad(paint(variable, {.bold = true}), 28), place));
+        }
+        display().plain(gray("Ranger une clé : /cle <VARIABLE> (saisie masquée) · la retirer : "
+                             "/cle <VARIABLE> effacer"));
+        if (secrets != nullptr && !secrets->is_system_keychain()) {
+            display().warning("Trousseau du système indisponible : les clés seraient gardées dans "
+                              "un " +
+                              secrets->description() + " (protection plus faible).");
+        }
+        return;
+    }
+    const auto space = argument.find(' ');
+    const std::string variable(argument.substr(0, space));
+    const std::string_view action =
+        space == std::string_view::npos ? std::string_view{} : trim(argument.substr(space + 1));
+    const auto name = api_key_secret(variable);
+    if (!name || (!action.empty() && action != "effacer")) {
+        display().warning("Usage : /cle [VARIABLE [effacer]] (VARIABLE : majuscules, chiffres et "
+                          "_, comme ANTHROPIC_API_KEY)");
+        return;
+    }
+    if (secrets == nullptr) {
+        display().error("trousseau indisponible : la clé ne peut pas être rangée.");
+        return;
+    }
+    const auto audit = spdlog::get("audit");
+    if (action == "effacer") {
+        if (auto removed = secrets->remove(*name); !removed) {
+            display().error(core::describe(removed.error()));
+            return;
+        }
+        if (audit) {
+            audit->info("clés : {} retirée du trousseau (/cle)", variable);
+        }
+        display().success(std::format("{} retirée du trousseau.", variable));
+        return;
+    }
+    const auto value = display().ask_secret(std::format("Clé {} :", variable));
+    if (!value || value->empty()) {
+        display().info("Rien n'a été changé.");
+        return;
+    }
+    if (auto written = secrets->write(*name, *value); !written) {
+        display().error(core::describe(written.error()));
+        return;
+    }
+    if (audit) {
+        audit->info("clés : {} rangée dans le {} (/cle)", variable, secrets->description());
+    }
+    display().success(std::format("{} rangée dans le {}.", variable, secrets->description()));
+    display().info("Elle sert aux modèles créés désormais ; pour le modèle actif : /redemarrer. "
+                   "Vous pouvez retirer la variable de votre environnement.");
+}
+
 void Runtime::State::record_action(const core::ActionEvent& event, bool in_conversation) const {
     storage::Store* store = conversations ? conversations->store() : nullptr;
     if (store == nullptr) {
@@ -1338,7 +1474,7 @@ agents::Environment Runtime::State::agent_environment() const {
                                         "modèle distant « " + choice->name + " » refusé");
             }
         }
-        auto provider = llm::make_provider(choice->config);
+        auto provider = llm::make_provider(choice->config, keys);
         if (!provider) {
             return std::unexpected(std::move(provider.error()));
         }
@@ -1413,7 +1549,7 @@ Runtime::State::make_project_agent(const std::string& name) const {
     if (active == nullptr) {
         return core::make_error(core::ErrorCode::Config, "aucun modèle actif pour le projet");
     }
-    auto provider = llm::make_provider(active->config);
+    auto provider = llm::make_provider(active->config, keys);
     if (!provider) {
         return std::unexpected(std::move(provider.error()));
     }
@@ -1900,6 +2036,8 @@ Outcome Runtime::State::command(std::string_view line, const std::stop_token& st
         }
     } else if (name == "/modules") {
         modules_ui->print_status();
+    } else if (name == "/cle") {
+        key_command(argument);
     } else if (name == "/journal") {
         print_journal(argument);
     } else if (name == "/permissions") {

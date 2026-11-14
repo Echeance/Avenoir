@@ -31,6 +31,8 @@ class SecretStore {
     /// Crée ou remplace le secret `name`. Valeur ASCII imprimable.
     [[nodiscard]] virtual core::Result<void> write(std::string_view name,
                                                    std::string_view value) = 0;
+    /// Supprime le secret `name` (rien à faire s'il n'existe pas).
+    [[nodiscard]] virtual core::Result<void> remove(std::string_view name) = 0;
     /// Où les secrets sont gardés, pour l'utilisateur (« trousseau du système »).
     [[nodiscard]] virtual std::string description() const = 0;
     /// Vrai pour le trousseau du système ; faux pour un repli plus faible
@@ -43,6 +45,7 @@ class MemorySecretStore final : public SecretStore {
   public:
     [[nodiscard]] core::Result<std::optional<std::string>> read(std::string_view name) override;
     [[nodiscard]] core::Result<void> write(std::string_view name, std::string_view value) override;
+    [[nodiscard]] core::Result<void> remove(std::string_view name) override;
     [[nodiscard]] std::string description() const override { return "mémoire"; }
     [[nodiscard]] bool is_system_keychain() const override { return true; }
 
@@ -58,6 +61,7 @@ class FileSecretStore final : public SecretStore {
     explicit FileSecretStore(std::filesystem::path directory);
     [[nodiscard]] core::Result<std::optional<std::string>> read(std::string_view name) override;
     [[nodiscard]] core::Result<void> write(std::string_view name, std::string_view value) override;
+    [[nodiscard]] core::Result<void> remove(std::string_view name) override;
     [[nodiscard]] std::string description() const override;
     [[nodiscard]] bool is_system_keychain() const override { return false; }
 

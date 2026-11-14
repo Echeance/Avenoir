@@ -47,6 +47,7 @@ set_target_properties(avenoird PROPERTIES
 if(AVENOIR_BUILD_TESTS)
     # Ce qui se décide sans terminal ni réseau : création guidée, réglages.
     add_executable(avenoir_daemon_tests
+        tests/keys_test.cpp
         tests/lock_theme_test.cpp
         tests/permissions_test.cpp
         tests/settings_catalog_test.cpp

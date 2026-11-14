@@ -80,6 +80,20 @@ class CredentialStore final : public SecretStore {
         return {};
     }
 
+    core::Result<void> remove(std::string_view name) override {
+        if (!is_valid_secret_name(name)) {
+            return keychain_error("nom de secret invalide");
+        }
+        const std::wstring target = target_name(name);
+        if (CredDeleteW(target.c_str(), CRED_TYPE_GENERIC, 0) == FALSE) {
+            const DWORD code = GetLastError();
+            if (code != ERROR_NOT_FOUND) {
+                return keychain_error("suppression refusée (code " + std::to_string(code) + ")");
+            }
+        }
+        return {};
+    }
+
     [[nodiscard]] std::string description() const override {
         return "trousseau du système (Gestionnaire d'identification)";
     }

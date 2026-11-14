@@ -77,9 +77,13 @@ class ModelSwitcher {
     /// sinon le premier (en mode « local uniquement » : seulement parmi les
     /// modèles locaux ; aucun modèle local = pas de fournisseur). Pas de confirmation : c'est un
     /// modèle de la configuration, déjà choisi par l'utilisateur. Renvoie son fournisseur, nul s'il
-    /// n'y a aucun modèle.
+    /// n'y a aucun modèle. Un modèle dont le fournisseur ne peut pas être créé (clé d'API absente)
+    /// est passé : le suivant permis est essayé ; aucun : pas de fournisseur (voie rapide seule).
+    /// Les modèles passés sont dans `take_start_problems`.
     [[nodiscard]] core::Result<std::unique_ptr<core::LlmProvider>>
     start(std::optional<std::string_view> preferred);
+    /// Modèles passés au démarrage et pourquoi (« claude : clé … »), vidés à la lecture.
+    [[nodiscard]] std::vector<std::string> take_start_problems();
 
     /// L'agent dont changer le modèle (à appeler une fois l'agent créé) ;
     /// il apprend le nom du modèle actif, puis de chaque nouveau modèle.
@@ -169,6 +173,7 @@ class ModelSwitcher {
     std::size_t active_ = 0;
     core::ConfirmationHandler* confirmer_;
     ProviderFactory factory_;
+    std::vector<std::string> start_problems_;
     core::Agent* agent_ = nullptr;
     std::function<void(const ModelChoice&)> on_switch_;
     JsonPoster poster_;

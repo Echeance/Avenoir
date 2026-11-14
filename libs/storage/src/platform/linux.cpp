@@ -92,6 +92,22 @@ class SecretToolStore final : public SecretStore {
         return {};
     }
 
+    core::Result<void> remove(std::string_view name) override {
+        if (!is_valid_secret_name(name)) {
+            return keychain_error("nom de secret invalide");
+        }
+        auto outcome =
+            run({program_, "clear", "application", "avenoir", "secret", std::string(name)}, {});
+        if (!outcome) {
+            return std::unexpected(std::move(outcome.error()));
+        }
+        // Absent : rien à retirer (code non nul sans message).
+        if (outcome->status != 0 && !outcome->err.empty()) {
+            return keychain_error(first_line(outcome->err));
+        }
+        return {};
+    }
+
     [[nodiscard]] std::string description() const override {
         return "trousseau du système (Secret Service)";
     }

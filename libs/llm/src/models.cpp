@@ -614,16 +614,30 @@ ModelSwitcher::start(std::optional<std::string_view> preferred) {
             }
         }
     }
+    active_ = models_.size(); // sans modèle utilisable : voie rapide seulement
     if (chosen == nullptr) {
-        active_ = models_.size(); // aucun modèle permis : voie rapide seulement
         return std::unique_ptr<core::LlmProvider>{};
     }
-    auto provider = factory_(chosen->config);
-    if (!provider) {
-        return std::unexpected(std::move(provider.error()));
+    // Le modèle choisi d'abord, puis les autres permis, dans l'ordre.
+    std::vector<const ModelChoice*> order{chosen};
+    for (const auto& model : models_) {
+        if (&model != chosen && allowed(&model)) {
+            order.push_back(&model);
+        }
     }
-    active_ = static_cast<std::size_t>(chosen - models_.data());
-    return std::move(*provider);
+    for (const auto* model : order) {
+        auto provider = factory_(model->config);
+        if (provider) {
+            active_ = static_cast<std::size_t>(model - models_.data());
+            return std::move(*provider);
+        }
+        start_problems_.push_back(model->name + " : " + provider.error().message);
+    }
+    return std::unique_ptr<core::LlmProvider>{};
+}
+
+std::vector<std::string> ModelSwitcher::take_start_problems() {
+    return std::exchange(start_problems_, {});
 }
 
 const ModelChoice* ModelSwitcher::find(std::string_view name) const {

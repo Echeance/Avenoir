@@ -105,4 +105,43 @@ std::optional<int> run_in_terminal(const std::vector<std::string>& arguments) {
     return status;
 }
 
+std::optional<std::string> read_hidden_line() {
+    termios saved{};
+    if (isatty(STDIN_FILENO) != 1 || tcgetattr(STDIN_FILENO, &saved) != 0) {
+        return std::nullopt;
+    }
+    // Mode ligne sans écho ; Ctrl+C reste un signal (lecture interrompue).
+    termios hidden = saved;
+    hidden.c_lflag |= static_cast<tcflag_t>(ICANON | ISIG);
+    hidden.c_lflag &= ~static_cast<tcflag_t>(ECHO);
+    (void)tcsetattr(STDIN_FILENO, TCSANOW, &hidden);
+    std::string line;
+    bool complete = false;
+    char c = 0;
+    while (true) {
+        const ssize_t got = read(STDIN_FILENO, &c, 1);
+        if (got < 0 && errno == EINTR) {
+            break; // Ctrl+C : abandon
+        }
+        if (got <= 0) {
+            break;
+        }
+        if (c == '\n') {
+            complete = true;
+            break;
+        }
+        if (line.size() < 4096) {
+            line += c;
+        }
+    }
+    (void)tcsetattr(STDIN_FILENO, TCSANOW, &saved);
+    if (!complete) {
+        return std::nullopt;
+    }
+    if (!line.empty() && line.back() == '\r') {
+        line.pop_back();
+    }
+    return line;
+}
+
 } // namespace avenoir::cli

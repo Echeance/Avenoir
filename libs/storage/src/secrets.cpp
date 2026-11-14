@@ -75,6 +75,18 @@ class LayeredSecretStore final : public SecretStore {
         return file_.write(name, value);
     }
 
+    /// Retiré des deux : un secret a pu être écrit dans le fichier quand le
+    /// trousseau manquait.
+    core::Result<void> remove(std::string_view name) override {
+        auto from_file = file_.remove(name);
+        if (keychain_ && !keychain_failed_) {
+            if (auto from_keychain = keychain_->remove(name); !from_keychain) {
+                return from_keychain;
+            }
+        }
+        return from_file;
+    }
+
     [[nodiscard]] std::string description() const override {
         return is_system_keychain() ? keychain_->description() : file_.description();
     }
@@ -114,6 +126,29 @@ core::Result<void> MemorySecretStore::write(std::string_view name, std::string_v
         return secret_error("secret invalide");
     }
     values_.insert_or_assign(std::string(name), std::string(value));
+    return {};
+}
+
+core::Result<void> MemorySecretStore::remove(std::string_view name) {
+    if (!is_valid_secret_name(name)) {
+        return secret_error("nom de secret invalide");
+    }
+    if (const auto found = values_.find(name); found != values_.end()) {
+        values_.erase(found);
+    }
+    return {};
+}
+
+core::Result<void> FileSecretStore::remove(std::string_view name) {
+    if (!is_valid_secret_name(name)) {
+        return secret_error("nom de secret invalide");
+    }
+    const std::filesystem::path path = directory_ / name;
+    std::error_code error;
+    std::filesystem::remove(path, error);
+    if (error) {
+        return secret_error("suppression impossible : " + path.string());
+    }
     return {};
 }
 

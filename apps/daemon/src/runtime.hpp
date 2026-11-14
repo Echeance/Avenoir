@@ -10,6 +10,7 @@
 
 #include "avenoir/core/config.hpp"
 #include "avenoir/core/error.hpp"
+#include "avenoir/storage/secrets.hpp"
 
 #include "settings_catalog.hpp"
 #include "setup.hpp"
@@ -25,7 +26,14 @@ struct ConfigFile {
     std::filesystem::path path;
     core::AppConfig config;
     SaveSettings save; ///< Écriture scellée, ou simple en mode développement.
+    /// Trousseau d'Avenoir : clés d'API (/cle, décision 63) ; peut manquer.
+    storage::SecretStore* secrets = nullptr;
 };
+
+/// Nom du secret d'une clé d'API : « api-key-<variable en minuscules> »
+/// (`ANTHROPIC_API_KEY` → `api-key-anthropic-api-key`) ; rien si le nom de
+/// variable est invalide (majuscules, chiffres et « _ », 64 au plus).
+[[nodiscard]] std::optional<std::string> api_key_secret(std::string_view variable);
 
 /// Suite à donner après une saisie.
 enum class Outcome : unsigned char {

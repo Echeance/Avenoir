@@ -100,6 +100,10 @@ class Ui {
     /// accord de l'utilisateur) ; seuls les paquets de la liste de la CLI sont
     /// acceptés. Par défaut : impossible (aucun terminal).
     [[nodiscard]] virtual core::Result<void> install_package(std::string_view package);
+    /// Saisie masquée d'un secret (clé d'API) dans le terminal du client :
+    /// rien n'est affiché ni gardé dans l'historique. Rien si l'utilisateur
+    /// abandonne ou s'il n'y a pas de terminal (par défaut).
+    [[nodiscard]] virtual std::optional<std::string> ask_secret(std::string_view question);
 };
 
 /// Interface d'un client connecté : chaque appel devient un message JSON-RPC
@@ -133,6 +137,7 @@ class RemoteUi final : public Ui {
     [[nodiscard]] ConfirmAnswer confirm(const core::ToolSpec& spec, const core::ToolCall& call,
                                         ConfirmChoices choices) override;
     [[nodiscard]] core::Result<void> install_package(std::string_view package) override;
+    [[nodiscard]] std::optional<std::string> ask_secret(std::string_view question) override;
 
   private:
     void send(std::string_view op, std::string_view text);

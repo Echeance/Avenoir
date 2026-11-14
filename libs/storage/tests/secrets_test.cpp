@@ -1,5 +1,6 @@
 #include <chrono>
 #include <filesystem>
+#include <optional>
 #include <string>
 #include <system_error>
 
@@ -62,4 +63,23 @@ TEST_CASE("MemorySecretStore", "[secrets]") {
     CHECK_FALSE(store.read("x").value().has_value());
     REQUIRE(store.write("x", "valeur").has_value());
     CHECK(store.read("x").value() == "valeur");
+}
+
+TEST_CASE("secrets : suppression (mémoire et fichier)", "[secrets]") {
+    storage::MemorySecretStore memory;
+    REQUIRE(memory.write("api-key-x", "sk-1"));
+    REQUIRE(memory.remove("api-key-x"));
+    CHECK_FALSE(memory.read("api-key-x").value_or(std::optional<std::string>{"?"}).has_value());
+    CHECK(memory.remove("api-key-x")); // absent : rien à faire
+    CHECK_FALSE(memory.remove("Nom Invalide"));
+
+    const fs::path directory = temporary_directory("avenoir-secrets-remove");
+    storage::FileSecretStore file(directory);
+    REQUIRE(file.write("api-key-x", "sk-2"));
+    REQUIRE(file.remove("api-key-x"));
+    CHECK_FALSE(file.read("api-key-x").value_or(std::optional<std::string>{"?"}).has_value());
+    CHECK(file.remove("api-key-x"));
+    CHECK_FALSE(file.remove("../evasion"));
+    std::error_code ignored;
+    fs::remove_all(directory, ignored);
 }

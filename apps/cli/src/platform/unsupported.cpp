@@ -16,4 +16,8 @@ std::optional<int> run_in_terminal(const std::vector<std::string>& /*arguments*/
     return std::nullopt; // seulement sous Linux (installation de swaylock)
 }
 
+std::optional<std::string> read_hidden_line() {
+    return std::nullopt;
+}
+
 } // namespace avenoir::cli

@@ -87,7 +87,10 @@ searxng_idle_minutes = 10 # arrêt de l'instance locale après cette inactivité
 # engine = "duckduckgo"   # moteur de départ ; /moteur le change (retenu)
 
 # ─── Permissions par niveau de risque : "allow" | "confirm" | "deny" ───────
-# `sensitive` ne peut jamais être "allow" (forcé à "confirm").
+# `sensitive` = "allow" se choisit seulement depuis Avenoir
+# (/reglage permissions.sensitive autoriser : avertissement et « Je sais ce
+# que je fais ») ; restent alors confirmés un argument venu d'une page ou d'un
+# module, et les commandes shell.
 [permissions]
 read_only = "allow"
 reversible = "allow"

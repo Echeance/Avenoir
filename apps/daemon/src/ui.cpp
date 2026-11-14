@@ -171,6 +171,19 @@ core::Result<void> Ui::install_package(std::string_view package) {
                             std::format("aucun terminal pour installer « {} »", package));
 }
 
+std::optional<std::string> Ui::ask_secret(std::string_view /*question*/) {
+    return std::nullopt;
+}
+
+std::optional<std::string> RemoteUi::ask_secret(std::string_view question) {
+    const std::scoped_lock lock(question_mutex_);
+    const auto answer = peer_->call("ask_secret", {{"question", question}}, never());
+    if (!answer || !answer->is_string()) {
+        return std::nullopt;
+    }
+    return answer->get<std::string>();
+}
+
 core::Result<void> RemoteUi::install_package(std::string_view package) {
     const std::scoped_lock lock(question_mutex_);
     const auto answer = peer_->call("install_package", {{"package", package}}, never());

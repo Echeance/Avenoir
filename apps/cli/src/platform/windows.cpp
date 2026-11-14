@@ -97,4 +97,34 @@ std::optional<int> run_in_terminal(const std::vector<std::string>& /*arguments*/
     return std::nullopt; // seulement sous Linux (installation de swaylock)
 }
 
+std::optional<std::string> read_hidden_line() {
+    HANDLE input = GetStdHandle(STD_INPUT_HANDLE);
+    DWORD saved = 0;
+    if (input == INVALID_HANDLE_VALUE || GetConsoleMode(input, &saved) == FALSE) {
+        return std::nullopt;
+    }
+    // Mode ligne sans écho.
+    const DWORD hidden = (saved | ENABLE_LINE_INPUT | ENABLE_PROCESSED_INPUT) &
+                         ~static_cast<DWORD>(ENABLE_ECHO_INPUT);
+    SetConsoleMode(input, hidden);
+    std::wstring buffer(4096, L'\0');
+    DWORD read = 0;
+    const BOOL ok =
+        ReadConsoleW(input, buffer.data(), static_cast<DWORD>(buffer.size()), &read, nullptr);
+    SetConsoleMode(input, saved);
+    if (ok == FALSE || read == 0) {
+        return std::nullopt;
+    }
+    buffer.resize(read);
+    while (!buffer.empty() && (buffer.back() == L'\n' || buffer.back() == L'\r')) {
+        buffer.pop_back();
+    }
+    const int size = WideCharToMultiByte(CP_UTF8, 0, buffer.data(), static_cast<int>(buffer.size()),
+                                         nullptr, 0, nullptr, nullptr);
+    std::string line(static_cast<std::size_t>(size), '\0');
+    WideCharToMultiByte(CP_UTF8, 0, buffer.data(), static_cast<int>(buffer.size()), line.data(),
+                        size, nullptr, nullptr);
+    return line;
+}
+
 } // namespace avenoir::cli

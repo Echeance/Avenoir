@@ -22,4 +22,8 @@ namespace avenoir::cli {
 /// lancée ou si ce système ne le permet pas.
 [[nodiscard]] std::optional<int> run_in_terminal(const std::vector<std::string>& arguments);
 
+/// Lit une ligne dans ce terminal sans l'afficher (clé d'API) ; rien si
+/// l'entrée n'est pas un terminal, si elle se ferme ou sur ce système.
+[[nodiscard]] std::optional<std::string> read_hidden_line();
+
 } // namespace avenoir::cli

@@ -653,3 +653,32 @@ TEST_CASE("annonce d'un changement de modèle sans l'outil", "[models]") {
     CHECK_FALSE(check("Je passe la main : que veux-tu faire ?", none));
     CHECK_FALSE(check("Il fait 12 °C à Lyon.", none));
 }
+
+TEST_CASE("démarrage : un modèle sans clé est passé, le suivant sert", "[models]") {
+    std::vector<llm::ModelChoice> models{
+        {.name = "distant",
+         .config = core::AnthropicConfig{.model = "m",
+                                         .api_key_env = "AVENOIR_TEST_SANS_CLE",
+                                         .max_tokens = 1024,
+                                         .base_url = std::nullopt},
+         .local = false},
+        {.name = "claude", .config = core::ClaudeCodeConfig{}, .local = false},
+    };
+    llm::ModelSwitcher switcher(models, nullptr);
+    const auto provider = switcher.start("distant");
+    REQUIRE(provider.has_value());
+    REQUIRE(*provider != nullptr);
+    REQUIRE(switcher.active() != nullptr);
+    CHECK(switcher.active()->name == "claude");
+    const auto problems = switcher.take_start_problems();
+    REQUIRE(problems.size() == 1);
+    CHECK(problems[0].starts_with("distant : "));
+    CHECK(switcher.take_start_problems().empty());
+
+    // Aucun modèle utilisable : pas de fournisseur, pas d'erreur.
+    llm::ModelSwitcher alone({models.front()}, nullptr);
+    const auto none = alone.start(std::nullopt);
+    REQUIRE(none.has_value());
+    CHECK(*none == nullptr);
+    CHECK(alone.active() == nullptr);
+}

@@ -17,23 +17,29 @@ namespace {
 
 using ProviderResult = core::Result<std::unique_ptr<core::LlmProvider>>;
 
-/// Clé lue dans la variable `name` ; le message d'erreur cite le nom de la
-/// variable, jamais une valeur.
-core::Result<std::string> read_key(const std::string& name) {
+/// Clé `name` : trousseau d'Avenoir, sinon variable d'environnement ; le
+/// message d'erreur cite le nom, jamais une valeur.
+core::Result<std::string> read_key(const std::string& name, const KeyLookup& keys) {
+    if (keys) {
+        if (auto kept = keys(name); kept && !kept->empty()) {
+            return std::move(*kept);
+        }
+    }
     if (auto value = core::read_env(name)) {
         return std::move(*value);
     }
     return core::make_error(core::ErrorCode::Config,
-                            "variable d'environnement « " + name + " » absente ou vide");
+                            "clé « " + name + " » introuvable : ni dans le trousseau (/cle " +
+                                name + "), ni dans l'environnement");
 }
 
 } // namespace
 
-ProviderResult make_provider(const core::LlmConfig& config) {
+ProviderResult make_provider(const core::LlmConfig& config, const KeyLookup& keys) {
     if (const auto* openai = std::get_if<core::OpenAiCompatibleConfig>(&config)) {
         std::optional<std::string> key;
         if (openai->api_key_env) {
-            auto value = read_key(*openai->api_key_env);
+            auto value = read_key(*openai->api_key_env, keys);
             if (!value) {
                 return std::unexpected(std::move(value.error()));
             }
@@ -42,7 +48,7 @@ ProviderResult make_provider(const core::LlmConfig& config) {
         return std::make_unique<OpenAiCompatible>(*openai, std::move(key));
     }
     if (const auto* anthropic = std::get_if<core::AnthropicConfig>(&config)) {
-        auto key = read_key(anthropic->api_key_env);
+        auto key = read_key(anthropic->api_key_env, keys);
         if (!key) {
             return std::unexpected(std::move(key.error()));
         }

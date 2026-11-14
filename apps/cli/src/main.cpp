@@ -171,6 +171,9 @@ class Client {
         peer_->on_request("confirm", [this](const json& params, const std::stop_token&) {
             return core::Result<json>(confirm(params));
         });
+        peer_->on_request("ask_secret", [this](const json& params, const std::stop_token&) {
+            return core::Result<json>(ask_secret(params.value("question", "")));
+        });
         peer_->on_request("install_package", [this](const json& params, const std::stop_token&) {
             return core::Result<json>(install_package(params.value("package", "")));
         });
@@ -415,6 +418,27 @@ class Client {
     /// Installe un paquet de la liste fermée (packages.hpp) dans ce terminal :
     /// le plein écran est quitté le temps de la commande (sudo, questions du
     /// gestionnaire de paquets), puis retrouvé. Le démon ne donne qu'un nom.
+    /// Saisie masquée d'une clé : plein écran quitté le temps de la saisie
+    /// (comme pour une installation), rien d'affiché, rien dans l'historique.
+    json ask_secret(const std::string& question) {
+        const Questioning questioning(questioning_);
+        display().suspend_thinking();
+        const bool full_screen = display().full_screen();
+        display().shutdown();
+        display().plain(shown(question) + " " +
+                        paint("(rien ne s'affiche pendant la saisie)", {.color = Color::Gray}));
+        const auto line = cli::read_hidden_line();
+        if (full_screen) {
+            display().enable_pinned_bar(true);
+        }
+        display().resume_thinking();
+        if (!line) {
+            (void)cli::take_interrupt();
+            return nullptr;
+        }
+        return *line;
+    }
+
     json install_package(const std::string& package) {
         if (!cli::installable_package(package)) {
             return {{"ok", false}, {"message", "paquet refusé par la CLI : " + package}};

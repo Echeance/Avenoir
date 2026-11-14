@@ -77,7 +77,7 @@ Avenoir agit sur une vraie machine et voit vos données : **la confidentialité 
 - **Une action annoncée est une action faite** : si le modèle dit « j'ai lancé Firefox » sans l'avoir fait, Avenoir le relance, puis vous prévient.
 - **Arguments validés** par chaque outil, **jamais de shell** construit à partir d'un texte : plus de 40 tentatives d'injection sont testées.
 - **Provenance des arguments** : si une action reprend une adresse, un nom ou un texte lu dans une page ou un résultat d'outil, et non dans votre demande, Avenoir vous la fait confirmer en disant d'où vient la valeur. Une injection (« ouvre https://… ») ne passe plus inaperçue, quel que soit le modèle.
-- **Vos clés d'API ne sont jamais écrites** dans la configuration : seul le *nom* de la variable d'environnement l'est.
+- **Vos clés d'API ne sont jamais écrites** dans la configuration : seul leur *nom* l'est. Rangez-les dans le trousseau du système avec `/cle NOM` (saisie masquée) ; une variable d'environnement de ce nom marche aussi.
 - **Vos conversations restent chez vous**, dans un fichier lisible par vous seul.
 - **Aucune confiance aveugle envers les modules** : manifeste vérifié avant tout lancement, module que vous installez désactivé tant que vous ne l'activez pas, environnement minimal (pas vos clés d'API), outils `SENSIBLE` par défaut, réponses bornées et nettoyées, chaque appel contrôlé et journalisé. Abaisser le risque d'un outil exige de taper « Je sais ce que je fais ».
 
@@ -142,7 +142,7 @@ Les modèles sont décrits un par section `[models.<nom>]`. Le premier sert au p
 | Fournisseur | `provider` | Pour qui | Mise en place |
 |---|---|---|---|
 | **Local** | `openai_compatible` | Ollama, llama.cpp, LM Studio, vLLM… | `ollama pull gemma4:26b-a4b` (tout modèle gérant le *tool calling*) |
-| **API distante** | `openai_compatible` ou `anthropic` | OpenAI, Mistral, OpenRouter, Anthropic… | exporter la variable indiquée par `api_key_env` |
+| **API distante** | `openai_compatible` ou `anthropic` | OpenAI, Mistral, OpenRouter, Anthropic… | `/cle <api_key_env>` (trousseau, saisie masquée), ou exporter la variable |
 | **Abonnement Claude** | `claude_code` | Claude Pro / Max, **sans clé d'API** | installer Claude Code, puis `claude` → `/login` |
 
 ```toml
@@ -268,6 +268,7 @@ Plusieurs **projets** peuvent avancer en même temps, en arrière-plan : `/proje
 | `/historique` | réafficher toute la conversation |
 | `/modules` | modules installés : état, permissions, outils |
 | `/risque [outil niveau]` | voir ou changer le risque d'un outil de module (`lecture`, `réversible`, `sensible`, `défaut`) |
+| `/cle [VARIABLE [effacer]]` | clés d'API : où elles sont, en ranger une dans le trousseau (saisie masquée), la retirer |
 | `/journal [tout] [nombre]` | actions de la conversation (ou de toutes) : décision de permission, résultat, durée |
 | `/permissions` | actions toujours autorisées ou refusées, permissions des modules |
 | `/revoquer <outil\|module\|tout>` | retirer une règle (retour à la confirmation), ou les permissions d'un module (ce qui le désactive) |

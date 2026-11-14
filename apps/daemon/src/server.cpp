@@ -102,6 +102,11 @@ class Server {
             save_ = [path = config_path_](const core::AppConfig& updated) {
                 return core::save_config(path, updated);
             };
+            // Clés d'API (/cle) : le trousseau de l'utilisateur, même en
+            // mode développement (elles ne dépendent pas du fichier).
+            if (const auto data = storage::data_directory()) {
+                secrets_ = storage::open_secret_store(*data / "secrets");
+            }
         } else {
             const auto path = core::default_config_path();
             const auto data = storage::data_directory();
@@ -217,8 +222,10 @@ class Server {
             spdlog::error("{}", build_error_);
             return;
         }
-        auto runtime = Runtime::create(
-            ConfigFile{.path = config_path_, .config = std::move(*config), .save = save_});
+        auto runtime = Runtime::create(ConfigFile{.path = config_path_,
+                                                  .config = std::move(*config),
+                                                  .save = save_,
+                                                  .secrets = secrets_.get()});
         if (!runtime) {
             build_error_ = core::describe(runtime.error());
             spdlog::error("{}", build_error_);
@@ -299,8 +306,10 @@ class Server {
                 build_runtime();
             } else {
                 // Aucun modèle, rien d'écrit : Avenoir tourne avec la voie rapide.
-                auto runtime = Runtime::create(
-                    ConfigFile{.path = config_path_, .config = std::move(*created), .save = save_});
+                auto runtime = Runtime::create(ConfigFile{.path = config_path_,
+                                                          .config = std::move(*created),
+                                                          .save = save_,
+                                                          .secrets = secrets_.get()});
                 if (runtime) {
                     runtime_ = std::move(*runtime);
                 } else {
