@@ -203,3 +203,27 @@ TEST_CASE("change_setting : conservation du journal", "[reglages][journal]") {
     CHECK_FALSE(daemon::change_setting(config, "journal.retention_days", "0", known()));
     CHECK_FALSE(daemon::change_setting(config, "journal.retention_days", "beaucoup", known()));
 }
+
+TEST_CASE("change_setting : carte graphique partagée", "[reglages][gpu]") {
+    core::AppConfig config;
+    config.models.push_back(
+        core::NamedLlm{.name = "leger", .config = core::ClaudeCodeConfig{}, .local = std::nullopt});
+    // Basculer exige le modèle léger.
+    CHECK_FALSE(daemon::change_setting(config, "gpu.mode", "basculer", known()).has_value());
+    auto light = daemon::change_setting(config, "gpu.light_model", "leger", known());
+    REQUIRE(light.has_value());
+    auto mode = daemon::change_setting(light->updated, "gpu.mode", "basculer", known());
+    REQUIRE(mode.has_value());
+    CHECK(mode->updated.gpu.mode == "switch");
+    CHECK(mode->before == "désactivé");
+    // Un modèle inconnu est refusé par la relecture de la configuration.
+    CHECK_FALSE(daemon::change_setting(config, "gpu.light_model", "inconnu", known()).has_value());
+    CHECK_FALSE(daemon::change_setting(mode->updated, "gpu.light_model", "aucun", known()));
+    auto unload = daemon::change_setting(config, "gpu.mode", "décharger", known());
+    REQUIRE(unload.has_value());
+    CHECK(unload->updated.gpu.mode == "unload");
+    CHECK(daemon::change_setting(config, "gpu.threshold_gb", "4", known())
+              .value_or(daemon::SettingChange{})
+              .updated.gpu.threshold_gb == 4);
+    CHECK_FALSE(daemon::change_setting(config, "gpu.threshold_gb", "0", known()).has_value());
+}

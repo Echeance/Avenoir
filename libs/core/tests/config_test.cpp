@@ -223,6 +223,7 @@ TEST_CASE("format_config est relu à l'identique", "[config]") {
     config.modules["meteo"].enabled = false;
     config.modules["autre.module"].risk.emplace("lire", RiskLevel::Sensitive);
     config.journal.retention_days = 30;
+    config.gpu = GpuConfig{.mode = "switch", .light_model = "claude", .threshold_gb = 4};
     config.modules["calendrier"].enabled = true;
     config.modules["calendrier"].granted = {"network", "files.read"};
     config.permissions.tools.emplace(
@@ -378,4 +379,24 @@ TEST_CASE("[journal] : durée de conservation", "[config][journal]") {
     CHECK(parse_config("").value_or(AppConfig{}).journal.retention_days == 90);
     CHECK_FALSE(parse_config("[journal]\nretention_days = 0\n").has_value());
     CHECK_FALSE(parse_config("[journal]\nretention_days = 4000\n").has_value());
+}
+
+TEST_CASE("[gpu] : mode, modèle léger, seuil", "[config][gpu]") {
+    constexpr const char* kModels = "[models.gros]\nprovider = \"claude_code\"\n"
+                                    "[models.leger]\nprovider = \"claude_code\"\n";
+    const auto config =
+        parse_config(std::string(kModels) + "[gpu]\nmode = \"switch\"\nlight_model = \"leger\"\n");
+    REQUIRE(config.has_value());
+    CHECK(config->gpu.mode == "switch");
+    CHECK(config->gpu.light_model == "leger");
+    CHECK(config->gpu.threshold_gb == 2);
+    CHECK(parse_config("").value_or(AppConfig{}).gpu.mode == "off");
+    const auto refused = [&kModels](const std::string& gpu) {
+        return !parse_config(std::string(kModels) + "[gpu]\n" + gpu).has_value();
+    };
+    CHECK(refused("mode = \"parfois\""));
+    CHECK(refused("mode = \"switch\"")); // sans modèle léger
+    CHECK(refused("light_model = \"inconnu\""));
+    CHECK(refused("threshold_gb = 0"));
+    CHECK_FALSE(refused("mode = \"unload\"\nthreshold_gb = 6"));
 }

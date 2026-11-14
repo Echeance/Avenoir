@@ -303,6 +303,20 @@ std::string format_config(const AppConfig& config) {
         format_module(out, id, settings);
     }
     section(out, "orchestration", format_orchestration(config.orchestration));
+    {
+        const GpuConfig defaults;
+        std::string body;
+        if (config.gpu.mode != defaults.mode) {
+            line(body, "mode", toml_string(config.gpu.mode));
+        }
+        if (config.gpu.light_model) {
+            line(body, "light_model", toml_string(*config.gpu.light_model));
+        }
+        if (config.gpu.threshold_gb != defaults.threshold_gb) {
+            line(body, "threshold_gb", std::to_string(config.gpu.threshold_gb));
+        }
+        section(out, "gpu", body);
+    }
     if (config.journal != JournalConfig{}) {
         section(out, "journal",
                 std::format("retention_days = {}\n", config.journal.retention_days));

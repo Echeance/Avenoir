@@ -403,6 +403,15 @@ class Server {
                         ui->notify(message);
                     }
                 }
+                // Carte graphique partagée : vérifiée toutes les 6 s, hors
+                // requête (verrou d'Avenoir pris).
+                if (tick % 6 == 0) {
+                    for (const auto& message : runtime_->gpu_check()) {
+                        for (const auto& ui : client_uis()) {
+                            ui->notify(message);
+                        }
+                    }
+                }
             }
         }
     }

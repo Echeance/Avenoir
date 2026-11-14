@@ -4,10 +4,13 @@
 // « autostart » XDG. `systemctl` est lancé par son chemin absolu avec un
 // tableau d'arguments.
 
+#include <algorithm>
 #include <array>
 #include <chrono>
+#include <cstdint>
 #include <filesystem>
 #include <fstream>
+#include <iterator>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -22,6 +25,7 @@
 #include "avenoir/core/error.hpp"
 
 #include "../autostart.hpp"
+#include "../gpu.hpp"
 
 namespace avenoir::daemon {
 
@@ -202,6 +206,50 @@ core::Result<AutostartState> set_autostart(bool enabled) {
         fs::remove(desktop, error);
     }
     return autostart_state();
+}
+
+std::optional<DemandingApp> demanding_app(std::uint64_t threshold_bytes) {
+    // Mémoire vidéo de chaque programme de l'utilisateur, d'après le fdinfo
+    // de ses descripteurs de carte graphique (/dev/dri) ; un client DRM ouvert
+    // plusieurs fois n'est compté qu'une fois.
+    std::optional<DemandingApp> biggest;
+    std::error_code error;
+    for (const auto& process : fs::directory_iterator("/proc", error)) {
+        const std::string pid = process.path().filename().string();
+        if (pid.empty() || !std::ranges::all_of(pid, [](char c) { return c >= '0' && c <= '9'; })) {
+            continue;
+        }
+        std::error_code ignored;
+        std::vector<std::string> clients;
+        std::uint64_t total = 0;
+        for (const auto& descriptor : fs::directory_iterator(process.path() / "fd", ignored)) {
+            std::error_code link_error;
+            const auto target = fs::read_symlink(descriptor.path(), link_error);
+            if (link_error || !target.string().starts_with("/dev/dri/")) {
+                continue;
+            }
+            std::ifstream info(process.path() / "fdinfo" / descriptor.path().filename());
+            const std::string text((std::istreambuf_iterator<char>(info)),
+                                   std::istreambuf_iterator<char>());
+            const auto usage = parse_drm_fdinfo(text);
+            if (!usage || std::ranges::contains(clients, usage->client)) {
+                continue;
+            }
+            clients.push_back(usage->client);
+            total += usage->video_memory;
+        }
+        if (total < threshold_bytes || (biggest && biggest->video_memory >= total)) {
+            continue;
+        }
+        std::ifstream comm(process.path() / "comm");
+        std::string name;
+        std::getline(comm, name);
+        if (is_model_server(name)) {
+            continue;
+        }
+        biggest = DemandingApp{.name = name, .video_memory = total};
+    }
+    return biggest;
 }
 
 } // namespace avenoir::daemon

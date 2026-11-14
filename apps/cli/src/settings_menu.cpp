@@ -119,6 +119,9 @@ std::string setting_family(std::string_view key) {
     if (prefix == "journal") {
         return "Journal";
     }
+    if (prefix == "gpu") {
+        return "Carte graphique";
+    }
     return std::string(prefix);
 }
 

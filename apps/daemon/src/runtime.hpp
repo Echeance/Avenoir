@@ -67,6 +67,11 @@ class Runtime {
     void finish_input();
     /// Modèles chargés ou déchargés hors d'Avenoir depuis la dernière fois.
     [[nodiscard]] std::vector<std::string> model_changes();
+    /// Carte graphique partagée (décision 66), appelée régulièrement hors
+    /// requête : une application exigeante apparue décharge le modèle local
+    /// ou fait passer au modèle léger ; partie, Avenoir revient. Rend les
+    /// messages à montrer (jamais de changement silencieux).
+    [[nodiscard]] std::vector<std::string> gpu_check();
 
     /// Commandes proposées à la complétion (Tab).
     [[nodiscard]] std::vector<std::string> completions() const;

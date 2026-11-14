@@ -268,6 +268,32 @@ std::vector<SettingLine> list_settings(const core::AppConfig& config,
                      .accepted = "1 à 8",
                      .description = "tâches en même temps (un modèle local sert à tour de rôle)",
                      .security = false});
+    {
+        const auto& gpu = config.gpu;
+        std::string mode = "désactivé";
+        if (gpu.mode == "unload") {
+            mode = "décharger";
+        } else if (gpu.mode == "switch") {
+            mode = "basculer";
+        }
+        lines.push_back({.key = "gpu.mode",
+                         .value = mode,
+                         .accepted = "désactivé | décharger | basculer",
+                         .description = "quand un jeu ou une application exigeante tourne : "
+                                        "décharger le modèle local, ou passer au modèle léger",
+                         .security = false});
+        lines.push_back({.key = "gpu.light_model",
+                         .value = gpu.light_model.value_or("aucun"),
+                         .accepted = "nom d'un modèle local | aucun",
+                         .description = "modèle léger pour « basculer »",
+                         .security = false});
+        lines.push_back({.key = "gpu.threshold_gb",
+                         .value = std::to_string(gpu.threshold_gb),
+                         .accepted = "1 à 64",
+                         .description = "Linux : mémoire vidéo (Go) d'un autre programme qui le "
+                                        "rend exigeant",
+                         .security = false});
+    }
     lines.push_back({.key = "journal.retention_days",
                      .value = std::to_string(config.journal.retention_days),
                      .accepted = "1 à 3650",
@@ -355,6 +381,58 @@ core::Result<SettingChange> change_setting(const core::AppConfig& config, std::s
         change.before = std::to_string(*field);
         change.after = std::to_string(*parsed);
         *field = static_cast<std::size_t>(*parsed);
+        done = {};
+    } else if (key == "gpu.mode") {
+        auto& gpu = change.updated.gpu;
+        const auto label = [](const std::string& mode) -> std::string {
+            if (mode == "unload") {
+                return "décharger";
+            }
+            if (mode == "switch") {
+                return "basculer";
+            }
+            return "désactivé";
+        };
+        std::string mode;
+        if (value == "désactivé" || value == "desactive" || value == "off" || value == "non") {
+            mode = "off";
+        } else if (value == "décharger" || value == "decharger" || value == "unload") {
+            mode = "unload";
+        } else if (value == "basculer" || value == "switch") {
+            mode = "switch";
+        } else {
+            return setting_error("gpu.mode : désactivé, décharger ou basculer attendu");
+        }
+        if (mode == "switch" && !gpu.light_model) {
+            return setting_error("gpu.mode : choisissez d'abord le modèle léger "
+                                 "(/reglage gpu.light_model <nom>)");
+        }
+        change.before = label(gpu.mode);
+        change.after = label(mode);
+        gpu.mode = mode;
+        done = {};
+    } else if (key == "gpu.light_model") {
+        auto& gpu = change.updated.gpu;
+        change.before = gpu.light_model.value_or("aucun");
+        if (value == "aucun" || value == "aucune") {
+            if (gpu.mode == "switch") {
+                return setting_error("gpu.light_model : nécessaire tant que gpu.mode vaut "
+                                     "« basculer »");
+            }
+            gpu.light_model.reset();
+        } else {
+            gpu.light_model = std::string(value);
+        }
+        change.after = gpu.light_model.value_or("aucun");
+        done = {};
+    } else if (key == "gpu.threshold_gb") {
+        const auto parsed = parse_integer(value, 1, 64);
+        if (!parsed) {
+            return setting_error("gpu.threshold_gb : nombre de Go de 1 à 64 attendu");
+        }
+        change.before = std::to_string(change.updated.gpu.threshold_gb);
+        change.after = std::to_string(*parsed);
+        change.updated.gpu.threshold_gb = static_cast<int>(*parsed);
         done = {};
     } else if (key == "journal.retention_days") {
         const auto parsed = parse_integer(value, 1, 3650);

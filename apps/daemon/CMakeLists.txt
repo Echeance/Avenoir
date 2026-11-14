@@ -13,6 +13,7 @@ endif()
 add_library(avenoir_daemon_lib STATIC
     ${_avenoir_daemon_platform}
     src/conversations.cpp
+    src/gpu.cpp
     src/lock_theme.cpp
     src/modules.cpp
     src/permissions.cpp
@@ -35,7 +36,7 @@ target_link_libraries(avenoir_daemon_lib PUBLIC
     spdlog::spdlog
     PRIVATE avenoir::options reproc++)
 if(WIN32)
-    target_link_libraries(avenoir_daemon_lib PRIVATE advapi32)
+    target_link_libraries(avenoir_daemon_lib PRIVATE advapi32 shell32)
 endif()
 
 add_executable(avenoird src/main.cpp)
@@ -47,6 +48,7 @@ set_target_properties(avenoird PROPERTIES
 if(AVENOIR_BUILD_TESTS)
     # Ce qui se décide sans terminal ni réseau : création guidée, réglages.
     add_executable(avenoir_daemon_tests
+        tests/gpu_test.cpp
         tests/keys_test.cpp
         tests/lock_theme_test.cpp
         tests/permissions_test.cpp

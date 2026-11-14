@@ -126,6 +126,16 @@ sensitive = "confirm"
 # # /risque (avertissement + saisie de « Je sais ce que je fais ») : une baisse
 # # écrite ici à la main est ignorée.
 
+# ─── Carte graphique partagée avec les jeux ────────────────────────────────
+# Quand un jeu ou une application exigeante tourne : "unload" décharge le
+# modèle local (rechargé ensuite), "switch" passe au modèle léger local
+# `light_model` (retour ensuite). Linux : exigeante = un autre programme qui
+# occupe au moins `threshold_gb` Go de mémoire vidéo ; Windows : plein écran.
+# [gpu]
+# mode = "off"                # off | unload | switch
+# light_model = "ministral-3" # un [models.<nom>] local, pour "switch"
+# threshold_gb = 2
+
 # ─── Journal des actions (/journal) ────────────────────────────────────────
 # Chaque action demandée (décision de permission, résultat, durée) est gardée
 # dans la base d'Avenoir ; les plus anciennes sont effacées au démarrage.

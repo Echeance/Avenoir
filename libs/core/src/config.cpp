@@ -496,6 +496,33 @@ Result<JournalConfig> parse_journal(const toml::table& table) {
     return config;
 }
 
+Result<GpuConfig> parse_gpu(const toml::table& table, const std::vector<NamedLlm>& models) {
+    constexpr std::string_view kSection = "gpu";
+    auto mode = optional_value<std::string>(table, kSection, "mode");
+    auto light = optional_value<std::string>(table, kSection, "light_model");
+    auto threshold = optional_integer(table, kSection, "threshold_gb", 1, 64);
+    if (auto error = first_error(mode, light, threshold)) {
+        return std::unexpected(std::move(*error));
+    }
+    GpuConfig config;
+    config.mode = mode->value_or(config.mode);
+    if (config.mode != "off" && config.mode != "unload" && config.mode != "switch") {
+        return config_error("gpu.mode", "off, unload ou switch attendu");
+    }
+    config.light_model = std::move(*light);
+    if (config.light_model && !std::ranges::any_of(models, [&config](const NamedLlm& model) {
+            return model.name == *config.light_model;
+        })) {
+        return config_error("gpu.light_model", "« " + *config.light_model +
+                                                   " » n'est pas un modèle de [models.<nom>]");
+    }
+    if (config.mode == "switch" && !config.light_model) {
+        return config_error("gpu.light_model", "obligatoire avec mode = \"switch\"");
+    }
+    config.threshold_gb = static_cast<int>(threshold->value_or(config.threshold_gb));
+    return config;
+}
+
 Result<OrchestrationConfig> parse_orchestration(const toml::table& table) {
     constexpr std::string_view kSection = "orchestration";
     auto enabled = optional_value<bool>(table, kSection, "enabled");
@@ -688,6 +715,17 @@ Result<AppConfig> parse_config(std::string_view toml_text) {
             return std::unexpected(std::move(orchestration.error()));
         }
         config.orchestration = std::move(*orchestration);
+    }
+    auto gpu_table = optional_table(root, "gpu");
+    if (!gpu_table) {
+        return std::unexpected(std::move(gpu_table.error()));
+    }
+    if (*gpu_table != nullptr) {
+        auto gpu = parse_gpu(**gpu_table, config.models);
+        if (!gpu) {
+            return std::unexpected(std::move(gpu.error()));
+        }
+        config.gpu = std::move(*gpu);
     }
     auto journal_table = optional_table(root, "journal");
     if (!journal_table) {

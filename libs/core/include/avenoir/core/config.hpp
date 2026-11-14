@@ -157,6 +157,20 @@ struct JournalConfig {
     bool operator==(const JournalConfig&) const = default;
 };
 
+/// Carte graphique partagée avec les jeux (`[gpu]`, décision 66).
+struct GpuConfig {
+    /// « off » (rien), « unload » (décharger le modèle local quand une
+    /// application exigeante tourne) ou « switch » (passer au modèle léger).
+    std::string mode = "off";
+    /// Modèle léger (`[models.<nom>]`, local) pour « switch ».
+    std::optional<std::string> light_model;
+    /// Linux : mémoire vidéo d'un autre programme à partir de laquelle il
+    /// est jugé exigeant, en Go.
+    int threshold_gb = 2;
+
+    bool operator==(const GpuConfig&) const = default;
+};
+
 struct AppConfig {
     /// Modèles (`[models.<nom>]`), dans l'ordre du fichier : le premier sert
     /// par défaut. Aucun : pas de LLM, seule la voie rapide répond.
@@ -170,6 +184,7 @@ struct AppConfig {
     std::vector<AgentProfile> agents;
     OrchestrationConfig orchestration;
     JournalConfig journal;
+    GpuConfig gpu;
 
     bool operator==(const AppConfig&) const = default;
 };

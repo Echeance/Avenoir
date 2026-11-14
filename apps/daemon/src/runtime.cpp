@@ -48,6 +48,7 @@
 
 #include "autostart.hpp"
 #include "conversations.hpp"
+#include "gpu.hpp"
 #include "modules.hpp"
 #include "permissions.hpp"
 #include "settings_catalog.hpp"
@@ -80,6 +81,13 @@ std::string_view trim(std::string_view text) {
 
 /// Commandes d'Avenoir (sans « / »), alias compris : un module ne peut pas
 /// en déclarer une du même nom.
+/// « 3,4 Go » (virgule décimale).
+std::string gigabytes(std::uint64_t bytes) {
+    std::string text = std::format("{:.1f} Go", static_cast<double>(bytes) / 1e9);
+    std::ranges::replace(text, '.', ',');
+    return text;
+}
+
 std::vector<std::string> builtin_commands() {
     return {"agent",        "agents",        "aide",       "annuler",   "arreter",  "charger",
             "configurer",   "conversations", "decharger",  "demarrage", "help",     "historique",
@@ -368,6 +376,14 @@ struct Runtime::State {
     };
     /// Clés d'API du trousseau (décision 63), pour chaque fournisseur créé.
     llm::KeyLookup keys;
+    /// Carte graphique partagée (décision 66) : application exigeante en
+    /// cours, et ce qu'Avenoir a fait pour elle (à défaire ensuite).
+    struct GpuState {
+        std::optional<std::string> app;
+        bool unloaded = false;               ///< Modèle actif déchargé.
+        std::optional<std::string> previous; ///< Modèle avant le passage au léger.
+    };
+    GpuState gpu;
     std::mutex projects_mutex;
     /// Déclarés en dernier : arrêtés avant tout le reste d'Avenoir.
     std::map<std::string, std::unique_ptr<Project>> projects;
@@ -837,6 +853,96 @@ std::vector<std::string> Runtime::model_changes() {
     return state_->load_watch->changes();
 }
 
+std::vector<std::string> Runtime::gpu_check() {
+    const auto& config = state_->file.config.gpu;
+    auto& gpu = state_->gpu;
+    if (config.mode == "off") {
+        return {};
+    }
+    constexpr std::uint64_t kGigabyte = 1'000'000'000;
+    const auto app = demanding_app(static_cast<std::uint64_t>(config.threshold_gb) * kGigabyte);
+    std::vector<std::string> messages;
+    const auto note = [&messages](std::string message) {
+        if (const auto audit = spdlog::get("audit")) {
+            audit->info("carte graphique : {}", message);
+        }
+        spdlog::info("carte graphique : {}", message);
+        messages.push_back(std::move(message));
+    };
+    auto& switcher = *state_->switcher;
+    const std::stop_token none;
+    if (app && !gpu.app) {
+        gpu.app = app->name;
+        const auto* active = switcher.active();
+        if (active == nullptr || !active->local) {
+            return messages; // rien de local à libérer
+        }
+        const std::string who = app->video_memory > 0
+                                    ? std::format("« {} » ({} de mémoire vidéo)", app->name,
+                                                  gigabytes(app->video_memory))
+                                    : std::format("« {} »", app->name);
+        if (config.mode == "switch" && config.light_model && *config.light_model != active->name) {
+            const auto* light = switcher.find(*config.light_model);
+            if (light == nullptr || !light->local) {
+                note(std::format("{} utilise la carte graphique, mais le modèle léger « {} » "
+                                 "n'est pas un modèle local : rien n'est changé.",
+                                 who, *config.light_model));
+                return messages;
+            }
+            const std::string previous = active->name;
+            if (auto switched = switcher.switch_to(light->name); !switched) {
+                note("passage au modèle léger impossible : " + core::describe(switched.error()));
+                return messages;
+            }
+            gpu.previous = previous;
+            if (const auto freed = switcher.set_residency(previous, llm::Residency::Unload, none);
+                !freed) {
+                spdlog::warn("carte graphique : « {} » non déchargé : {}", previous,
+                             core::describe(freed.error()));
+            }
+            note(std::format("{} utilise la carte graphique : passage au modèle léger « {} », "
+                             "« {} » déchargé. Retour automatique quand il se ferme.",
+                             who, light->name, previous));
+            return messages;
+        }
+        if (config.mode == "unload") {
+            if (const auto unloaded =
+                    switcher.set_residency(active->name, llm::Residency::Unload, none);
+                unloaded) {
+                gpu.unloaded = true;
+                note(std::format("{} utilise la carte graphique : modèle « {} » déchargé pour lui "
+                                 "laisser la mémoire vidéo (rechargé quand il se ferme).",
+                                 who, active->name));
+            }
+        }
+        return messages;
+    }
+    if (!app && gpu.app) {
+        const std::string gone = *gpu.app;
+        gpu.app.reset();
+        if (gpu.previous) {
+            const std::string previous = std::exchange(gpu.previous, std::nullopt).value_or("");
+            const auto* active = switcher.active();
+            // L'utilisateur a pu changer de modèle entre-temps : on le respecte.
+            if (active != nullptr && config.light_model && active->name == *config.light_model) {
+                if (const auto back = switcher.switch_to(previous); back) {
+                    note(std::format("« {} » fermé : retour au modèle « {} ».", gone, previous));
+                }
+            }
+        }
+        if (std::exchange(gpu.unloaded, false)) {
+            if (const auto* active = switcher.active(); active != nullptr) {
+                if (const auto loaded =
+                        switcher.set_residency(active->name, llm::Residency::Load, none);
+                    loaded) {
+                    note(std::format("« {} » fermé : modèle « {} » rechargé.", gone, active->name));
+                }
+            }
+        }
+    }
+    return messages;
+}
+
 Outcome Runtime::input(std::string_view line, const std::stop_token& stop) {
     line = trim(line);
     if (line.empty()) {
@@ -1303,13 +1409,6 @@ void Runtime::State::key_command(std::string_view argument) const {
 }
 
 namespace {
-
-/// « 3,4 Go » (virgule décimale).
-std::string gigabytes(std::uint64_t bytes) {
-    std::string text = std::format("{:.1f} Go", static_cast<double>(bytes) / 1e9);
-    std::ranges::replace(text, '.', ',');
-    return text;
-}
 
 void audit_line(const std::string& message) {
     if (const auto audit = spdlog::get("audit")) {

@@ -5,14 +5,21 @@
 #ifndef NOMINMAX
 #define NOMINMAX
 #endif
+#include <array>
+#include <cstdint>
+#include <optional>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include <windows.h>
+// Après windows.h.
+#include <shellapi.h>
 
 #include "avenoir/core/error.hpp"
 
 #include "../autostart.hpp"
+#include "../gpu.hpp"
 
 namespace avenoir::daemon {
 
@@ -64,6 +71,49 @@ core::Result<AutostartState> set_autostart(bool enabled) {
         return autostart_error("écriture refusée (code " + std::to_string(status) + ")");
     }
     return autostart_state();
+}
+
+std::optional<DemandingApp> demanding_app(std::uint64_t /*threshold_bytes*/) {
+    // Plein écran : jeu Direct3D exclusif, ou application en plein écran
+    // (« occupé ») ; le programme est celui de la fenêtre au premier plan.
+    QUERY_USER_NOTIFICATION_STATE state{};
+    if (FAILED(SHQueryUserNotificationState(&state)) ||
+        (state != QUNS_RUNNING_D3D_FULL_SCREEN && state != QUNS_BUSY)) {
+        return std::nullopt;
+    }
+    std::string name = "application en plein écran";
+    DWORD pid = 0;
+    if (HWND window = GetForegroundWindow(); window != nullptr) {
+        GetWindowThreadProcessId(window, &pid);
+    }
+    if (HANDLE process = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pid);
+        process != nullptr) {
+        std::array<wchar_t, MAX_PATH> path{};
+        DWORD size = static_cast<DWORD>(path.size());
+        if (QueryFullProcessImageNameW(process, 0, path.data(), &size) != FALSE) {
+            const std::wstring full(path.data(), size);
+            const std::wstring file = full.substr(full.find_last_of(L"\\/") + 1);
+            const int bytes =
+                WideCharToMultiByte(CP_UTF8, 0, file.data(), static_cast<int>(file.size()), nullptr,
+                                    0, nullptr, nullptr);
+            std::string utf8(static_cast<std::size_t>(bytes), '\0');
+            WideCharToMultiByte(CP_UTF8, 0, file.data(), static_cast<int>(file.size()), utf8.data(),
+                                bytes, nullptr, nullptr);
+            name = std::move(utf8);
+        }
+        CloseHandle(process);
+    }
+    // Le terminal d'Avenoir ou le bureau en plein écran ne demandent rien.
+    for (const std::string_view ignored :
+         {"WindowsTerminal.exe", "conhost.exe", "explorer.exe", "avenoir.exe"}) {
+        if (name == ignored) {
+            return std::nullopt;
+        }
+    }
+    if (is_model_server(name)) {
+        return std::nullopt;
+    }
+    return DemandingApp{.name = std::move(name), .video_memory = 0};
 }
 
 } // namespace avenoir::daemon
