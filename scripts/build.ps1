@@ -28,7 +28,13 @@
     Reformate le code avec clang-format avant de compiler (alias -f).
 
 .PARAMETER Check
-    Vérifications d'avant commit : formatage, clang-tidy, tests (alias -k).
+    Vérifications d'avant commit sur ce qui a changé depuis le dernier push
+    (commité ou non) : formatage, clang-tidy (les .cpp modifiés et ceux qui
+    incluent un en-tête modifié), tests (alias -k).
+
+.PARAMETER CheckAll
+    Les mêmes vérifications sur tout le code (pas d'alias : -K vaudrait -k,
+    PowerShell ne distinguant pas la casse).
 
 .EXAMPLE
     scripts\build.ps1                       # debug + tests
@@ -37,7 +43,9 @@
 .EXAMPLE
     scripts\build.ps1 -r -RunArgs cc.toml   # debug, tests, puis `avenoir cc.toml`
 .EXAMPLE
-    scripts\build.ps1 -k                    # tout vérifier avant de committer
+    scripts\build.ps1 -k                    # vérifier ses changements avant de committer
+.EXAMPLE
+    scripts\build.ps1 -CheckAll             # tout vérifier, quel que soit le changement
 #>
 [CmdletBinding()]
 param(
@@ -50,7 +58,8 @@ param(
     [string[]]$RunArgs = @(),
     [Alias('n')][switch]$NoTest,
     [Alias('f')][switch]$Format,
-    [Alias('k')][switch]$Check
+    [Alias('k')][switch]$Check,
+    [switch]$CheckAll
 )
 
 Set-StrictMode -Version 3.0
@@ -84,6 +93,38 @@ function Get-SourceFile([string[]]$Patterns) {
     $files = @(git ls-files --cached --others --exclude-standard @Patterns)
     if ($LASTEXITCODE -ne 0) { Exit-WithError 'git ls-files a échoué' }
     return $files
+}
+
+# Fichiers changés depuis le dernier push (ou depuis le dernier commit sans
+# branche suivie) : commités, modifiés ou nouveaux, sans les supprimés.
+function Get-ChangedFile([string[]]$Patterns) {
+    $base = git merge-base HEAD '@{upstream}' 2>$null
+    if ($LASTEXITCODE -ne 0 -or -not $base) { $base = 'HEAD' }
+    $files = @(git diff --name-only --diff-filter=d $base -- @Patterns) +
+        @(git ls-files --others --exclude-standard -- @Patterns)
+    return @($files | Where-Object { $_ } | Sort-Object -Unique)
+}
+
+# .cpp à analyser : ceux dont la compilation lit un fichier changé (le .cpp
+# lui-même ou un en-tête, même inclus indirectement), d'après les dépendances
+# relevées par Ninja à la compilation.
+function Get-AffectedSource {
+    $wanted = @{}
+    foreach ($file in (Get-ChangedFile '*.cpp', '*.hpp')) { $wanted[$file] = $true }
+    $prefix = ($Root -replace '\\', '/') + '/'
+    $found = @{}
+    $source = $null
+    foreach ($line in (ninja -C $BuildDir -t deps)) {
+        if ($line -notmatch '^\s') { $source = $null; continue }
+        $path = $line.Trim() -replace '\\', '/'
+        if ($path.StartsWith($prefix, [StringComparison]::OrdinalIgnoreCase)) {
+            $path = $path.Substring($prefix.Length)
+        }
+        if (-not $source) { $source = $path }
+        if ($wanted.ContainsKey($path) -and $source -like '*.cpp') { $found[$source] = $true }
+    }
+    if ($LASTEXITCODE -ne 0) { Exit-WithError 'ninja -t deps a échoué' }
+    return @($found.Keys | Sort-Object)
 }
 
 # Le préréglage release ne compile pas les tests.
@@ -143,20 +184,39 @@ Write-Step "Compilation ($Preset)"
 Invoke-Native cmake @('--build', '--preset', $Preset)
 
 # ─── Tests ───────────────────────────────────────────────────────────────────
-if ($RunTests -or ($Check -and $Preset -ne 'release')) {
+if ($RunTests -or (($Check -or $CheckAll) -and $Preset -ne 'release')) {
     Write-Step 'Tests'
     Invoke-Native ctest @('--preset', $Preset)
 }
 
 # ─── Vérifications d'avant commit ────────────────────────────────────────────
-if ($Check) {
+if ($Check -or $CheckAll) {
+    # Règles d'analyse ou de formatage changées : tout revérifier.
+    $all = $CheckAll -or (@(Get-ChangedFile '.clang-tidy', '.clang-format').Count -gt 0)
+    if ($all) {
+        $toFormat = @(Get-SourceFile '*.cpp', '*.hpp')
+        $toAnalyze = @(Get-SourceFile '*.cpp')
+    } else {
+        $toFormat = @(Get-ChangedFile '*.cpp', '*.hpp')
+        $toAnalyze = @(Get-AffectedSource)
+    }
+    # Le code propre à Linux ne s'analyse pas ici (en-têtes POSIX absents).
+    $toAnalyze = @($toAnalyze | Where-Object { $_ -notmatch '/platform/linux\.cpp$' })
+
     Write-Step 'Vérification du formatage'
-    Invoke-Native clang-format (@('--dry-run', '--Werror') + (Get-SourceFile '*.cpp', '*.hpp'))
+    if ($toFormat.Count -gt 0) {
+        Invoke-Native clang-format (@('--dry-run', '--Werror') + $toFormat)
+    } else {
+        Write-Host 'Aucun fichier changé.'
+    }
 
     Write-Step 'Analyse statique (clang-tidy)'
-    # Le code propre à Linux ne s'analyse pas ici (en-têtes POSIX absents).
-    $sources = @(Get-SourceFile '*.cpp' | Where-Object { $_ -notmatch '/platform/linux\.cpp$' })
-    Invoke-Native clang-tidy (@('-p', $BuildDir, '--quiet') + $sources)
+    if ($toAnalyze.Count -gt 0) {
+        Write-Host "$($toAnalyze.Count) fichier(s) à analyser."
+        Invoke-Native clang-tidy (@('-p', $BuildDir, '--quiet') + $toAnalyze)
+    } else {
+        Write-Host 'Aucun fichier concerné.'
+    }
 
     Write-Host ''
     Write-Host 'Tout est bon : prêt à committer.' -ForegroundColor Green

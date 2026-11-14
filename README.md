@@ -339,7 +339,8 @@ scripts/build.sh                      # debug + tests
 scripts/build.sh -r                   # compile, teste, puis lance Avenoir
 scripts/build.sh -r -- config.toml    # … avec une autre configuration
 scripts/build.sh asan -c              # build propre avec AddressSanitizer + UBSan
-scripts/build.sh -k                   # avant de committer : formatage, clang-tidy, tests
+scripts/build.sh -k                   # avant de committer : formatage, clang-tidy, tests (sur ce qui a changé)
+scripts/build.sh -K                   # les mêmes vérifications sur tout le code
 scripts/build.sh -h                   # toutes les options
 ```
 

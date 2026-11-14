@@ -35,8 +35,8 @@ Avenoir est un projet **développé par son auteur, assisté par IA** — et non
 ## Commandes
 
 ```sh
-scripts/build.sh [debug|release|asan] [-c] [-r] [-n] [-f] [-k]   # raccourci Linux (voir -h)
-scripts\build.ps1 [debug|release] [-c] [-r] [-n] [-f] [-k]       # raccourci Windows (même logique)
+scripts/build.sh [debug|release|asan] [-c] [-r] [-n] [-f] [-k|-K]   # raccourci Linux (voir -h ; -k : ce qui a changé, -K : tout)
+scripts\build.ps1 [debug|release] [-c] [-r] [-n] [-f] [-k|-CheckAll] # raccourci Windows (même logique)
 export VCPKG_ROOT=~/vcpkg          # requis par les préréglages
 cmake --preset debug               # configuration (vcpkg en mode manifeste)
 cmake --build --preset debug       # build
