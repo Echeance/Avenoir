@@ -409,7 +409,7 @@ void run_lock_setup(const SetupAsk& io, bool requested) {
     switch (state) {
     case LockConfigState::Missing:
         question = std::format("Utiliser l'écran de verrouillage d'Avenoir ? Fond bleu nuit, le "
-                               "loup à l'épée, anneau bleu ({}).",
+                               "loup d'Avenoir, anneau bleu ({}).",
                                utf8_path(config));
         break;
     case LockConfigState::Avenoir:

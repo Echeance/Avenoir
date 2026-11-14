@@ -102,12 +102,12 @@ TEST_CASE("loup : dimensions annoncées, avec ou sans couleurs", "[wolf]") {
     for (const bool colors : {true, false}) {
         terminal::set_enabled(colors);
         const auto art = wolf_art();
-        CHECK(art.size() == 18);
+        CHECK(art.size() == 27);
         for (const auto& line : art) {
             CHECK(terminal::display_width(line) == kWolfArtWidth);
         }
         const auto icon = wolf_icon();
-        CHECK(icon.size() == 15);
+        CHECK(icon.size() == 14);
         for (const auto& line : icon) {
             CHECK(terminal::display_width(line) == kWolfIconWidth);
         }

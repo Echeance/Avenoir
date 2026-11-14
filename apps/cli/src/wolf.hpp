@@ -6,17 +6,17 @@
 
 namespace avenoir::cli {
 
-/// Le loup d'Avenoir : « Wolf » (asciiart.eu), assis, qui hurle, avec une épée
-/// dans la gueule (lame vers le haut à droite), en ASCII : coloré
-/// par zones (pelage, yeux, lame, garde…), en texte simple sans couleurs.
+/// Le loup d'Avenoir, dessiné en braille (libs/terminal mascot.cpp), en bleu
+/// ciel ; en texte simple sans couleurs.
 
-/// Grand loup : 30 colonnes sur 18 lignes (en-tête, accueil).
+/// Grand loup : 37 colonnes sur 27 lignes (en-tête complet).
 [[nodiscard]] std::vector<std::string> wolf_art();
-/// Petit loup (lame courte) : 27 colonnes sur 15 lignes (en-tête compact, cadres).
+/// Petit loup (réduit de moitié) : 19 colonnes sur 14 lignes (en-tête
+/// compact, cadres).
 [[nodiscard]] std::vector<std::string> wolf_icon();
 
 /// Largeur du grand et du petit loup, en colonnes.
-inline constexpr std::size_t kWolfArtWidth = 30;
-inline constexpr std::size_t kWolfIconWidth = 27;
+inline constexpr std::size_t kWolfArtWidth = 37;
+inline constexpr std::size_t kWolfIconWidth = 19;
 
 } // namespace avenoir::cli

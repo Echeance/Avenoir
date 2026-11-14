@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 """Génère le logo d'Avenoir en SVG, tel que l'en-tête de la CLI le dessine.
 
-Le loup, ses zones, le petit loup et le titre « AVENOIR » en blocs sont lus
-dans libs/terminal/src/mascot.cpp, source unique des dessins : le
-logo du README et celui du terminal restent identiques. Le loup est « Wolf »
-(asciiart.eu, artiste inconnu), tel quel, avec une épée ajoutée pour Avenoir.
+Le loup en braille, le petit loup et le titre « AVENOIR » en blocs sont lus
+dans libs/terminal/src/mascot.cpp, source unique des dessins : le logo du
+README et celui du terminal restent identiques. Chaque caractère braille est
+dessiné point par point (2 × 4 points par cellule), comme sur l'écran de
+verrouillage : le rendu ne dépend pas d'une police.
 
 Les couleurs sont celles de la capture (docs/readme/terminal_render.py) :
 mêmes codes de terminal, même fond sombre, pour un rendu identique en thème
@@ -23,17 +24,13 @@ MASCOT = Path(__file__).resolve().parents[2] / "libs" / "terminal" / "src" / "ma
 # Fond et couleurs du terminal de la capture (terminal_render.py).
 BACKGROUND = "#1e1e2e"
 XTERM = {"navy": "#005faf", "azure": "#0087ff", "sky": "#87afff", "ice": "#afd7ff"}
-WHITE, YELLOW, YELLOW_DIM, CYAN, GRAY = "#ffffff", "#f9e2af", "#958769", "#94e2d5", "#6c7086"
+GRAY = "#6c7086"
 
-# Zones de wolf.cpp → (couleur, gras), comme zone_style().
-ZONES = {
-    "E": (CYAN, True), "N": (WHITE, False), "T": (WHITE, True), "B": (WHITE, True),
-    "P": (YELLOW, True), "G": (YELLOW, True), "R": (YELLOW_DIM, False),
-    "C": (XTERM["ice"], False), "Q": (GRAY, False), "F": (XTERM["sky"], False),
-}
 # Lignes du titre, du bleu clair au bleu nuit (title_art()).
 TITLE_SHADES = ["ice", "sky", "azure", "azure", "navy"]
-TITLE_ROW = 1  # le titre commence sur la deuxième ligne du loup, comme dans l'en-tête
+DOT_RADIUS = 1.7
+# Points du braille (bits Unicode) : (colonne, ligne) dans la cellule.
+BRAILLE = [(0, 0), (0, 1), (0, 2), (1, 0), (1, 1), (1, 2), (0, 3), (1, 3)]
 GAP = 3        # colonnes entre le loup et le titre (side_by_side(..., 3))
 SUBTITLE = "assistant de votre système"
 
@@ -59,33 +56,29 @@ def y_of(row: int) -> float:
     return PAD + row * CELL_H
 
 
-def text_row(row: int, column: int, text: str, zones: str) -> str:
-    """Une ligne de texte, chaque suite d'une même zone dans son tspan.
-
-    La ligne est calée sur la grille (`textLength`) : sans la police prévue,
-    le dessin garde sa largeur et reste aligné avec le titre.
-    """
-    left = len(text) - len(text.lstrip(" "))
-    text, zones = text.strip(" "), zones[left:left + len(text.strip(" "))]
-    column += left
-    spans, start = [], 0
-    while start < len(text):
-        end = start + 1
-        while end < len(text) and zones[end] == zones[start]:
-            end += 1
-        piece = escape(text[start:end])
-        if zones[start] == " ":
-            spans.append(piece)
-        else:
-            color, bold = ZONES.get(zones[start], ZONES["F"])
-            weight = ' font-weight="bold"' if bold else ""
-            spans.append(f'<tspan fill="{color}"{weight}>{piece}</tspan>')
-        start = end
+def text_row(row: int, column: int, text: str, color: str) -> str:
+    """Une ligne de texte, calée sur la grille (`textLength`)."""
     return (
-        f'<text x="{x_of(column):.1f}" y="{y_of(row + 1) - 4:.1f}" '
+        f'<text x="{x_of(column):.1f}" y="{y_of(row + 1) - 4:.1f}" fill="{color}" '
         f'textLength="{len(text) * CELL_W:.1f}" lengthAdjust="spacingAndGlyphs">'
-        f'{"".join(spans)}</text>'
+        f"{escape(text)}</text>"
     )
+
+
+def braille_dots(art: list[str]) -> list[str]:
+    """Le loup point par point : un cercle par point levé du braille."""
+    dots = []
+    for row, line in enumerate(art):
+        for column, character in enumerate(line):
+            bits = ord(character) - 0x2800
+            if not 0 <= bits <= 0xFF:
+                continue
+            for bit, (dx, dy) in enumerate(BRAILLE):
+                if bits >> bit & 1:
+                    cx = x_of(column) + (dx + 0.5) * CELL_W / 2
+                    cy = y_of(row) + (dy + 0.5) * CELL_H / 4
+                    dots.append(f'<circle cx="{cx:.1f}" cy="{cy:.1f}" r="{DOT_RADIUS}"/>')
+    return [f'<g fill="{XTERM["sky"]}">'] + dots + ["</g>"]
 
 
 def block_rows(row: int, column: int, lines: list[str]) -> list[str]:
@@ -106,7 +99,7 @@ def svg(columns: int, rows: int, body: list[str]) -> str:
     return (
         f'<svg xmlns="http://www.w3.org/2000/svg" width="{width:.0f}" height="{height:.0f}" '
         f'viewBox="0 0 {width:.0f} {height:.0f}" role="img" '
-        f'aria-label="Avenoir : le loup, une épée dans la gueule, en ASCII">\n'
+        f'aria-label="Avenoir : le loup d\'Avenoir, dessiné en braille">\n'
         f"  <title>Avenoir</title>\n"
         f'  <rect width="100%" height="100%" rx="12" fill="{BACKGROUND}"/>\n'
         f'  <g font-family="JetBrains Mono, DejaVu Sans Mono, Menlo, Consolas, monospace" '
@@ -116,28 +109,29 @@ def svg(columns: int, rows: int, body: list[str]) -> str:
     )
 
 
-def logo(art: list[str], zones: list[str], title: list[str]) -> str:
-    """Le loup et le titre côte à côte, comme l'en-tête plein écran."""
+def logo(art: list[str], title: list[str]) -> str:
+    """Le loup et le titre côte à côte, comme l'en-tête plein écran (titre
+    centré sur la hauteur du loup)."""
     art_width = max(map(len, art))
     title_column = art_width + GAP
-    body = [text_row(row, 0, text, zone) for row, (text, zone) in enumerate(zip(art, zones))]
-    body += block_rows(TITLE_ROW, title_column, title)
-    body.append(text_row(TITLE_ROW + len(title), title_column, SUBTITLE, "Q" * len(SUBTITLE)))
+    title_row = (len(art) - len(title) - 1) // 2
+    body = braille_dots(art)
+    body += block_rows(title_row, title_column, title)
+    body.append(text_row(title_row + len(title), title_column, SUBTITLE, GRAY))
     columns = title_column + max(map(len, title))
     return svg(columns, len(art), body)
 
 
-def icon(art: list[str], zones: list[str]) -> str:
-    body = [text_row(row, 0, text, zone) for row, (text, zone) in enumerate(zip(art, zones))]
-    return svg(max(map(len, art)), len(art), body)
+def icon(art: list[str]) -> str:
+    return svg(max(map(len, art)), len(art), braille_dots(art))
 
 
 if __name__ == "__main__":
     wolf = MASCOT.read_text(encoding="utf-8")
     title = read_title(wolf)
     outputs = {
-        "avenoir-wolf.svg": logo(read_array(wolf, "kArt"), read_array(wolf, "kArtZones"), title),
-        "avenoir-wolf-icon.svg": icon(read_array(wolf, "kIcon"), read_array(wolf, "kIconZones")),
+        "avenoir-wolf.svg": logo(read_array(wolf, "kArt"), title),
+        "avenoir-wolf-icon.svg": icon(read_array(wolf, "kIcon")),
     }
     for name, content in outputs.items():
         output = Path(__file__).with_name(name)

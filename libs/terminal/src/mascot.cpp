@@ -1,60 +1,42 @@
 #include "avenoir/terminal/mascot.hpp"
 
 #include <array>
+#include <cstddef>
+#include <cstdint>
 #include <span>
 #include <string_view>
+#include <vector>
 
 namespace avenoir::terminal {
 
 namespace {
 
-// « Wolf » (asciiart.eu, artiste inconnu), loup assis qui hurle, tel quel :
-// seule l'épée est ajoutée pour Avenoir, le manche dans la gueule ouverte et
-// la lame vers le haut à droite.
-constexpr std::array<std::string_view, 18> kArt = {
-    R"(                            /\)", R"(                           / /)",
-    R"(                          / / )", R"(                         / /  )",
-    R"(                        / /   )", R"(                       / /    )",
-    R"(                     =##=     )", R"(                     ./       )",
-    R"(                    / V\      )", R"(                  / `  /      )",
-    R"(                 <<   |       )", R"(                 /    |       )",
-    R"(               /      |       )", R"(             /        |       )",
-    R"(           /    \  \ /        )", R"(          (      ) | |        )",
-    R"(  ________|   _/_  | |        )", R"(<__________\______)\__)       )",
+// Le loup d'Avenoir, dessiné en braille (dessin donné par l'auteur) : un
+// caractère par cellule, chacun une grille de 2 × 4 points.
+constexpr std::array<std::string_view, 27> kArt = {
+    R"(⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢀⣤⡀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀)", R"(⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣰⠻⣥⠙⢦⡀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀)",
+    R"(⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢸⡿⠀⡿⠻⣆⠙⠦⣤⣀⡀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀)", R"(⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠈⢿⡄⠁⠀⠘⣆⡔⢶⣆⠉⢷⡄⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀)",
+    R"(⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢻⡄⠀⠀⡿⢿⡀⠉⠀⠞⠹⡆⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀)", R"(⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢀⡿⡄⠀⡇⠘⣧⣀⣀⣀⠀⠻⣄⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀)",
+    R"(⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢀⣼⠃⠁⢀⣠⠞⣹⢿⠻⡟⢿⣿⣯⢳⡄⠀⠀⠀⠀⠀⠀⠀⠀⠀)", R"(⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣠⣾⠃⠶⠒⠉⠁⣴⠇⢸⡇⡟⡷⢬⡙⠎⣿⠀⠀⠀⠀⠀⠀⠀⠀⠀)",
+    R"(⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣴⣿⠇⢀⣠⣄⡀⠚⠁⠀⠈⠀⠀⣷⠀⠉⠛⠛⠀⠀⠀⠀⠀⠀⠀⠀⠀)", R"(⠀⠀⠀⠀⠀⠀⠀⠀⠀⡼⣽⣿⣶⠋⢉⡿⠇⠀⠀⠀⠀⠀⣰⣿⣇⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀)",
+    R"(⠀⠀⠀⠀⠀⠀⠀⠀⠀⢱⣿⣿⠇⠀⣠⣥⣤⡀⠀⠀⠀⢀⡟⣿⣿⣦⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀)", R"(⠀⠀⠀⠀⠀⠀⠀⠀⠀⣼⢿⣿⢀⣾⡟⠉⢹⡇⠀⠀⠀⢸⠁⡿⠙⣿⣷⣄⡀⠀⠀⠀⠀⠀⠀⠀⠀)",
+    R"(⠀⠀⠀⠀⠀⠀⠀⠀⠀⠸⢸⣇⣾⡟⠀⠸⡏⣄⡀⠀⠀⢹⢀⡇⢀⢘⢿⣮⡙⠀⠀⠀⠀⠀⠀⠀⠀)", R"(⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠈⣿⣿⣇⠀⡀⣧⠰⣿⣶⣄⠀⠀⠀⠘⣎⠳⣿⣿⣦⡀⠀⠀⠀⠀⠀⠀)",
+    R"(⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠸⡿⣿⣆⠹⣿⡐⣾⣷⣹⣆⠀⠀⠀⠘⢷⣄⣻⣿⣿⣷⡄⠀⠀⠀⠀)", R"(⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠹⢿⣿⣦⠽⣇⣹⣟⢿⠙⠁⠀⠀⠀⣤⠉⠻⣿⣿⣿⣿⣦⡀⠀⠀)",
+    R"(⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠘⠙⡟⠂⣿⢹⡿⣼⠇⠀⠀⣀⠀⣷⡀⠀⠈⠻⣿⣿⣿⣷⡀⠀)", R"(⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢰⡆⢻⠀⠉⢸⡇⠈⣀⣠⣾⠇⠀⠻⣿⣦⣤⣴⣿⠿⣿⡿⣷⠀)",
+    R"(⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠈⡇⢸⡀⠀⢸⠁⣰⠛⣽⡧⠖⠻⢿⡆⠈⠉⠉⠀⠀⢻⣷⠹⠇)", R"(⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣿⠘⡇⠀⢸⢰⡏⢰⡟⠀⣀⣀⡼⠃⠀⢀⡆⠀⠀⠘⣿⡆⠀)",
+    R"(⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢀⣠⣤⣴⣿⣶⣷⣶⣾⣿⣧⣾⣤⣄⣀⣀⣤⣤⣶⡿⠀⠀⠀⢠⣿⡇⠀)", R"(⠀⠀⠀⠀⠀⠀⠀⣠⣴⣾⣿⣟⡛⠛⠛⠉⠉⠉⠉⢉⣭⣽⡿⠿⠿⠿⠛⠛⠛⠓⠲⠦⠄⣼⢻⡇⠀)",
+    R"(⠀⠀⠀⠀⠀⠀⠘⢉⣼⣿⣿⠿⠛⠛⠁⠀⠀⣠⠖⠋⠉⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⡸⠁⣸⡇⠀)", R"(⠀⠀⠀⠀⠀⢀⣴⠿⠛⠁⢀⣀⣀⣀⣀⣀⣄⡀⠀⠀⠀⢦⣀⠀⠀⠀⠀⠀⠀⠀⠀⣠⠇⣰⣿⠁⠀)",
+    R"(⠀⠀⠀⢀⣴⣟⣥⣶⣾⣿⣿⣿⣿⣿⣿⣭⣤⣤⣤⣀⣀⡀⠈⠛⠶⢶⣶⣶⣶⣾⣿⣿⣿⠟⠁⠀⠀)", R"(⠀⢀⣴⡿⠟⠋⡽⠟⠉⠉⠀⠀⠀⠀⠀⠀⠀⠈⠉⠉⠉⠙⠛⠛⠛⠿⠿⠿⠿⠟⠛⠉⠁⠀⠀⠀⠀)",
+    R"(⠐⠋⠁⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀)",
 };
 
-constexpr std::array<std::string_view, 18> kArtZones = {
-    R"(                            BB)", R"(                           B C)",
-    R"(                          B C )", R"(                         B C  )",
-    R"(                        B C   )", R"(                       B C    )",
-    R"(                     GGGG     )", R"(                     FR       )",
-    R"(                    F FF      )", R"(                  F F  F      )",
-    R"(                 FF   F       )", R"(                 F    F       )",
-    R"(               F      F       )", R"(             F        F       )",
-    R"(           F    F  F F        )", R"(          F      F F F        )",
-    R"(  FFFFFFFFF   FFF  F F        )", R"(FFFFFFFFFFFFFFFFFFFFFFF       )",
-};
-
-constexpr std::array<std::string_view, 15> kIcon = {
-    R"(                         /\)", R"(                        / /)",
-    R"(                       / / )", R"(                     =##=  )",
-    R"(                     ./    )", R"(                    / V\   )",
-    R"(                  / `  /   )", R"(                 <<   |    )",
-    R"(                 /    |    )", R"(               /      |    )",
-    R"(             /        |    )", R"(           /    \  \ /     )",
-    R"(          (      ) | |     )", R"(  ________|   _/_  | |     )",
-    R"(<__________\______)\__)    )",
-};
-
-constexpr std::array<std::string_view, 15> kIconZones = {
-    R"(                         BB)", R"(                        B C)",
-    R"(                       B C )", R"(                     GGGG  )",
-    R"(                     FR    )", R"(                    F FF   )",
-    R"(                  F F  F   )", R"(                 FF   F    )",
-    R"(                 F    F    )", R"(               F      F    )",
-    R"(             F        F    )", R"(           F    F  F F     )",
-    R"(          F      F F F     )", R"(  FFFFFFFFF   FFF  F F     )",
-    R"(FFFFFFFFFFFFFFFFFFFFFFF    )",
+// Le même, réduit de moitié (un point gardé si l'un des quatre l'était).
+constexpr std::array<std::string_view, 14> kIcon = {
+    R"(⠀⠀⠀⠀⠀⠀⣴⡶⣄⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀)", R"(⠀⠀⠀⠀⠀⠸⣇⠟⢯⣷⡶⣄⠀⠀⠀⠀⠀⠀⠀)", R"(⠀⠀⠀⠀⠀⠀⢘⣆⢸⢷⣁⡛⣇⠀⠀⠀⠀⠀⠀)",
+    R"(⠀⠀⠀⠀⠀⢀⡾⡭⠶⣿⣿⣿⣿⣷⠀⠀⠀⠀⠀)", R"(⠀⠀⠀⠀⢠⣿⡷⣶⡎⠁⠁⣼⡌⠉⠀⠀⠀⠀⠀)", R"(⠀⠀⠀⠀⢸⣿⣣⡾⣶⠀⢰⢿⢿⣄⡀⠀⠀⠀⠀)",
+    R"(⠀⠀⠀⠀⠘⢿⣿⢘⣷⣦⡘⠚⢾⣿⣧⡀⠀⠀⠀)", R"(⠀⠀⠀⠀⠀⠘⣿⣿⣿⣿⡿⠄⠈⡳⣿⣿⣦⡀⠀)", R"(⠀⠀⠀⠀⠀⠀⢨⣽⠹⣿⢟⣠⡆⣷⣌⣿⣿⣷⠀)",
+    R"(⠀⠀⠀⠀⠀⠀⠈⡿⡆⣯⣯⡟⣛⡿⢉⡅⠸⣿⠃)", R"(⠀⠀⠀⢀⣤⣶⡾⠿⠿⢿⣿⣶⣶⠶⠿⣤⣰⣿⠀)", R"(⠀⠀⢀⣽⠿⣛⣉⣁⣐⠋⢡⡀⠀⠀⠀⢀⣯⡿⠀)",
+    R"(⢀⣴⡿⣿⠿⠛⠛⠛⠲⠶⠶⠭⢿⣿⣿⠿⠟⠁⠀)", R"(⠉⠁⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀)",
 };
 
 constexpr std::array<std::array<std::string_view, 5>, 7> kTitleLetters{{
@@ -73,16 +55,34 @@ std::span<const std::string_view> wolf_rows() {
     return kArt;
 }
 
-std::span<const std::string_view> wolf_zones() {
-    return kArtZones;
-}
-
 std::span<const std::string_view> wolf_icon_rows() {
     return kIcon;
 }
 
-std::span<const std::string_view> wolf_icon_zones() {
-    return kIconZones;
+std::vector<std::uint8_t> braille_cells(std::string_view row) {
+    std::vector<std::uint8_t> cells;
+    std::size_t at = 0;
+    while (at < row.size()) {
+        const auto lead = static_cast<unsigned char>(row[at]);
+        // U+2800 à U+28FF : E2 A0..A3 xx en UTF-8.
+        if (lead == 0xE2U && at + 2 < row.size()) {
+            const auto second = static_cast<unsigned char>(row[at + 1]);
+            const auto third = static_cast<unsigned char>(row[at + 2]);
+            if (second >= 0xA0U && second <= 0xA3U) {
+                cells.push_back(
+                    static_cast<std::uint8_t>(((second & 0x03U) << 6U) | (third & 0x3FU)));
+                at += 3;
+                continue;
+            }
+        }
+        cells.push_back(0);
+        // Un caractère, quelle que soit sa longueur en UTF-8.
+        ++at;
+        while (at < row.size() && (static_cast<unsigned char>(row[at]) & 0xC0U) == 0x80U) {
+            ++at;
+        }
+    }
+    return cells;
 }
 
 std::span<const std::array<std::string_view, 5>> title_letters() {

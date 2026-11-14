@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="docs/readme/avenoir-wolf.svg" alt="Le logo d'Avenoir tel que la CLI l'affiche : le loup assis qui hurle, une épée dans la gueule, en ASCII, à côté du titre AVENOIR en blocs bleus" width="658">
+<img src="docs/readme/avenoir-wolf.svg" alt="Le logo d'Avenoir tel que la CLI l'affiche : le loup d'Avenoir, dessiné en braille, à côté du titre AVENOIR en blocs bleus" width="716">
 
 # Avenoir
 
@@ -252,7 +252,7 @@ Plusieurs **projets** peuvent avancer en même temps, en arrière-plan : `/proje
 | `/settings` (ou `/parametres`) | **menu des réglages** : choisir un réglage avec les flèches (taper filtre la liste), puis sa valeur dans une liste ou en la tapant ; mêmes règles que `/reglage` |
 | `/reglages` · `/reglage <clé> <valeur>` | voir les réglages et leur valeur, en changer un (ex. `/reglage agent.local_only oui`) ; écrit par le sceau, noté au journal d'audit, appliqué par `/redemarrer` ; affaiblir la sécurité demande de taper « Je sais ce que je fais » |
 | `/configurer` | refaire la création guidée des modèles (recherche des serveurs, choix, « aucun ») ; les autres réglages sont gardés, le fichier réécrit après confirmation ; appliqué par `/redemarrer` |
-| `/verrouillage` | Linux, Wayland sans verrouillage propre (niri, sway…) : installer swaylock (par sudo, dans le terminal) et poser l'écran de verrouillage d'Avenoir (fond bleu nuit, loup à l'épée) ; aussi proposé à la fin de la création guidée |
+| `/verrouillage` | Linux, Wayland sans verrouillage propre (niri, sway…) : installer swaylock (par sudo, dans le terminal) et poser l'écran de verrouillage d'Avenoir (fond bleu nuit, loup d'Avenoir) ; aussi proposé à la fin de la création guidée |
 | `/projet <nom> <demande>` · `/projets` | travailler en arrière-plan sur un projet isolé (son contexte, ses équipes), plusieurs à la fois ; `/projet voir|arreter|supprimer <nom>` ; en arrière-plan, une action à confirmer est refusée |
 | `/agents` · `/agent …` | l'équipe d'agents ; la composer : `/agent ajouter chercheur chercheur web`, `/agent outils chercheur web_search,read_webpage`, `/agent modele chercheur gemma`, `/agent consigne …`, `/agent supprimer …` (appliqué par `/redemarrer`) |
 | `/redemarrer` | reconstruire Avenoir avec ses réglages actuels (modules relancés, modèle repris) |
@@ -357,7 +357,7 @@ Sous Windows, `scripts\build.ps1` offre les mêmes options et charge tout seul l
 ./build/debug/evals/avenoir-evals --config ollama.toml --prompt essai.txt --only injection-meteo
 ```
 
-Les images de ce README sont générées par les scripts de [`docs/readme/`](docs/readme/) : `wolf.py` (logo identique à l'en-tête de la CLI : loup lu dans `apps/cli/src/wolf.cpp`, titre dans `apps/cli/src/display.cpp`, couleurs de la capture ; « Wolf », [asciiart.eu](https://www.asciiart.eu/animals/wolves), artiste inconnu, tel quel ; seule l'épée est ajoutée) et `capture.sh` (enregistre une vraie session de la CLI et la dessine en PNG).
+Les images de ce README sont générées par les scripts de [`docs/readme/`](docs/readme/) : `wolf.py` (logo identique à l'en-tête de la CLI : loup et titre lus dans `libs/terminal/src/mascot.cpp`, le loup en braille dessiné point par point, couleurs de la capture) et `capture.sh` (enregistre une vraie session de la CLI et la dessine en PNG).
 
 <details>
 <summary><b>Publier une version</b></summary>

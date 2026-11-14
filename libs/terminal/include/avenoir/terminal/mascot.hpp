@@ -1,23 +1,28 @@
 #pragma once
 
 #include <array>
+#include <cstdint>
 #include <span>
 #include <string_view>
+#include <vector>
 
-// Dessins d'Avenoir, en données seulement (aucune couleur ici) : le loup à
-// l'épée et les lettres du titre « AVENOIR ». Source unique pour la CLI
+// Dessins d'Avenoir, en données seulement (aucune couleur ici) : le loup en
+// braille et les lettres du titre « AVENOIR ». Source unique pour la CLI
 // (en-tête, couleurs par zones), le démon (fond de l'écran de verrouillage)
 // et les images du README (docs/readme/wolf.py lit ce fichier).
 namespace avenoir::terminal {
 
-/// Grand loup : 30 colonnes sur 18 lignes.
+/// Grand loup, en caractères braille (U+2800 à U+28FF) : 37 colonnes sur
+/// 27 lignes.
 [[nodiscard]] std::span<const std::string_view> wolf_rows();
-/// Zone de chaque caractère du grand loup : F loup, R manche, G garde,
-/// B fil de la lame, C lame, espace : rien.
-[[nodiscard]] std::span<const std::string_view> wolf_zones();
-/// Petit loup (lame courte) : 27 colonnes sur 15 lignes.
+/// Petit loup (le même, réduit de moitié) : 19 colonnes sur 14 lignes.
 [[nodiscard]] std::span<const std::string_view> wolf_icon_rows();
-[[nodiscard]] std::span<const std::string_view> wolf_icon_zones();
+
+/// Points de chaque cellule d'une ligne en braille, dans l'ordre : bit 0 à 2,
+/// colonne de gauche de haut en bas ; bits 3 à 5, colonne de droite ; bit 6
+/// en bas à gauche, bit 7 en bas à droite (codage Unicode). Un caractère qui
+/// n'est pas du braille compte pour une cellule vide.
+[[nodiscard]] std::vector<std::uint8_t> braille_cells(std::string_view row);
 
 /// Lettres de « AVENOIR » en blocs : 5 lignes de 5 colonnes par lettre
 /// (« █ » plein, espace vide).

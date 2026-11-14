@@ -8,6 +8,7 @@
 #include <optional>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 #include "avenoir/terminal/mascot.hpp"
@@ -34,50 +35,15 @@ enum class Ink : std::uint8_t { Background, Sky, Grip, Gold, White, Ice, Azure, 
 constexpr std::array<std::uint32_t, 8> kPalette{0x0b1020, 0x87afff, 0x958769, 0xf9e2af,
                                                 0xffffff, 0xafd7ff, 0x0087ff, 0x005faf};
 
-/// Couleur d'une zone du loup (comme la CLI : zone_style).
-Ink zone_ink(char zone) {
-    switch (zone) {
-    case 'R':
-        return Ink::Grip;
-    case 'G':
-        return Ink::Gold;
-    case 'B':
-        return Ink::White;
-    case 'C':
-        return Ink::Ice;
-    default:
-        return Ink::Sky;
-    }
-}
-
-/// Petite police 5 × 7 pour les seuls caractères du loup.
-struct Glyph {
-    char character = '\0';
-    std::array<std::string_view, 7> rows;
-};
-constexpr std::array<Glyph, 12> kFont{{
-    {.character = '/', .rows = {"....#", "...#.", "...#.", "..#..", ".#...", ".#...", "#...."}},
-    {.character = '\\', .rows = {"#....", ".#...", ".#...", "..#..", "...#.", "...#.", "....#"}},
-    {.character = '|', .rows = {"..#..", "..#..", "..#..", "..#..", "..#..", "..#..", "..#.."}},
-    {.character = '_', .rows = {".....", ".....", ".....", ".....", ".....", ".....", "#####"}},
-    {.character = '=', .rows = {".....", ".....", "#####", ".....", "#####", ".....", "....."}},
-    {.character = '#', .rows = {".#.#.", ".#.#.", "#####", ".#.#.", "#####", ".#.#.", ".#.#."}},
-    {.character = '.', .rows = {".....", ".....", ".....", ".....", ".....", ".##..", ".##.."}},
-    {.character = 'V', .rows = {"#...#", "#...#", "#...#", ".#.#.", ".#.#.", "..#..", "..#.."}},
-    {.character = '`', .rows = {".#...", "..#..", ".....", ".....", ".....", ".....", "....."}},
-    {.character = '<', .rows = {"...#.", "..#..", ".#...", "#....", ".#...", "..#..", "...#."}},
-    {.character = '(', .rows = {"...#.", "..#..", ".#...", ".#...", ".#...", "..#..", "...#."}},
-    {.character = ')', .rows = {".#...", "..#..", "...#.", "...#.", "...#.", "..#..", ".#..."}},
-}};
-
-// Grille : une cellule de caractère fait 12 × 18 pixels, chaque point de la
-// police 2 × 2 ; le titre est en blocs pleins d'une cellule, comme dans le
-// terminal.
-constexpr int kDot = 2;
+// Grille : le titre est en blocs pleins d'une cellule de 12 × 18 pixels,
+// comme dans le terminal ; le loup, en braille, est dessiné point par point
+// (un caractère = 2 × 4 points espacés de 4 pixels, chacun de 3 × 3).
 constexpr int kCellWidth = 12;
 constexpr int kCellHeight = 18;
-constexpr int kTop = 24;       // haut du loup
-constexpr int kTitleTop = 640; // haut du titre, sous l'anneau
+constexpr int kDotPitch = 4;
+constexpr int kDotSize = 3;
+constexpr int kTop = 8;        // haut du loup
+constexpr int kTitleTop = 700; // haut du titre, sous l'anneau
 
 class Canvas {
   public:
@@ -91,29 +57,6 @@ class Canvas {
             for (int column = std::max(x, 0); column < std::min(x + width, width_); ++column) {
                 pixels_[(static_cast<std::size_t>(row) * static_cast<std::size_t>(width_)) +
                         static_cast<std::size_t>(column)] = static_cast<std::uint8_t>(ink);
-            }
-        }
-    }
-
-    /// Un caractère du loup dans la cellule (`x`, `y`) en pixels.
-    void glyph(char character, int x, int y, Ink ink) {
-        // Boucle simple : l'itérateur de std::array n'est pas un pointeur sous MSVC.
-        const Glyph* found = nullptr;
-        for (const auto& candidate : kFont) {
-            if (candidate.character == character) {
-                found = &candidate;
-                break;
-            }
-        }
-        if (found == nullptr) {
-            return;
-        }
-        for (int row = 0; row < 7; ++row) {
-            const std::string_view line = found->rows.at(static_cast<std::size_t>(row));
-            for (int column = 0; column < 5; ++column) {
-                if (line[static_cast<std::size_t>(column)] == '#') {
-                    fill(x + (kDot / 2) + (column * kDot), y + 2 + (row * kDot), kDot, kDot, ink);
-                }
             }
         }
     }
@@ -240,7 +183,7 @@ std::string swaylock_config(std::string_view image_path) {
 # Écrit par Avenoir (création guidée ou /verrouillage). Vous pouvez le
 # modifier : Avenoir ne le remplace que si vous le lui demandez.
 
-# Fond bleu nuit : le loup à l'épée au-dessus de l'anneau, le titre dessous.
+# Fond bleu nuit : le loup d'Avenoir au-dessus de l'anneau, le titre dessous.
 image={}
 scaling=center
 color=0b1020
@@ -297,19 +240,28 @@ LockConfigState lock_config_state(const std::optional<std::string>& content) {
 std::string lock_image_png() {
     Canvas canvas(kLockImageWidth, kLockImageHeight);
     const auto rows = terminal::wolf_rows();
-    const auto zones = terminal::wolf_zones();
     const auto letters = terminal::title_letters();
-    const int wolf_columns = static_cast<int>(rows.front().size());
+    const int wolf_width =
+        static_cast<int>(terminal::braille_cells(rows.front()).size()) * 2 * kDotPitch;
     const int title_columns = (static_cast<int>(letters.size()) * 6) - 1;
-    const int left = (kLockImageWidth - (wolf_columns * kCellWidth)) / 2;
+    const int left = (kLockImageWidth - wolf_width) / 2;
 
-    // Le loup au-dessus de l'anneau, caractère par caractère, coloré par zones.
+    // Le loup au-dessus de l'anneau, point par point (braille : bits 0 à 2 et
+    // 6 à gauche, 3 à 5 et 7 à droite, de haut en bas).
+    constexpr std::array<std::pair<int, int>, 8> kDots{
+        {{0, 0}, {0, 1}, {0, 2}, {1, 0}, {1, 1}, {1, 2}, {0, 3}, {1, 3}}};
     for (std::size_t row = 0; row < rows.size(); ++row) {
-        const std::string_view text = rows[row];
-        for (std::size_t column = 0; column < text.size(); ++column) {
-            canvas.glyph(text[column], left + (static_cast<int>(column) * kCellWidth),
-                         kTop + (static_cast<int>(row) * kCellHeight),
-                         zone_ink(zones[row][column]));
+        const auto cells = terminal::braille_cells(rows[row]);
+        for (std::size_t column = 0; column < cells.size(); ++column) {
+            for (std::size_t bit = 0; bit < kDots.size(); ++bit) {
+                if (((static_cast<unsigned>(cells[column]) >> bit) & 1U) == 0U) {
+                    continue;
+                }
+                const auto [dx, dy] = kDots.at(bit);
+                canvas.fill(left + (((static_cast<int>(column) * 2) + dx) * kDotPitch),
+                            kTop + (((static_cast<int>(row) * 4) + dy) * kDotPitch), kDotSize,
+                            kDotSize, Ink::Sky);
+            }
         }
     }
 

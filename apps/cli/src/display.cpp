@@ -52,8 +52,8 @@ constexpr std::size_t kMinPinnedRows = 8;
 constexpr std::size_t kMinViewRows = 6;
 
 /// En-tête complet (grand loup) : taille du terminal nécessaire.
-constexpr std::size_t kFullHeaderColumns = 82;
-constexpr std::size_t kFullHeaderRows = 36;
+constexpr std::size_t kFullHeaderColumns = 90;
+constexpr std::size_t kFullHeaderRows = 40;
 /// En-tête compact (petit loup).
 constexpr std::size_t kCompactHeaderColumns = 62;
 constexpr std::size_t kCompactHeaderRows = 30;

@@ -33,12 +33,12 @@ enum class LockConfigState : unsigned char {
 [[nodiscard]] LockConfigState lock_config_state(const std::optional<std::string>& content);
 
 /// Fond de l'écran de verrouillage, en PNG : sur une image bleu nuit centrée
-/// sur l'écran, le loup à l'épée au-dessus de l'anneau de swaylock et le
+/// sur l'écran, le loup d'Avenoir au-dessus de l'anneau de swaylock et le
 /// titre « AVENOIR » en blocs dessous (couleurs de l'en-tête de la CLI).
 [[nodiscard]] std::string lock_image_png();
 
 /// Taille de `lock_image_png` (et place laissée à l'anneau au centre).
 inline constexpr int kLockImageWidth = 1000;
-inline constexpr int kLockImageHeight = 960;
+inline constexpr int kLockImageHeight = 1080;
 
 } // namespace avenoir::daemon
