@@ -8,8 +8,7 @@ dessiné point par point (2 × 4 points par cellule), comme sur l'écran de
 verrouillage : le rendu ne dépend pas d'une police.
 
 Les couleurs sont celles de la capture (docs/readme/terminal_render.py) :
-mêmes codes de terminal, même fond sombre, pour un rendu identique en thème
-clair comme en thème sombre.
+mêmes codes de terminal ; le fond est transparent.
 
 Usage : python3 docs/readme/wolf.py   (écrit docs/readme/avenoir-wolf.svg et
 avenoir-wolf-icon.svg)
@@ -21,8 +20,8 @@ from pathlib import Path
 
 MASCOT = Path(__file__).resolve().parents[2] / "libs" / "terminal" / "src" / "mascot.cpp"
 
-# Fond et couleurs du terminal de la capture (terminal_render.py).
-BACKGROUND = "#1e1e2e"
+# Couleurs du terminal de la capture (terminal_render.py) ; fond transparent :
+# le logo se pose sur le thème clair comme sur le sombre.
 XTERM = {"navy": "#005faf", "azure": "#0087ff", "sky": "#87afff", "ice": "#afd7ff"}
 GRAY = "#6c7086"
 
@@ -101,7 +100,6 @@ def svg(columns: int, rows: int, body: list[str]) -> str:
         f'viewBox="0 0 {width:.0f} {height:.0f}" role="img" '
         f'aria-label="Avenoir : le loup d\'Avenoir, dessiné en braille">\n'
         f"  <title>Avenoir</title>\n"
-        f'  <rect width="100%" height="100%" rx="12" fill="{BACKGROUND}"/>\n'
         f'  <g font-family="JetBrains Mono, DejaVu Sans Mono, Menlo, Consolas, monospace" '
         f'font-size="{FONT}" xml:space="preserve" style="white-space: pre">\n    '
         + "\n    ".join(body)
