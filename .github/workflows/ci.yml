@@ -35,6 +35,28 @@ jobs:
           $issues | Format-Table -AutoSize
           if ($issues) { exit 1 }
 
+  ui:
+    name: Interface web
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: ui
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: ui/package-lock.json
+      - name: Installer les dépendances (versions du fichier de verrou)
+        run: npm ci --no-fund --no-audit
+      - name: Contrôler les types (TypeScript strict, Svelte)
+        run: npm run check
+      - name: Tests
+        run: npm test
+      - name: Construire la page
+        run: npm run build
+
   linux:
     name: Linux ${{ matrix.name }}
     runs-on: ubuntu-24.04

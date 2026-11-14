@@ -10,8 +10,8 @@ verrouillage : le rendu ne dépend pas d'une police.
 Les couleurs sont celles de la capture (docs/readme/terminal_render.py) :
 mêmes codes de terminal ; le fond est transparent.
 
-Usage : python3 docs/readme/wolf.py   (écrit docs/readme/avenoir-wolf.svg et
-avenoir-wolf-icon.svg)
+Usage : python3 docs/readme/wolf.py   (écrit docs/readme/avenoir-wolf.svg,
+avenoir-wolf-icon.svg et ui/src/assets/wolf.svg)
 """
 
 import re
@@ -131,6 +131,10 @@ if __name__ == "__main__":
         "avenoir-wolf.svg": logo(read_array(wolf, "kArt"), title),
         "avenoir-wolf-icon.svg": icon(read_array(wolf, "kIcon")),
     }
+    # Le petit loup sert aussi à l'interface graphique (barre du widget).
+    ui_icon = Path(__file__).resolve().parents[2] / "ui" / "src" / "assets" / "wolf.svg"
+    ui_icon.write_text(outputs["avenoir-wolf-icon.svg"], encoding="utf-8")
+    print(f"écrit : {ui_icon}")
     for name, content in outputs.items():
         output = Path(__file__).with_name(name)
         output.write_text(content, encoding="utf-8")

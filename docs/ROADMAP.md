@@ -16,7 +16,7 @@
 | **3. Résident** | Démon en arrière-plan, IPC, journal structuré, permissions durables et révocables, magasin de modèles | ✅ |
 | **4. Tâches et modules** | Orchestrateur multi-agents (agents en parallèle, plusieurs projets isolés), fichiers, mémoire, contexte long, appels entre modules, fonctions de fond | 🔄 |
 | **5. Voix** | Mot de réveil, STT, TTS, confirmations vocales | ⬜ |
-| **6. Interface graphique** | Widget en haut de l'écran (loup animé), application principale, onglets de modules | ⬜ |
+| **6. Interface graphique** | Widget en haut de l'écran (loup animé), application principale, onglets de modules | 🔄 |
 | **7. Identité et présence** | Propriétaire et liste blanche, vérification par la voix et le visage, verrouillage et connexion automatiques | ⬜ |
 
 L'ordre suit un principe : **chaque jalon produit un assistant utilisable**, plus capable que le précédent. La voix et l'UI viennent tard parce qu'elles reposent sur un cœur stable (PROJECT.md, décision 7).
@@ -293,22 +293,22 @@ L'ordre suit un principe : **chaque jalon produit un assistant utilisable**, plu
 
 ---
 
-## Jalon 6 — Interface graphique ⬜
+## Jalon 6 — Interface graphique 🔄
 
 *Interface web (HTML / CSS / TypeScript) dans la vue web du système, hébergée par un petit hôte C++ (PROJECT.md § 2.7, décisions 18 à 20).*
 
 ### 6.1 Fondations — P1
-- ⬜ Choisir le framework web (Svelte, Solid, React…) et la bibliothèque C++ de vue web (`saucer`, `webview`…)
+- ✅ Choisir le framework web et la bibliothèque C++ de vue web — décision 68 : **Svelte 5** ; hôte **écrit à la main** (WebKitGTK 6 + gtk4-layer-shell du système sous Linux, SDK WebView2 sous Windows), lié dynamiquement (LGPL acceptée pour ce seul exécutable)
 - ⬜ Hôte C++ des fenêtres (`apps/ui`) : WebView2 sous Windows, WebKitGTK sous Linux ; un processus, deux fenêtres
-- ⬜ Pont typé interface ↔ hôte C++ ↔ démon (IPC du jalon 3)
-- ⬜ Build de `ui/` intégré à CMake et à la CI ; contrôle de types TypeScript strict
+- 🔄 Pont typé interface ↔ hôte C++ ↔ démon (IPC du jalon 3) — fait côté page (`ui/src/lib/protocol.ts`, `bridge.ts` : messages validés, appels permis en liste fermée, hôte simulé pour le développement) ; reste l'hôte C++
+- 🔄 Build de `ui/` intégré à CMake et à la CI ; contrôle de types TypeScript strict — fait : Vite, `npm run check` (svelte-check, TypeScript strict), `npm test` (vitest), `npm run build`, job « Interface web » de la CI ; reste l'intégration à CMake avec l'hôte
 
 ### 6.2 Widget principal — P1
 - ⬜ Fenêtre sans bordure, transparente, au premier plan, en haut au centre ; layer-shell sous Wayland (niri, KDE, Hyprland, Sway)
-- ⬜ Barre pliée ; widget déplié au survol, avec animations
+- 🔄 Barre pliée ; widget déplié au survol, avec animations — première version de la page : barre (loup, état, modèle), dépliée au survol ou pendant une requête ; conversation au fil de l'eau, saisie, « Arrêter »
 - ⬜ Loup animé (Rive ou Lottie) qui reflète l'état de l'assistant (repos, écoute, réflexion, action)
 - ⬜ Onglets : activités en cours, historique défilable, informations système, version et mises à jour, chatbox, consommation et limites Claude Code
-- ⬜ Confirmations dessinées par Avenoir (`ConfirmationHandler` graphique), hors de tout contenu de module
+- 🔄 Confirmations dessinées par Avenoir (`ConfirmationHandler` graphique), hors de tout contenu de module — carte de confirmation de la page (autoriser, refuser, toujours, jamais ; questions, saisie masquée) ; reste à la brancher par l'hôte
 - ⬜ Bouton « Arrêter » (équivalent de Ctrl+C) et proposition d'annulation ; bouton « Annuler » sur la dernière requête (équivalent de `/annuler`)
 
 ### 6.3 Onglets des modules — P1

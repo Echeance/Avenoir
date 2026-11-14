@@ -1,0 +1,38 @@
+/* Couleurs d'Avenoir : celles de l'en-tête de la CLI (bleu nuit, azur, ciel,
+   glacier) sur fond sombre. */
+:root {
+  --night: #0b1020;
+  --panel: #131a2e;
+  --line: #1f2a48;
+  --navy: #005faf;
+  --azure: #0087ff;
+  --sky: #87afff;
+  --ice: #afd7ff;
+  --text: #cdd6f4;
+  --muted: #6c7086;
+  --green: #a6e3a1;
+  --yellow: #f9e2af;
+  --red: #f38ba8;
+  color-scheme: dark;
+  font-family: "Inter", "Segoe UI", system-ui, sans-serif;
+  font-size: 14px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  background: transparent;
+  color: var(--text);
+  overflow: hidden;
+}
+
+button {
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}

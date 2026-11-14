@@ -2,7 +2,7 @@
 
 Avenoir est un assistant de système d'exploitation (Windows + Linux) écrit en **C++23**, piloté par un LLM configurable et extensible par des **modules** (processus JSON-RPC, compatibles MCP). L'interface graphique sera en **TypeScript** (web, dans la vue web du système).
 
-Licence : **PolyForm Strict 1.0.0** (`LICENSE.md`) — ne pas la modifier ni ajouter de code tiers incompatible sans accord de l'utilisateur ; toute dépendance doit avoir une licence permissive compatible (MIT, BSD, Boost, Apache-2.0…).
+Licence : **PolyForm Strict 1.0.0** (`LICENSE.md`) — ne pas la modifier ni ajouter de code tiers incompatible sans accord de l'utilisateur ; toute dépendance doit avoir une licence permissive compatible (MIT, BSD, Boost, Apache-2.0…). Seule exception, décidée par l'auteur (décision 68) : l'hôte des fenêtres (`apps/ui`) est lié dynamiquement à WebKitGTK et GTK du système (LGPL), jamais livrés avec Avenoir.
 
 **`docs/PROJECT.md` est le document de référence** (vision, architecture, sécurité, directives, journal des décisions). **`docs/ROADMAP.md`** donne le plan de travail détaillé. Les relire avant tout travail structurant et les tenir à jour.
 
@@ -74,13 +74,13 @@ Une VM Windows 11 LTSC (conteneur podman `windows`, image `dockurr/windows`, 4 c
 - `libs/agents` : orchestrateur multi-agents (plan de tâches, exécution parallèle, outil `delegate_tasks`) ; ne dépend que de `libs/core`.
 - `libs/voice` : interfaces voix.
 - `apps/cli` : interface texte (exécutable `avenoir`) ; `apps/daemon` : démon résident ; `apps/ui` : hôte C++ des fenêtres (widget + application principale). Les applications de `apps/` assemblent le tout.
-- `ui/` : interface web en TypeScript strict ; ne parle qu'à l'hôte C++ des fenêtres.
+- `ui/` : interface web en TypeScript strict, Svelte 5, Vite (décision 68) ; ne parle qu'à l'hôte C++ des fenêtres, par le pont de `ui/src/lib/` (messages validés, appels en liste fermée) ; CSP sans réseau. Avant un commit qui la touche : `npm run check && npm test && npm run build` dans `ui/`.
 
 - `ports/` : ports vcpkg locaux (`vcpkg-configuration.json`, `overlay-ports`), aujourd'hui `replxx` patché.
 - `modules/` : modules fournis avec Avenoir, programmes séparés (`modules/meteo/`) ; compilés dans `modules/` à côté de l'exécutable et livrés dans les archives de release.
 - `evals/` : banc d'essai avec de vrais modèles (`avenoir-evals`) : requêtes de référence (`requetes.toml`), doublures d'outils, rapports et comparaison dans `resultats/`. Jamais lancé par ctest ni la CI (il appelle un vrai LLM). **Modifier le prompt système ou la description d'un outil → repasser le banc** sur les modèles recommandés et noter le résultat dans `resultats/COMPARAISON.md`.
 
-Ces dossiers sont créés à leur étape de la roadmap. Existent aujourd'hui : `libs/core`, `libs/llm`, `libs/tools`, `libs/modules`, `libs/storage`, `libs/terminal`, `libs/ipc`, `libs/agents`, `apps/daemon` (démon `avenoird`), `apps/cli` (client du démon, avec un test de bout en bout dans `apps/cli/tests/`), `modules/meteo` et `evals`. Comment le code s'articule : `docs/FONCTIONNEMENT.md` (à tenir à jour avec le code).
+Ces dossiers sont créés à leur étape de la roadmap. Existent aujourd'hui : `libs/core`, `libs/llm`, `libs/tools`, `libs/modules`, `libs/storage`, `libs/terminal`, `libs/ipc`, `libs/agents`, `apps/daemon` (démon `avenoird`), `apps/cli` (client du démon, avec un test de bout en bout dans `apps/cli/tests/`), `modules/meteo`, `evals` et `ui/` (page du widget, avec un hôte simulé : `npm run dev` ; l'hôte C++ `apps/ui` reste à écrire). Comment le code s'articule : `docs/FONCTIONNEMENT.md` (à tenir à jour avec le code).
 
 En-têtes publics dans `libs/<nom>/include/avenoir/<nom>/`, tests Catch2 dans `libs/<nom>/tests/`.
 

@@ -351,7 +351,9 @@ scripts/build.sh -h                   # toutes les options
 
 Sous Windows, `scripts\build.ps1` offre les mêmes options et charge tout seul l'environnement Visual Studio. Avec CMake directement : `cmake --preset debug`, `cmake --build --preset debug`, `ctest --preset debug`.
 
-**Qualité** : avertissements traités comme des erreurs, `clang-format`, `clang-tidy`, AddressSanitizer + UndefinedBehaviorSanitizer, et plus de 130 tests — dont un test de bout en bout de la CLI. La [CI](https://github.com/echeance/Avenoir/actions) vérifie chaque modification sous Linux (GCC, Clang, sanitizers) et Windows (MSVC).
+**Qualité** : avertissements traités comme des erreurs, `clang-format`, `clang-tidy`, AddressSanitizer + UndefinedBehaviorSanitizer, et plus de 300 tests — dont un test de bout en bout de la CLI. La [CI](https://github.com/echeance/Avenoir/actions) vérifie chaque modification sous Linux (GCC, Clang, sanitizers) et Windows (MSVC).
+
+**Interface graphique** (en cours) : le code web est dans [`ui/`](ui/) (Svelte 5, TypeScript strict). `cd ui && npm install`, puis `npm run dev` l'ouvre dans un navigateur avec un hôte simulé (rien n'est réellement fait) ; `npm run check`, `npm test` et `npm run build` le vérifient et le construisent.
 
 **Essais avec de vrais modèles** : `avenoir-evals` passe les requêtes de référence ([`evals/requetes.toml`](evals/requetes.toml)) sur le modèle de votre configuration, avec de fausses versions des outils (rien n'est lancé), et écrit un rapport dans [`evals/resultats/`](evals/resultats/) :
 
@@ -393,7 +395,7 @@ Le workflow `release` vérifie que le numéro du tag correspond à la version du
 | **3 · Résident** | démon, journal, permissions durables, réglages scellés, clés au trousseau, magasin de modèles, carte graphique partagée, saisie rapide | ✅ |
 | **4 · Tâches et modules** | orchestrateur multi-agents, plusieurs projets en parallèle, fichiers, mémoire, appels entre modules | 🔄 équipes d'agents et projets faits |
 | **5 · Voix** | mot de réveil, reconnaissance et synthèse vocales | ⬜ |
-| **6 · Interface graphique** | widget avec le loup animé, application principale | ⬜ |
+| **6 · Interface graphique** | widget avec le loup animé, application principale | 🔄 page du widget commencée (Svelte), hôte des fenêtres à écrire |
 | **7 · Identité et présence** | propriétaire et liste blanche, voix et visage, verrouillage automatique | ⬜ |
 
 Le détail, étape par étape : **[docs/ROADMAP.md](docs/ROADMAP.md)**.
