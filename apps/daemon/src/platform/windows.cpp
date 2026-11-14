@@ -6,10 +6,16 @@
 #define NOMINMAX
 #endif
 #include <array>
+#include <atomic>
 #include <cstdint>
+#include <filesystem>
+#include <future>
+#include <memory>
 #include <optional>
 #include <string>
 #include <string_view>
+#include <thread>
+#include <utility>
 #include <vector>
 
 #include <windows.h>
@@ -20,6 +26,7 @@
 
 #include "../autostart.hpp"
 #include "../gpu.hpp"
+#include "../shortcut.hpp"
 
 namespace avenoir::daemon {
 
@@ -114,6 +121,102 @@ std::optional<DemandingApp> demanding_app(std::uint64_t /*threshold_bytes*/) {
         return std::nullopt;
     }
     return DemandingApp{.name = std::move(name), .video_memory = 0};
+}
+
+namespace {
+
+/// Ctrl+Alt+Espace, enregistré dans un fil qui a sa propre boucle de
+/// messages (RegisterHotKey est lié au fil qui l'appelle).
+class WindowsShortcut final : public GlobalShortcut {
+  public:
+    explicit WindowsShortcut(std::wstring command) : command_(std::move(command)) {}
+
+    /// Lance le fil ; vrai si la touche a pu être enregistrée.
+    bool start() {
+        std::promise<bool> registered;
+        auto ready = registered.get_future();
+        thread_ = std::jthread([this, &registered] {
+            thread_id_ = GetCurrentThreadId();
+            MSG message{};
+            // File de messages du fil créée avant d'annoncer qu'il est prêt.
+            PeekMessageW(&message, nullptr, WM_USER, WM_USER, PM_NOREMOVE);
+            if (RegisterHotKey(nullptr, 1, MOD_CONTROL | MOD_ALT | MOD_NOREPEAT, VK_SPACE) ==
+                FALSE) {
+                registered.set_value(false);
+                return;
+            }
+            registered.set_value(true);
+            while (GetMessageW(&message, nullptr, 0, 0) > 0) {
+                if (message.message == WM_HOTKEY) {
+                    launch();
+                }
+            }
+            UnregisterHotKey(nullptr, 1);
+        });
+        const bool ok = ready.get();
+        if (!ok) {
+            thread_.join();
+        }
+        return ok;
+    }
+
+    ~WindowsShortcut() override {
+        if (thread_.joinable() && thread_id_ != 0) {
+            PostThreadMessageW(thread_id_, WM_QUIT, 0, 0);
+        }
+    }
+
+    WindowsShortcut(const WindowsShortcut&) = delete;
+    WindowsShortcut& operator=(const WindowsShortcut&) = delete;
+    WindowsShortcut(WindowsShortcut&&) = delete;
+    WindowsShortcut& operator=(WindowsShortcut&&) = delete;
+
+  private:
+    /// Nouvelle console avec « avenoir --rapide » (sans shell).
+    void launch() const {
+        std::wstring command = command_;
+        STARTUPINFOW startup{};
+        startup.cb = sizeof(startup);
+        PROCESS_INFORMATION process{};
+        if (CreateProcessW(nullptr, command.data(), nullptr, nullptr, FALSE, CREATE_NEW_CONSOLE,
+                           nullptr, nullptr, &startup, &process) != FALSE) {
+            CloseHandle(process.hThread);
+            CloseHandle(process.hProcess);
+        }
+    }
+
+    std::wstring command_;
+    std::atomic<DWORD> thread_id_{0};
+    std::jthread thread_;
+};
+
+std::wstring wide(const std::string& text) {
+    const int size =
+        MultiByteToWideChar(CP_UTF8, 0, text.data(), static_cast<int>(text.size()), nullptr, 0);
+    std::wstring out(static_cast<std::size_t>(size), L'\0');
+    MultiByteToWideChar(CP_UTF8, 0, text.data(), static_cast<int>(text.size()), out.data(), size);
+    return out;
+}
+
+} // namespace
+
+std::unique_ptr<GlobalShortcut>
+register_quick_shortcut(const std::filesystem::path& cli,
+                        const std::optional<std::filesystem::path>& config, std::string& error) {
+    std::wstring command = L"\"" + cli.wstring() + L"\" --rapide";
+    if (config) {
+        command += L" \"" + config->wstring() + L"\"";
+    }
+    auto shortcut = std::make_unique<WindowsShortcut>(std::move(command));
+    if (!shortcut->start()) {
+        error = "Ctrl+Alt+Espace est déjà pris par un autre programme";
+        return nullptr;
+    }
+    return shortcut;
+}
+
+std::optional<std::string> native_shortcut() {
+    return std::string("Ctrl+Alt+Espace");
 }
 
 } // namespace avenoir::daemon

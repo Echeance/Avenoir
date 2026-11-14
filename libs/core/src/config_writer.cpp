@@ -317,6 +317,9 @@ std::string format_config(const AppConfig& config) {
         }
         section(out, "gpu", body);
     }
+    if (config.shortcut.enabled) {
+        section(out, "shortcut", "enabled = true\n");
+    }
     if (config.journal != JournalConfig{}) {
         section(out, "journal",
                 std::format("retention_days = {}\n", config.journal.retention_days));

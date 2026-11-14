@@ -11,6 +11,7 @@
 #include <filesystem>
 #include <fstream>
 #include <iterator>
+#include <memory>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -26,6 +27,7 @@
 
 #include "../autostart.hpp"
 #include "../gpu.hpp"
+#include "../shortcut.hpp"
 
 namespace avenoir::daemon {
 
@@ -250,6 +252,18 @@ std::optional<DemandingApp> demanding_app(std::uint64_t threshold_bytes) {
         biggest = DemandingApp{.name = name, .video_memory = total};
     }
     return biggest;
+}
+
+std::unique_ptr<GlobalShortcut>
+register_quick_shortcut(const std::filesystem::path& /*cli*/,
+                        const std::optional<std::filesystem::path>& /*config*/,
+                        std::string& error) {
+    error = "sous Linux, le raccourci se déclare dans le bureau (/raccourci)";
+    return nullptr;
+}
+
+std::optional<std::string> native_shortcut() {
+    return std::nullopt;
 }
 
 } // namespace avenoir::daemon

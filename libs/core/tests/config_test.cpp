@@ -223,6 +223,7 @@ TEST_CASE("format_config est relu à l'identique", "[config]") {
     config.modules["meteo"].enabled = false;
     config.modules["autre.module"].risk.emplace("lire", RiskLevel::Sensitive);
     config.journal.retention_days = 30;
+    config.shortcut.enabled = true;
     config.gpu = GpuConfig{.mode = "switch", .light_model = "claude", .threshold_gb = 4};
     config.modules["calendrier"].enabled = true;
     config.modules["calendrier"].granted = {"network", "files.read"};
@@ -391,7 +392,7 @@ TEST_CASE("[gpu] : mode, modèle léger, seuil", "[config][gpu]") {
     CHECK(config->gpu.light_model == "leger");
     CHECK(config->gpu.threshold_gb == 2);
     CHECK(parse_config("").value_or(AppConfig{}).gpu.mode == "off");
-    const auto refused = [&kModels](const std::string& gpu) {
+    const auto refused = [](const std::string& gpu) {
         return !parse_config(std::string(kModels) + "[gpu]\n" + gpu).has_value();
     };
     CHECK(refused("mode = \"parfois\""));
@@ -399,4 +400,10 @@ TEST_CASE("[gpu] : mode, modèle léger, seuil", "[config][gpu]") {
     CHECK(refused("light_model = \"inconnu\""));
     CHECK(refused("threshold_gb = 0"));
     CHECK_FALSE(refused("mode = \"unload\"\nthreshold_gb = 6"));
+}
+
+TEST_CASE("[shortcut] : raccourci global", "[config]") {
+    CHECK_FALSE(parse_config("").value_or(AppConfig{}).shortcut.enabled);
+    CHECK(parse_config("[shortcut]\nenabled = true\n").value_or(AppConfig{}).shortcut.enabled);
+    CHECK_FALSE(parse_config("[shortcut]\nenabled = \"oui\"\n").has_value());
 }

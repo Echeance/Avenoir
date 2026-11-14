@@ -122,6 +122,9 @@ std::string setting_family(std::string_view key) {
     if (prefix == "gpu") {
         return "Carte graphique";
     }
+    if (prefix == "shortcut") {
+        return "Saisie rapide";
+    }
     return std::string(prefix);
 }
 

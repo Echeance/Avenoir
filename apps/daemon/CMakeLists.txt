@@ -20,6 +20,7 @@ add_library(avenoir_daemon_lib STATIC
     src/runtime.cpp
     src/server.cpp
     src/settings_catalog.cpp
+    src/shortcut.cpp
     src/setup.cpp
     src/setup_plan.cpp
     src/ui.cpp)
@@ -52,6 +53,7 @@ if(AVENOIR_BUILD_TESTS)
         tests/keys_test.cpp
         tests/lock_theme_test.cpp
         tests/permissions_test.cpp
+        tests/shortcut_test.cpp
         tests/settings_catalog_test.cpp
         tests/ui_test.cpp
         tests/setup_plan_test.cpp)

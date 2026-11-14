@@ -503,8 +503,15 @@ int run(int argc, char** argv) {
 
     const std::span<char*> args(argv, static_cast<std::size_t>(argc));
     std::optional<std::filesystem::path> config;
-    if (args.size() > 1) {
-        config = std::filesystem::path(args[1]);
+    // « --rapide » : saisie rapide (raccourci global, décision 67), sans plein
+    // écran ni cadre d'accueil ; une ligne vide ferme la fenêtre.
+    bool quick = false;
+    for (const auto* argument : args.subspan(1)) {
+        if (std::string_view(argument) == "--rapide") {
+            quick = true;
+        } else if (!config) {
+            config = std::filesystem::path(argument);
+        }
     }
     auto endpoint = daemon_endpoint(config);
     if (!endpoint) {
@@ -551,7 +558,7 @@ int run(int argc, char** argv) {
     peer.start();
 
     // Terminal rendu dans son état normal à la sortie, même en cas d'erreur.
-    display().enable_pinned_bar(terminal::detect_vt_support());
+    display().enable_pinned_bar(!quick && terminal::detect_vt_support());
     struct ScreenGuard {
         ScreenGuard() = default;
         ScreenGuard(const ScreenGuard&) = delete;
@@ -562,7 +569,8 @@ int run(int argc, char** argv) {
     } const screen_guard;
 
     // Accueil (et, au premier lancement, création guidée des réglages).
-    auto opened = client.run("session/open", {{"interactive", cli::stdin_is_terminal()}});
+    auto opened =
+        client.run("session/open", {{"interactive", cli::stdin_is_terminal()}, {"quick", quick}});
     if (!opened) {
         display().error(core::describe(opened.error()));
         return EXIT_FAILURE;
@@ -575,6 +583,11 @@ int run(int argc, char** argv) {
     }
     prompt.set_commands(std::move(completions));
     std::string conversation = opened->value("conversation", "");
+    if (quick) {
+        display().plain(
+            paint("◆ Avenoir", {.color = Color::Azure, .bold = true}) +
+            paint("  saisie rapide · ligne vide ou Ctrl+D : fermer", {.color = Color::Gray}));
+    }
 
     while (!client.lost()) {
         for (const auto& note : client.take_notes()) {
@@ -593,6 +606,9 @@ int run(int argc, char** argv) {
         }
         const std::string_view line = trim(input.text);
         if (line.empty()) {
+            if (quick) {
+                break;
+            }
             continue;
         }
         if (line == "/settings" || line == "/parametres" || line == "/paramètres") {
@@ -642,7 +658,9 @@ int run(int argc, char** argv) {
         display().error("Connexion au démon perdue (voir logs/daemon.log du dossier de données).");
         return EXIT_FAILURE;
     }
-    display().farewell(shown(conversation));
+    if (!quick) {
+        display().farewell(shown(conversation));
+    }
     return EXIT_SUCCESS;
 }
 

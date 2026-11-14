@@ -171,6 +171,15 @@ struct GpuConfig {
     bool operator==(const GpuConfig&) const = default;
 };
 
+/// Raccourci global de la saisie rapide (`[shortcut]`, décision 67).
+struct ShortcutConfig {
+    /// Windows : le démon enregistre Ctrl+Alt+Espace. Linux : sans effet,
+    /// le raccourci se déclare dans le bureau (/raccourci).
+    bool enabled = false;
+
+    bool operator==(const ShortcutConfig&) const = default;
+};
+
 struct AppConfig {
     /// Modèles (`[models.<nom>]`), dans l'ordre du fichier : le premier sert
     /// par défaut. Aucun : pas de LLM, seule la voie rapide répond.
@@ -185,6 +194,7 @@ struct AppConfig {
     OrchestrationConfig orchestration;
     JournalConfig journal;
     GpuConfig gpu;
+    ShortcutConfig shortcut;
 
     bool operator==(const AppConfig&) const = default;
 };

@@ -53,6 +53,7 @@
 #include "permissions.hpp"
 #include "settings_catalog.hpp"
 #include "setup.hpp"
+#include "shortcut.hpp"
 #include "ui.hpp"
 
 namespace avenoir::daemon {
@@ -96,7 +97,7 @@ std::vector<std::string> builtin_commands() {
             "raisonnement", "recharger",     "redemarrer", "reglage",   "reglages", "renommer",
             "reset",        "risque",        "settings",   "supprimer", "tools",    "transcription",
             "verrouillage", "permissions",   "revoquer",   "accorder",  "journal",  "cle",
-            "modeles"};
+            "modeles",      "raccourci"};
 }
 
 /// Coordinateur de la requête en cours dans ce fil (Avenoir, ou un projet) :
@@ -384,6 +385,8 @@ struct Runtime::State {
         std::optional<std::string> previous; ///< Modèle avant le passage au léger.
     };
     GpuState gpu;
+    /// Raccourci global de la saisie rapide (Windows), retiré avec Avenoir.
+    std::unique_ptr<GlobalShortcut> shortcut;
     std::mutex projects_mutex;
     /// Déclarés en dernier : arrêtés avant tout le reste d'Avenoir.
     std::map<std::string, std::unique_ptr<Project>> projects;
@@ -407,6 +410,7 @@ struct Runtime::State {
     void print_permissions() const;
     void key_command(std::string_view argument) const;
     void store_command(std::string_view argument, const std::stop_token& stop);
+    void shortcut_command(std::string_view argument);
     /// Journal structuré : enregistre une action ; `in_conversation` faux
     /// pour un projet (aucune conversation).
     void record_action(const core::ActionEvent& event, bool in_conversation) const;
@@ -502,6 +506,27 @@ core::Result<std::unique_ptr<Runtime>> Runtime::create(ConfigFile file) {
         options.on_action = [journal_state](const core::ActionEvent& event) {
             journal_state->record_action(event, /*in_conversation=*/true);
         };
+    }
+
+    // Raccourci global de la saisie rapide (décision 67).
+    if (config.shortcut.enabled) {
+        if (const auto program_directory = modules::executable_directory()) {
+#ifdef _WIN32
+            const auto cli = *program_directory / "avenoir.exe";
+#else
+            const auto cli = *program_directory / "avenoir";
+#endif
+            const auto standard = core::default_config_path();
+            std::optional<std::filesystem::path> own;
+            if (!standard || *standard != s->file.path) {
+                own = s->file.path; // configuration donnée en argument
+            }
+            std::string error;
+            s->shortcut = register_quick_shortcut(cli, own, error);
+            if (!s->shortcut && native_shortcut()) {
+                s->startup_warnings.push_back("raccourci global non enregistré : " + error);
+            }
+        }
     }
 
     if (config.permissions.sensitive == core::Policy::Allow) {
@@ -1070,6 +1095,9 @@ void Runtime::State::print_help() const {
     out += command("/outils", "outils disponibles et leur niveau de risque") + "\n";
     out += command("/annuler", "annuler les actions de la dernière requête (répétable)") + "\n";
     out += command("/modele [nom]", "modèles disponibles, ou changer de modèle") + "\n";
+    out += command("/raccourci [oui|non]", "raccourci global de la saisie rapide (avenoir "
+                                           "--rapide)") +
+           "\n";
     out += command("/modeles [installer|retirer nom]",
                    "magasin : modèles conseillés par le banc, installés par Ollama") +
            "\n";
@@ -1640,6 +1668,80 @@ void Runtime::State::store_command(std::string_view argument, const std::stop_to
     audit_line(std::format("magasin : {} ajouté aux modèles sous « {} »", tag, name));
     display().success(std::format("{} ajouté à vos modèles sous le nom « {} ».", tag, name));
     display().info(std::format("Pour l'utiliser : /redemarrer, puis /modele {}.", name));
+}
+
+/// /raccourci : raccourci global de la saisie rapide. Windows : l'activer ou
+/// le couper (réglage shortcut.enabled) ; Linux : la ligne à ajouter au
+/// bureau, avec le terminal installé.
+void Runtime::State::shortcut_command(std::string_view argument) {
+    const auto gray = [](std::string_view text) { return paint(text, {.color = Color::Gray}); };
+    if (const auto native = native_shortcut()) {
+        if (argument == "oui" || argument == "non") {
+            change_setting(std::format("shortcut.enabled {}", argument));
+            return;
+        }
+        std::string state = "désactivé";
+        if (file.config.shortcut.enabled) {
+            state = shortcut ? "actif" : "activé, mais non enregistré";
+        }
+        display().plain(std::format("  Saisie rapide : {} — {}", *native, state));
+        display().plain(gray("  /raccourci oui | non, puis /redemarrer"));
+        return;
+    }
+    const auto directory = modules::executable_directory();
+    if (!directory) {
+        display().error("emplacement d'Avenoir introuvable");
+        return;
+    }
+    const auto cli = *directory / "avenoir";
+    // Terminal : $TERMINAL s'il est connu, sinon le premier installé.
+    std::optional<std::string> command;
+    if (const auto chosen = core::read_env("TERMINAL")) {
+        command = quick_command(std::filesystem::path(*chosen).filename().string(), cli);
+    }
+    for (const std::string_view terminal : {"foot", "kitty", "alacritty", "wezterm", "ghostty",
+                                            "gnome-terminal", "konsole", "xterm"}) {
+        if (command) {
+            break;
+        }
+        const auto path = core::read_env("PATH").value_or("");
+        for (const auto part : std::views::split(path, ':')) {
+            const std::filesystem::path candidate =
+                std::filesystem::path(std::string_view(part)) / terminal;
+            std::error_code error;
+            if (std::filesystem::is_regular_file(candidate, error)) {
+                command = quick_command(terminal, cli);
+                break;
+            }
+        }
+    }
+    if (!command) {
+        display().warning("aucun terminal connu trouvé (foot, kitty, alacritty, wezterm, ghostty, "
+                          "gnome-terminal, konsole, xterm) : lancez « " +
+                          cli.string() + " --rapide » depuis votre terminal.");
+        return;
+    }
+    if (argument == "oui" || argument == "non") {
+        display().info("Sous Linux, le raccourci se déclare dans le bureau (ci-dessous) : Avenoir "
+                       "ne peut pas le prendre lui-même sous Wayland.");
+    }
+    const std::string desktop = core::read_env("XDG_CURRENT_DESKTOP").value_or("");
+    display().plain(paint("Saisie rapide", {.bold = true}) +
+                    gray("  une question, sans quitter ce que vous faites"));
+    display().plain("  Commande : " + paint(*command, {.color = Color::Cyan}));
+    if (const auto binding = desktop_binding(desktop, *command)) {
+        display().plain("  " + desktop + " : " + paint(*binding, {.color = Color::Cyan}));
+    } else if (desktop.contains("GNOME")) {
+        display().plain(gray("  GNOME : Paramètres › Clavier › Raccourcis personnalisés › +, avec "
+                             "cette commande."));
+    } else if (desktop.contains("KDE")) {
+        display().plain(
+            gray("  KDE : Configuration › Raccourcis › Ajouter une commande, avec cette "
+                 "commande."));
+    } else {
+        display().plain(gray("  Associez cette commande à un raccourci dans les réglages de votre "
+                             "bureau."));
+    }
 }
 
 void Runtime::State::record_action(const core::ActionEvent& event, bool in_conversation) const {
@@ -2349,6 +2451,8 @@ Outcome Runtime::State::command(std::string_view line, const std::stop_token& st
                      core::ToolCall{.id = {}, .name = tool, .arguments = std::move(arguments)},
                      stop, [label = std::move(label)] { return label; });
         }
+    } else if (name == "/raccourci") {
+        shortcut_command(argument);
     } else if (name == "/modeles" || name == "/modèles") {
         store_command(argument, stop);
     } else if (name == "/memoire" || name == "/mémoire") {

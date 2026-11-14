@@ -268,6 +268,12 @@ std::vector<SettingLine> list_settings(const core::AppConfig& config,
                      .accepted = "1 à 8",
                      .description = "tâches en même temps (un modèle local sert à tour de rôle)",
                      .security = false});
+    lines.push_back({.key = "shortcut.enabled",
+                     .value = std::string(yes_no(config.shortcut.enabled)),
+                     .accepted = std::string(kBooleans),
+                     .description = "Windows : Ctrl+Alt+Espace ouvre la saisie rapide (Linux : "
+                                    "/raccourci)",
+                     .security = false});
     {
         const auto& gpu = config.gpu;
         std::string mode = "désactivé";
@@ -381,6 +387,15 @@ core::Result<SettingChange> change_setting(const core::AppConfig& config, std::s
         change.before = std::to_string(*field);
         change.after = std::to_string(*parsed);
         *field = static_cast<std::size_t>(*parsed);
+        done = {};
+    } else if (key == "shortcut.enabled") {
+        const auto parsed = parse_bool(value);
+        if (!parsed) {
+            return setting_error("shortcut.enabled : « oui » ou « non » attendu");
+        }
+        change.before = yes_no(change.updated.shortcut.enabled);
+        change.after = yes_no(*parsed);
+        change.updated.shortcut.enabled = *parsed;
         done = {};
     } else if (key == "gpu.mode") {
         auto& gpu = change.updated.gpu;

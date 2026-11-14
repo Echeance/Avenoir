@@ -136,6 +136,12 @@ sensitive = "confirm"
 # light_model = "ministral-3" # un [models.<nom>] local, pour "switch"
 # threshold_gb = 2
 
+# ─── Saisie rapide ─────────────────────────────────────────────────────────
+# Windows : Ctrl+Alt+Espace ouvre « avenoir --rapide ». Linux : sans effet,
+# /raccourci donne la ligne à ajouter à votre bureau.
+# [shortcut]
+# enabled = false
+
 # ─── Journal des actions (/journal) ────────────────────────────────────────
 # Chaque action demandée (décision de permission, résultat, durée) est gardée
 # dans la base d'Avenoir ; les plus anciennes sont effacées au démarrage.

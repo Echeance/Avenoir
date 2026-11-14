@@ -4,9 +4,11 @@
 #include <array>
 #include <charconv>
 #include <cstdint>
+#include <memory>
 #include <optional>
 #include <string>
 #include <string_view>
+#include <system_error>
 
 namespace avenoir::daemon {
 
@@ -34,11 +36,13 @@ std::optional<std::string_view> field(std::string_view text, std::string_view ke
 /// « 216936 KiB » → octets.
 std::optional<std::uint64_t> memory(std::string_view value) {
     std::uint64_t number = 0;
-    const auto [end, error] = std::from_chars(value.begin(), value.end(), number);
+    // Pointeurs, pas itérateurs : ceux de string_view n'en sont pas sous MSVC.
+    const char* first = std::to_address(value.begin());
+    const auto [end, error] = std::from_chars(first, std::to_address(value.end()), number);
     if (error != std::errc{}) {
         return std::nullopt;
     }
-    std::string_view unit(end, value.end());
+    std::string_view unit = value.substr(static_cast<std::size_t>(end - first));
     while (!unit.empty() && unit.front() == ' ') {
         unit.remove_prefix(1);
     }

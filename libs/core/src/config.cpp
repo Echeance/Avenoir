@@ -727,6 +727,17 @@ Result<AppConfig> parse_config(std::string_view toml_text) {
         }
         config.gpu = std::move(*gpu);
     }
+    auto shortcut_table = optional_table(root, "shortcut");
+    if (!shortcut_table) {
+        return std::unexpected(std::move(shortcut_table.error()));
+    }
+    if (*shortcut_table != nullptr) {
+        auto enabled = optional_value<bool>(**shortcut_table, "shortcut", "enabled");
+        if (!enabled) {
+            return std::unexpected(std::move(enabled.error()));
+        }
+        config.shortcut.enabled = enabled->value_or(false);
+    }
     auto journal_table = optional_table(root, "journal");
     if (!journal_table) {
         return std::unexpected(std::move(journal_table.error()));

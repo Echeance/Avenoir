@@ -321,9 +321,12 @@ class Server {
             notices_.show();
             return core::make_error(core::ErrorCode::Config, build_error_);
         }
-        runtime_->welcome(first_welcome_);
-        notices_.show();
-        first_welcome_ = false;
+        // Saisie rapide (raccourci global, décision 67) : pas de cadre d'accueil.
+        if (!params.value("quick", false)) {
+            runtime_->welcome(first_welcome_);
+            notices_.show();
+            first_welcome_ = false;
+        }
         json completions = json::array();
         for (const auto& name : runtime_->completions()) {
             completions.push_back(name);

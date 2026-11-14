@@ -268,6 +268,7 @@ Plusieurs **projets** peuvent avancer en même temps, en arrière-plan : `/proje
 | `/historique` | réafficher toute la conversation |
 | `/modules` | modules installés : état, permissions, outils |
 | `/risque [outil niveau]` | voir ou changer le risque d'un outil de module (`lecture`, `réversible`, `sensible`, `défaut`) |
+| `/raccourci [oui\|non]` | saisie rapide par un raccourci global (`avenoir --rapide`) : Ctrl+Alt+Espace sous Windows, la ligne à ajouter à votre bureau sous Linux |
 | `/reglage gpu.mode décharger\|basculer` | laisser la carte graphique aux jeux : décharger le modèle local, ou passer au modèle léger, le temps qu'ils tournent |
 | `/modeles [installer\|retirer nom]` | magasin : modèles conseillés par le banc (score, mémoire vidéo, disque), les installer ou les retirer par Ollama |
 | `/cle [VARIABLE [effacer]]` | clés d'API : où elles sont, en ranger une dans le trousseau (saisie masquée), la retirer |
