@@ -154,8 +154,10 @@ if $check; then
 
     step "Analyse statique (clang-tidy)"
     if [[ -n "$to_analyze" ]]; then
-        echo "$(wc -l <<<"$to_analyze") fichier(s) à analyser."
-        xargs clang-tidy -p "$build_dir" --quiet <<<"$to_analyze"
+        jobs="$(nproc 2>/dev/null || echo 4)"
+        echo "$(wc -l <<<"$to_analyze") fichier(s) à analyser ($jobs en parallèle)."
+        # Un fichier par processus : xargs échoue si l'un d'eux signale un problème.
+        xargs -P "$jobs" -n 1 clang-tidy -p "$build_dir" --quiet <<<"$to_analyze"
     else
         echo "Aucun fichier concerné."
     fi

@@ -127,6 +127,28 @@ function Get-AffectedSource {
     return @($found.Keys | Sort-Object)
 }
 
+# clang-tidy en parallèle (un lot de fichiers par processeur) : sortie de
+# chaque lot affichée à la fin, échec si l'un d'eux signale un problème.
+function Invoke-ClangTidy([string[]]$Files) {
+    $count = [Math]::Max(1, [Math]::Min([Environment]::ProcessorCount, $Files.Count))
+    Write-Host "$($Files.Count) fichier(s) à analyser ($count en parallèle)."
+    $jobs = for ($i = 0; $i -lt $count; $i++) {
+        $chunk = @(for ($j = $i; $j -lt $Files.Count; $j += $count) { $Files[$j] })
+        Start-Job -ArgumentList $Root, $BuildDir, $chunk -ScriptBlock {
+            param($JobRoot, $JobBuildDir, [string[]]$Chunk)
+            Set-Location $JobRoot
+            $output = & clang-tidy -p $JobBuildDir --quiet @Chunk 2>&1 | Out-String
+            [pscustomobject]@{ Output = $output; Code = $LASTEXITCODE }
+        }
+    }
+    $failed = $false
+    foreach ($result in @($jobs | Receive-Job -Wait -AutoRemoveJob)) {
+        if ($result.Output.Trim()) { Write-Host $result.Output }
+        if ($result.Code -ne 0) { $failed = $true }
+    }
+    if ($failed) { Exit-WithError 'clang-tidy a signalé des problèmes' }
+}
+
 # Le préréglage release ne compile pas les tests.
 $RunTests = (-not $NoTest) -and ($Preset -ne 'release')
 
@@ -212,8 +234,7 @@ if ($Check -or $CheckAll) {
 
     Write-Step 'Analyse statique (clang-tidy)'
     if ($toAnalyze.Count -gt 0) {
-        Write-Host "$($toAnalyze.Count) fichier(s) à analyser."
-        Invoke-Native clang-tidy (@('-p', $BuildDir, '--quiet') + $toAnalyze)
+        Invoke-ClangTidy $toAnalyze
     } else {
         Write-Host 'Aucun fichier concerné.'
     }
