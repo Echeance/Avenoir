@@ -337,6 +337,36 @@ TEST_CASE("un module utilisateur reste désactivé tant qu'il n'est pas activé"
     CHECK(has_warning(loaded.warnings, "inconnu"));
 }
 
+TEST_CASE("module utilisateur : lancé seulement avec ses permissions accordées", "[host]") {
+    const TempDir temp;
+    install(temp.path(), "essai", R"(permissions = ["network", "files.read"])");
+    std::map<std::string, core::ModuleSettings, std::less<>> settings;
+    settings["essai"].enabled = true;
+    SECTION("activé sans accord : pas lancé, permissions à accorder") {
+        const auto loaded = load(temp.path(), Origin::User, {}, settings);
+        const auto status = loaded.host.statuses()[0];
+        CHECK(status.state == ModuleState::AwaitingGrant);
+        CHECK(status.missing == std::vector<std::string>{"network", "files.read"});
+        CHECK(loaded.tools.empty());
+        CHECK(has_warning(loaded.warnings, "/accorder essai"));
+    }
+    SECTION("nouvelle version qui demande plus : nouvel accord") {
+        settings["essai"].granted = {"network"};
+        const auto loaded = load(temp.path(), Origin::User, {}, settings);
+        CHECK(loaded.host.statuses()[0].state == ModuleState::AwaitingGrant);
+        CHECK(loaded.host.statuses()[0].missing == std::vector<std::string>{"files.read"});
+    }
+    SECTION("tout accordé : lancé") {
+        settings["essai"].granted = {"files.read", "network"};
+        const auto loaded = load(temp.path(), Origin::User, {}, settings);
+        CHECK(loaded.host.statuses()[0].state == ModuleState::Running);
+    }
+    SECTION("module fourni avec Avenoir : ses permissions viennent avec lui") {
+        const auto loaded = load(temp.path(), Origin::Bundled);
+        CHECK(loaded.host.statuses()[0].state == ModuleState::Running);
+    }
+}
+
 TEST_CASE("serveur MCP : outils sensibles, pas d'annulation, pagination", "[host]") {
     const TempDir temp;
     install(temp.path(), "serveur", R"(protocol = "mcp")", R"(, "--mcp", "--paginate")", "");

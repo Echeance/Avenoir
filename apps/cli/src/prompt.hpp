@@ -77,6 +77,10 @@ class Prompt {
     /// Pose une question fermée ; seuls « o », « oui », « y », « yes » valent
     /// oui. Ctrl+C vaut non et lève une demande d'interruption.
     [[nodiscard]] bool ask_yes_no(const std::string& question);
+    /// Pose une question à réponse courte : la réponse en minuscules, sans
+    /// espaces autour, ou rien (Ctrl+C, qui lève une demande d'interruption,
+    /// ou fin de l'entrée).
+    [[nodiscard]] std::optional<std::string> ask_short(const std::string& question);
 
   private:
     [[nodiscard]] Input read_line(const std::string& prompt, bool remember);

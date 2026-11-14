@@ -95,8 +95,8 @@ TEST_CASE("activation par défaut selon la provenance", "[discovery]") {
     CHECK(is_enabled(bundled, &unset));
     CHECK_FALSE(is_enabled(user, &unset));
 
-    const core::ModuleSettings on{.enabled = true, .risk = {}};
-    const core::ModuleSettings off{.enabled = false, .risk = {}};
+    const core::ModuleSettings on{.enabled = true, .risk = {}, .granted = {}};
+    const core::ModuleSettings off{.enabled = false, .risk = {}, .granted = {}};
     CHECK(is_enabled(user, &on));
     CHECK_FALSE(is_enabled(bundled, &off));
 }

@@ -38,6 +38,8 @@ struct Environment {
     /// Confirmations des actions : toujours l'utilisateur.
     std::function<std::unique_ptr<core::ConfirmationHandler>()> confirmer;
     core::PermissionPolicy policy;
+    /// Règles durables en vigueur (« toujours autoriser / refuser »).
+    std::shared_ptr<const core::ToolRules> rules;
     /// Demandes de l'utilisateur à l'origine du plan : seules tenues pour
     /// « demandées » par la provenance des arguments des agents.
     std::string requester_text;

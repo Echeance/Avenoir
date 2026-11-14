@@ -37,22 +37,6 @@ std::string_view trim(std::string_view text) {
     return text;
 }
 
-std::string permission_label(std::string_view permission) {
-    if (permission == "network") {
-        return "réseau";
-    }
-    if (permission == "files.read") {
-        return "lecture de fichiers";
-    }
-    if (permission == "files.write") {
-        return "écriture de fichiers";
-    }
-    if (permission == "ui.web") {
-        return "onglet web";
-    }
-    return std::string(permission);
-}
-
 std::string join(const std::vector<std::string>& items, std::string_view separator) {
     std::string out;
     for (const auto& item : items) {
@@ -111,8 +95,9 @@ ModulesUi::ModulesUi(modules::ModuleHost& host, std::vector<modules::ModuleComma
 std::vector<KnownModule> ModulesUi::known_modules() const {
     std::vector<KnownModule> known;
     for (const auto& status : host_->statuses()) {
-        known.push_back(
-            KnownModule{.id = status.id, .bundled = status.origin == modules::Origin::Bundled});
+        known.push_back(KnownModule{.id = status.id,
+                                    .bundled = status.origin == modules::Origin::Bundled,
+                                    .permissions = status.permissions});
     }
     return known;
 }
@@ -132,6 +117,9 @@ void ModulesUi::print_status() const {
         case modules::ModuleState::Disabled:
             icon = gray("○");
             break;
+        case modules::ModuleState::AwaitingGrant:
+            icon = paint("◌", {.color = Color::Yellow});
+            break;
         case modules::ModuleState::Failed:
             icon = paint("✗", {.color = Color::Red});
             break;
@@ -144,19 +132,22 @@ void ModulesUi::print_status() const {
             gray(std::format("{} · v{} · {}{}", status.id, status.version, origin, protocol))));
         if (status.state == modules::ModuleState::Disabled) {
             display().plain("    " +
-                            gray(std::format("désactivé — pour l'activer : "
-                                             "[modules.{}] enabled = true dans config.toml",
-                                             status.id)));
+                            gray(std::format("désactivé — pour l'activer : /accorder {} "
+                                             "(permissions : {})",
+                                             status.id, permission_list(status.permissions))));
+            continue;
+        }
+        if (status.state == modules::ModuleState::AwaitingGrant) {
+            display().plain("    " + paint(std::format("non lancé : permissions à accorder ({}) "
+                                                       "— /accorder {}",
+                                                       permission_list(status.missing), status.id),
+                                           {.color = Color::Yellow}));
             continue;
         }
         if (status.state == modules::ModuleState::Failed) {
             display().plain("    " + paint("échec : " + status.message, {.color = Color::Red}));
         }
-        std::vector<std::string> permissions;
-        std::ranges::transform(status.permissions, std::back_inserter(permissions),
-                               permission_label);
-        display().plain("    " + gray("permissions : " +
-                                      (permissions.empty() ? "aucune" : join(permissions, ", "))));
+        display().plain("    " + gray("permissions : " + permission_list(status.permissions)));
         if (!status.env.empty()) {
             display().plain("    " + gray("variables transmises : " + join(status.env, ", ")));
         }

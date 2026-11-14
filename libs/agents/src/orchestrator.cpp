@@ -173,6 +173,7 @@ TaskOutcome run_task(const Task& task, const AgentSpec& agent, const std::string
     }
     core::AgentOptions options;
     options.policy = environment.policy;
+    options.rules = environment.rules;
     options.system_prompt = agent_prompt(agent, environment.base_prompt);
     options.max_steps = agent.max_steps;
     options.name = agent.name;

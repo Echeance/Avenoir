@@ -1,7 +1,10 @@
 #include "avenoir/core/permission.hpp"
 
+#include <mutex>
 #include <optional>
+#include <string>
 #include <string_view>
+#include <utility>
 
 namespace avenoir::core {
 
@@ -43,6 +46,53 @@ Policy PermissionPolicy::for_risk(RiskLevel risk) const {
         return sensitive;
     }
     return Policy::Deny;
+}
+
+Policy apply_rule(const ToolRule* rule, RiskLevel risk, Policy policy) noexcept {
+    if (rule == nullptr) {
+        return policy;
+    }
+    if (rule->policy == Policy::Deny) {
+        return Policy::Deny;
+    }
+    if (rule->policy == Policy::Allow && policy == Policy::Confirm && risk <= rule->risk) {
+        return Policy::Allow;
+    }
+    return policy;
+}
+
+std::optional<ToolRule> ToolRules::find(std::string_view tool) const {
+    const std::scoped_lock lock(mutex_);
+    const auto found = rules_.find(tool);
+    if (found == rules_.end()) {
+        return std::nullopt;
+    }
+    return found->second;
+}
+
+void ToolRules::set(const std::string& tool, ToolRule rule) {
+    const std::scoped_lock lock(mutex_);
+    rules_.insert_or_assign(tool, std::move(rule));
+}
+
+bool ToolRules::remove(std::string_view tool) {
+    const std::scoped_lock lock(mutex_);
+    const auto found = rules_.find(tool);
+    if (found == rules_.end()) {
+        return false;
+    }
+    rules_.erase(found);
+    return true;
+}
+
+void ToolRules::replace(ToolRuleMap rules) {
+    const std::scoped_lock lock(mutex_);
+    rules_ = std::move(rules);
+}
+
+ToolRuleMap ToolRules::all() const {
+    const std::scoped_lock lock(mutex_);
+    return rules_;
 }
 
 } // namespace avenoir::core

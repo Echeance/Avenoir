@@ -271,6 +271,22 @@ Agent::Execution Agent::execute(const ToolCall& call, const std::stop_token& sto
     ToolSpec spec = tool->spec();
 
     Policy policy = options_.policy.for_risk(spec.risk);
+    // Règle durable (« toujours autoriser / refuser ») : elle ne lève qu'une
+    // confirmation de la politique par niveau ; les protections suivantes
+    // (provenance, examen) peuvent l'imposer à nouveau.
+    if (options_.rules != nullptr) {
+        if (const auto rule = options_.rules->find(call.name)) {
+            const Policy ruled = apply_rule(&*rule, spec.risk, policy);
+            if (ruled != policy) {
+                audit()->info("{}règle durable : {} {}", audit_prefix(), call.name,
+                              ruled == Policy::Allow ? "toujours autorisé" : "toujours refusé");
+            }
+            policy = ruled;
+        }
+    }
+    // « Toujours autoriser » n'est proposé que pour une confirmation venue de
+    // la politique par niveau : pas pour celles qu'une protection impose.
+    bool can_always = true;
     // Provenance : un argument tiré d'un résultat d'outil, et non d'une
     // demande de l'utilisateur, se fait confirmer (injection possible).
     if (policy != Policy::Deny) {
@@ -283,6 +299,7 @@ Agent::Execution Agent::execute(const ToolCall& call, const std::stop_token& sto
                                 " » vient d'un résultat d'outil (page, module…), pas de votre "
                                 "demande : vérifiez avant d'autoriser.";
             policy = Policy::Confirm;
+            can_always = false;
         }
     }
 
@@ -300,6 +317,7 @@ Agent::Execution Agent::execute(const ToolCall& call, const std::stop_token& sto
         }
         if (review.always_confirm || !review.warnings.empty()) {
             policy = Policy::Confirm;
+            can_always = false;
         }
     }
 
@@ -310,7 +328,9 @@ Agent::Execution Agent::execute(const ToolCall& call, const std::stop_token& sto
         audit()->info("{}refusé par la politique : {}", audit_prefix(), call.name);
         return {.content = "Action refusée par la politique de sécurité.", .is_error = true};
     case Policy::Confirm:
-        if (confirmer_ == nullptr || confirmer_->confirm(spec, call) == Decision::Rejected) {
+        if (confirmer_ == nullptr ||
+            confirmer_->confirm_action(spec, call, ConfirmContext{.can_always = can_always}) ==
+                Decision::Rejected) {
             audit()->info("{}refusé par l'utilisateur : {}", audit_prefix(), call.name);
             return {.content = "L'utilisateur a refusé cette action.", .is_error = true};
         }

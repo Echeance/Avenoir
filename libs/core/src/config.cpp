@@ -201,6 +201,68 @@ Result<AgentConfig> parse_agent(const toml::table& agent) {
 
 // ─── [permissions] ──────────────────────────────────────────────────────────
 
+/// `[permissions.tools]` : `outil = { policy = "allow", risk = "…", version = "…" }`.
+Result<ToolRuleMap> parse_tool_rules(const toml::table& permissions) {
+    constexpr std::string_view kSection = "permissions.tools";
+    ToolRuleMap rules;
+    const toml::node* node = permissions.get("tools");
+    if (node == nullptr) {
+        return rules;
+    }
+    const auto* table = node->as_table();
+    if (table == nullptr) {
+        return config_error(kSection, "table attendue ([permissions.tools])");
+    }
+    for (const auto& [tool, value] : *table) {
+        const std::string where = key_path(kSection, tool.str());
+        if (!is_valid_tool_name(tool.str())) {
+            return config_error(where, "nom d'outil invalide");
+        }
+        const auto* entry = value.as_table();
+        if (entry == nullptr) {
+            return config_error(where, "table attendue ({ policy = \"allow\", risk = … })");
+        }
+        for (const auto& [key, field] : *entry) {
+            if (key.str() != "policy" && key.str() != "risk" && key.str() != "version") {
+                return config_error(key_path(where, key.str()),
+                                    "clé inconnue (policy, risk ou version attendu)");
+            }
+        }
+        ToolRule rule;
+        auto policy = required_value<std::string>(*entry, where, "policy");
+        if (!policy) {
+            return std::unexpected(std::move(policy.error()));
+        }
+        const auto parsed = policy_from_string(*policy);
+        if (!parsed || *parsed == Policy::Confirm) {
+            return config_error(key_path(where, "policy"), "allow ou deny attendu");
+        }
+        rule.policy = *parsed;
+        auto risk = optional_value<std::string>(*entry, where, "risk");
+        if (!risk) {
+            return std::unexpected(std::move(risk.error()));
+        }
+        if (risk->has_value()) {
+            const auto level = risk_level_from_string(**risk);
+            if (!level) {
+                return config_error(key_path(where, "risk"),
+                                    "read_only, reversible ou sensitive attendu");
+            }
+            rule.risk = *level;
+        } else if (rule.policy == Policy::Allow) {
+            // Un accord porte sur un risque connu : sans lui, rien n'est levé.
+            return config_error(key_path(where, "risk"), "clé obligatoire pour allow");
+        }
+        auto version = optional_value<std::string>(*entry, where, "version");
+        if (!version) {
+            return std::unexpected(std::move(version.error()));
+        }
+        rule.version = std::move(*version);
+        rules.emplace(std::string(tool.str()), std::move(rule));
+    }
+    return rules;
+}
+
 Result<PermissionPolicy> parse_permissions(const toml::table& permissions) {
     constexpr std::string_view kSection = "permissions";
     PermissionPolicy policy;
@@ -224,6 +286,11 @@ Result<PermissionPolicy> parse_permissions(const toml::table& permissions) {
         }
         *target = *parsed;
     }
+    auto tools = parse_tool_rules(permissions);
+    if (!tools) {
+        return std::unexpected(std::move(tools.error()));
+    }
+    policy.tools = std::move(*tools);
     return policy;
 }
 
@@ -233,9 +300,9 @@ Result<ModuleSettings> parse_module_settings(const toml::table& module,
                                              const std::string& section) {
     ModuleSettings settings;
     for (const auto& [key, value] : module) {
-        if (key.str() != "enabled" && key.str() != "risk") {
+        if (key.str() != "enabled" && key.str() != "risk" && key.str() != "granted") {
             return config_error(key_path(section, key.str()),
-                                "clé inconnue (enabled ou risk attendu)");
+                                "clé inconnue (enabled, risk ou granted attendu)");
         }
     }
     auto enabled = optional_value<bool>(module, section, "enabled");
@@ -243,6 +310,26 @@ Result<ModuleSettings> parse_module_settings(const toml::table& module,
         return std::unexpected(std::move(enabled.error()));
     }
     settings.enabled = *enabled;
+
+    if (const toml::node* granted = module.get("granted")) {
+        const auto* list = granted->as_array();
+        if (list == nullptr) {
+            return config_error(key_path(section, "granted"),
+                                "liste attendue (granted = [\"network\"])");
+        }
+        for (const auto& item : *list) {
+            const auto permission = item.value<std::string>();
+            const bool valid = permission && !permission->empty() && permission->size() <= 32 &&
+                               std::ranges::all_of(*permission, [](char c) {
+                                   return (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') ||
+                                          c == '.' || c == '_' || c == '-';
+                               });
+            if (!valid) {
+                return config_error(key_path(section, "granted"), "permission invalide");
+            }
+            settings.granted.push_back(*permission);
+        }
+    }
 
     const toml::node* risk = module.get("risk");
     if (risk == nullptr) {

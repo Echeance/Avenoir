@@ -16,7 +16,8 @@ namespace {
 
 /// Un module fourni avec Avenoir, un installé par l'utilisateur.
 std::vector<KnownModule> known() {
-    return {{.id = "meteo", .bundled = true}, {.id = "communaute", .bundled = false}};
+    return {{.id = "meteo", .bundled = true, .permissions = {"network"}},
+            {.id = "communaute", .bundled = false, .permissions = {"network", "files.read"}}};
 }
 
 } // namespace
@@ -152,4 +153,42 @@ TEST_CASE("change_setting : orchestration", "[reglages]") {
     CHECK_FALSE(off->updated.orchestration.enabled);
     CHECK_FALSE(daemon::change_setting(config, "orchestration.mode", "libre", known()));
     CHECK_FALSE(daemon::change_setting(config, "orchestration.max_parallel", "9", known()));
+}
+
+TEST_CASE("change_setting : activer un module installé accorde ses permissions",
+          "[reglages][permissions]") {
+    const core::AppConfig config;
+    auto enabled = daemon::change_setting(config, "modules.communaute.enabled", "oui", known());
+    REQUIRE(enabled.has_value());
+    REQUIRE(enabled->weakening.has_value());
+    CHECK(enabled->weakening.value_or("").contains("réseau, lecture de fichiers"));
+    CHECK(enabled->updated.modules.at("communaute").granted ==
+          std::vector<std::string>{"network", "files.read"});
+
+    // Nouvelle version qui demande plus : « oui » de nouveau est un changement.
+    core::AppConfig older = enabled->updated;
+    older.modules.at("communaute").granted = {"network"};
+    auto regrant = daemon::change_setting(older, "modules.communaute.enabled", "oui", known());
+    REQUIRE(regrant.has_value());
+    CHECK(regrant->before != regrant->after);
+    CHECK(regrant->weakening.has_value());
+    CHECK(regrant->updated.modules.at("communaute").granted.size() == 2);
+
+    // Déjà tout accordé : rien à changer.
+    auto same =
+        daemon::change_setting(enabled->updated, "modules.communaute.enabled", "oui", known());
+    REQUIRE(same.has_value());
+    CHECK(same->before == same->after);
+
+    // Le désactiver retire l'accord : le réactiver le redemandera.
+    auto disabled =
+        daemon::change_setting(enabled->updated, "modules.communaute.enabled", "non", known());
+    REQUIRE(disabled.has_value());
+    CHECK(disabled->strengthens);
+    CHECK(disabled->updated.modules.at("communaute").granted.empty());
+
+    // Module fourni : aucun accord à enregistrer.
+    auto bundled = daemon::change_setting(config, "modules.meteo.enabled", "non", known());
+    REQUIRE(bundled.has_value());
+    CHECK(bundled->updated.modules.at("meteo").granted.empty());
 }

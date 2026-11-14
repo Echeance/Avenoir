@@ -164,6 +164,20 @@ std::string format_permissions(const PermissionPolicy& policy) {
     return body;
 }
 
+/// `[permissions.tools]`, une règle par ligne.
+std::string format_tool_rules(const ToolRuleMap& rules) {
+    std::string body;
+    for (const auto& [tool, rule] : rules) {
+        std::string fields = "policy = " + toml_string(to_string(rule.policy)) +
+                             ", risk = " + toml_string(to_string(rule.risk));
+        if (rule.version) {
+            fields += ", version = " + toml_string(*rule.version);
+        }
+        line(body, key(tool), "{ " + fields + " }");
+    }
+    return body;
+}
+
 std::string format_web(const WebConfig& web) {
     const WebConfig defaults;
     std::string body;
@@ -183,7 +197,7 @@ std::string format_web(const WebConfig& web) {
 }
 
 void format_module(std::string& out, std::string_view id, const ModuleSettings& settings) {
-    if (!settings.enabled && settings.risk.empty()) {
+    if (!settings.enabled && settings.risk.empty() && settings.granted.empty()) {
         return;
     }
     out += std::format("\n[modules.{}]\n", key(id));
@@ -197,6 +211,13 @@ void format_module(std::string& out, std::string_view id, const ModuleSettings& 
                                  toml_string(to_string(level)));
         }
         line(out, "risk", "{ " + risks + " }");
+    }
+    if (!settings.granted.empty()) {
+        std::string granted;
+        for (const auto& permission : settings.granted) {
+            granted += (granted.empty() ? "" : ", ") + toml_string(permission);
+        }
+        line(out, "granted", "[" + granted + "]");
     }
 }
 
@@ -276,6 +297,7 @@ std::string format_config(const AppConfig& config) {
     }
     section(out, "agent", format_agent(config.agent));
     section(out, "permissions", format_permissions(config.permissions));
+    section(out, "permissions.tools", format_tool_rules(config.permissions.tools));
     section(out, "web", format_web(config.web));
     for (const auto& [id, settings] : config.modules) {
         format_module(out, id, settings);

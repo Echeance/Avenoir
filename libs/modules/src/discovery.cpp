@@ -98,4 +98,18 @@ bool is_enabled(const DiscoveredModule& module, const core::ModuleSettings* sett
     return module.origin == Origin::Bundled;
 }
 
+std::vector<std::string> missing_permissions(const DiscoveredModule& module,
+                                             const core::ModuleSettings* settings) {
+    std::vector<std::string> missing;
+    if (module.origin == Origin::Bundled) {
+        return missing;
+    }
+    for (const auto& permission : module.manifest.permissions) {
+        if (settings == nullptr || !std::ranges::contains(settings->granted, permission)) {
+            missing.push_back(permission);
+        }
+    }
+    return missing;
+}
+
 } // namespace avenoir::modules

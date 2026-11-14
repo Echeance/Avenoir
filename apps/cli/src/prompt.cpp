@@ -393,16 +393,20 @@ Prompt::Input Prompt::read_line(const std::string& prompt, bool remember) {
 }
 
 bool Prompt::ask_yes_no(const std::string& question) {
+    const auto text = ask_short(question);
+    return text && (*text == "o" || *text == "oui" || *text == "y" || *text == "yes");
+}
+
+std::optional<std::string> Prompt::ask_short(const std::string& question) {
     const Input answer = read(question, /*remember=*/false);
     if (answer.status == Status::Interrupted) {
         raise_interrupt();
-        return false;
+        return std::nullopt;
     }
     if (answer.status != Status::Line) {
-        return false;
+        return std::nullopt;
     }
-    const std::string text = trim_lower(answer.text);
-    return text == "o" || text == "oui" || text == "y" || text == "yes";
+    return trim_lower(answer.text);
 }
 
 } // namespace avenoir::cli

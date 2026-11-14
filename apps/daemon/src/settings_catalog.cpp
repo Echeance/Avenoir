@@ -88,6 +88,34 @@ std::optional<std::int64_t> parse_integer(std::string_view text, std::int64_t mi
     return value;
 }
 
+} // namespace
+
+std::string permission_label(std::string_view permission) {
+    if (permission == "network") {
+        return "réseau";
+    }
+    if (permission == "files.read") {
+        return "lecture de fichiers";
+    }
+    if (permission == "files.write") {
+        return "écriture de fichiers";
+    }
+    if (permission == "ui.web") {
+        return "onglet web";
+    }
+    return std::string(permission);
+}
+
+std::string permission_list(const std::vector<std::string>& permissions) {
+    std::string out;
+    for (const auto& permission : permissions) {
+        out += (out.empty() ? "" : ", ") + permission_label(permission);
+    }
+    return out.empty() ? "aucune" : out;
+}
+
+namespace {
+
 bool module_enabled(const core::AppConfig& config, const KnownModule& module) {
     const auto found = config.modules.find(module.id);
     if (found == config.modules.end()) {
@@ -395,12 +423,30 @@ core::Result<SettingChange> change_setting(const core::AppConfig& config, std::s
         const bool before = module_enabled(config, *module);
         change.before = yes_no(before);
         change.after = yes_no(*parsed);
-        if (!before && *parsed && !module->bundled) {
-            change.weakening = "Ce module, installé par vous et non fourni avec Avenoir, sera "
-                               "lancé et ses outils proposés au modèle (avec leurs contrôles).";
+        auto& settings = change.updated.modules[std::string(*id)];
+        if (*parsed && !module->bundled) {
+            // L'activer accorde les permissions de son manifeste (directive 15).
+            const bool new_grant =
+                std::ranges::any_of(module->permissions, [&settings](const std::string& p) {
+                    return !std::ranges::contains(settings.granted, p);
+                });
+            if (!before || new_grant) {
+                change.weakening = std::format(
+                    "Ce module, installé par vous et non fourni avec Avenoir, sera lancé et ses "
+                    "outils proposés au modèle (avec leurs contrôles). Vous lui accordez ses "
+                    "permissions : {}.",
+                    permission_list(module->permissions));
+                if (before) {
+                    change.before = "oui (permissions à accorder)";
+                }
+            }
+            settings.granted = module->permissions;
+        }
+        if (!*parsed && !module->bundled) {
+            settings.granted.clear(); // le réactiver redemandera l'accord
         }
         change.strengthens = before && !*parsed && !module->bundled;
-        change.updated.modules[std::string(*id)].enabled = parsed;
+        settings.enabled = parsed;
         done = {};
     }
 

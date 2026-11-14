@@ -39,6 +39,20 @@ struct Welcome {
 /// Symbole des actions (outil), comme dans la CLI.
 inline constexpr std::string_view kToolGlyph = "»";
 
+/// Réponse à la confirmation d'une action.
+enum class ConfirmAnswer : unsigned char {
+    No,
+    Yes,
+    Always, ///< « toujours autoriser » cet outil (règle durable).
+    Never,  ///< « toujours refuser » cet outil (règle durable).
+};
+
+/// Réponses durables proposées en plus de « oui » et « non ».
+struct ConfirmChoices {
+    bool always = false;
+    bool never = false;
+};
+
 class Ui {
   public:
     Ui() = default;
@@ -78,8 +92,10 @@ class Ui {
     [[nodiscard]] virtual std::optional<std::string> ask(std::string_view question) = 0;
     /// Question fermée : vrai seulement pour « o », « oui »… (non par défaut).
     [[nodiscard]] virtual bool ask_yes_no(std::string_view question) = 0;
-    /// Cadre de confirmation d'une action puis « Autoriser ? ».
-    [[nodiscard]] virtual bool confirm(const core::ToolSpec& spec, const core::ToolCall& call) = 0;
+    /// Cadre de confirmation d'une action puis « Autoriser ? » ; « toujours »
+    /// et « jamais » seulement s'ils sont proposés dans `choices`.
+    [[nodiscard]] virtual ConfirmAnswer
+    confirm(const core::ToolSpec& spec, const core::ToolCall& call, ConfirmChoices choices) = 0;
     /// Installe un paquet du système dans le terminal du client (sudo, après
     /// accord de l'utilisateur) ; seuls les paquets de la liste de la CLI sont
     /// acceptés. Par défaut : impossible (aucun terminal).
@@ -114,7 +130,8 @@ class RemoteUi final : public Ui {
     [[nodiscard]] bool streamed() override;
     [[nodiscard]] std::optional<std::string> ask(std::string_view question) override;
     [[nodiscard]] bool ask_yes_no(std::string_view question) override;
-    [[nodiscard]] bool confirm(const core::ToolSpec& spec, const core::ToolCall& call) override;
+    [[nodiscard]] ConfirmAnswer confirm(const core::ToolSpec& spec, const core::ToolCall& call,
+                                        ConfirmChoices choices) override;
     [[nodiscard]] core::Result<void> install_package(std::string_view package) override;
 
   private:
@@ -161,9 +178,10 @@ class BroadcastUi final : public Ui {
         return std::nullopt;
     }
     [[nodiscard]] bool ask_yes_no(std::string_view /*question*/) override { return false; }
-    [[nodiscard]] bool confirm(const core::ToolSpec& /*spec*/,
-                               const core::ToolCall& /*call*/) override {
-        return false; // personne pour confirmer : refusé
+    [[nodiscard]] ConfirmAnswer confirm(const core::ToolSpec& /*spec*/,
+                                        const core::ToolCall& /*call*/,
+                                        ConfirmChoices /*choices*/) override {
+        return ConfirmAnswer::No; // personne pour confirmer : refusé
     }
 
   private:
@@ -202,7 +220,8 @@ class ProjectUi final : public Ui {
     [[nodiscard]] bool streamed() override { return false; }
     [[nodiscard]] std::optional<std::string> ask(std::string_view question) override;
     [[nodiscard]] bool ask_yes_no(std::string_view question) override;
-    [[nodiscard]] bool confirm(const core::ToolSpec& spec, const core::ToolCall& call) override;
+    [[nodiscard]] ConfirmAnswer confirm(const core::ToolSpec& spec, const core::ToolCall& call,
+                                        ConfirmChoices choices) override;
 
     /// Dernière réponse du coordinateur du projet.
     [[nodiscard]] std::string last_reply() const;

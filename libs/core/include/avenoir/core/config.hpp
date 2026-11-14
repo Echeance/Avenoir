@@ -98,6 +98,10 @@ struct ModuleSettings {
     /// peut que **relever** celui du manifeste : une baisse écrite ici est
     /// ignorée (elle exige un accord enregistré, docs/PROJECT.md § 2.6).
     std::map<std::string, RiskLevel, std::less<>> risk;
+    /// Permissions accordées par l'utilisateur (`network`, `files.read`…) à
+    /// un module qu'il a installé, à l'activation : un module qui en demande
+    /// d'autres n'est pas lancé avant un nouvel accord. Absent : aucune.
+    std::vector<std::string> granted;
 
     bool operator==(const ModuleSettings&) const = default;
 };

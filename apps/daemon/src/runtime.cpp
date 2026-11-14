@@ -46,6 +46,7 @@
 #include "autostart.hpp"
 #include "conversations.hpp"
 #include "modules.hpp"
+#include "permissions.hpp"
 #include "settings_catalog.hpp"
 #include "setup.hpp"
 #include "ui.hpp"
@@ -83,7 +84,7 @@ std::vector<std::string> builtin_commands() {
             "ouvrir",       "outils",        "parametres", "q",         "quit",     "quitter",
             "raisonnement", "recharger",     "redemarrer", "reglage",   "reglages", "renommer",
             "reset",        "risque",        "settings",   "supprimer", "tools",    "transcription",
-            "verrouillage"};
+            "verrouillage", "permissions",   "revoquer",   "accorder"};
 }
 
 /// Coordinateur de la requête en cours dans ce fil (Avenoir, ou un projet) :
@@ -94,13 +95,75 @@ thread_local core::Agent* t_coordinator = nullptr;
 /// Projets en même temps au plus.
 constexpr std::size_t kMaxRunningProjects = 4;
 
-/// Confirmation d'une action par le client de la requête en cours.
+/// Confirmation d'une action par le client de la requête en cours. Avec un
+/// gardien des permissions, l'utilisateur peut aussi répondre « toujours »
+/// ou « jamais » (règle durable, décision 61).
 class UiConfirmation final : public core::ConfirmationHandler {
   public:
+    explicit UiConfirmation(PermissionKeeper* keeper = nullptr) : keeper_(keeper) {}
+
     [[nodiscard]] core::Decision confirm(const core::ToolSpec& spec,
                                          const core::ToolCall& call) override {
-        return display().confirm(spec, call) ? core::Decision::Approved : core::Decision::Rejected;
+        return display().confirm(spec, call, {}) == ConfirmAnswer::Yes ? core::Decision::Approved
+                                                                       : core::Decision::Rejected;
     }
+
+    [[nodiscard]] core::Decision confirm_action(const core::ToolSpec& spec,
+                                                const core::ToolCall& call,
+                                                const core::ConfirmContext& context) override {
+        if (keeper_ == nullptr) {
+            return confirm(spec, call);
+        }
+        // « Jamais » renforce la sécurité : toujours proposé.
+        switch (display().confirm(spec, call, {.always = context.can_always, .never = true})) {
+        case ConfirmAnswer::Yes:
+            return core::Decision::Approved;
+        case ConfirmAnswer::No:
+            return core::Decision::Rejected;
+        case ConfirmAnswer::Never:
+            keep(spec, core::Policy::Deny);
+            return core::Decision::Rejected;
+        case ConfirmAnswer::Always:
+            if (spec.risk != core::RiskLevel::Sensitive || agree_sensitive(spec)) {
+                keep(spec, core::Policy::Allow);
+            } else {
+                display().info("Autorisé cette fois seulement.");
+            }
+            return core::Decision::Approved;
+        }
+        return core::Decision::Rejected;
+    }
+
+  private:
+    /// Lever pour de bon la confirmation d'une action sensible affaiblit la
+    /// sécurité : avertissement, responsabilité et phrase exacte (décision 59).
+    static bool agree_sensitive(const core::ToolSpec& spec) {
+        display().warning(std::format("« {} » est une action SENSIBLE : elle s'exécutera "
+                                      "désormais SANS vous demander, y compris si le modèle se "
+                                      "trompe ou est trompé.",
+                                      spec.name));
+        display().plain("  Restent confirmés : un argument venu d'une page web ou d'un module, "
+                        "les commandes shell. /revoquer " +
+                        spec.name + " défait ce choix.");
+        display().plain("  " + paint("Tout comportement ayant un impact négatif causé par ce "
+                                     "changement relève de votre seule responsabilité.",
+                                     {.color = Color::Yellow}));
+        const auto answer =
+            display().ask(std::format("  Pour confirmer, tapez « {} » :", kAgreementPhrase));
+        return answer && trim(*answer) == kAgreementPhrase;
+    }
+
+    void keep(const core::ToolSpec& spec, core::Policy policy) const {
+        if (auto kept = keeper_->remember(spec, policy); !kept) {
+            display().error("règle non enregistrée : " + core::describe(kept.error()));
+            return;
+        }
+        display().success(std::format(
+            "{} : {} (/revoquer {} pour revenir à la confirmation)", spec.name,
+            policy == core::Policy::Allow ? "toujours autorisé" : "toujours refusé", spec.name));
+    }
+
+    PermissionKeeper* keeper_;
 };
 
 /// Repère les modèles chargés ou déchargés hors d'Avenoir (Ollama décharge un
@@ -271,6 +334,9 @@ struct Runtime::State {
     std::vector<std::string> startup_warnings;
     std::unique_ptr<modules::ModuleHost> host;
     std::unique_ptr<ModulesUi> modules_ui;
+    /// Règles durables (« toujours autoriser / refuser ») : déclaré avant les
+    /// agents, détruit après eux.
+    std::unique_ptr<PermissionKeeper> permissions;
     UiConfirmation switch_confirmer;
     std::unique_ptr<llm::ModelSwitcher> switcher;
     std::unique_ptr<LoadWatch> load_watch;
@@ -316,6 +382,8 @@ struct Runtime::State {
     make_project_agent(const std::string& name) const;
     static void startup(std::string_view argument);
     void change_setting(std::string_view argument);
+    void print_permissions() const;
+    void revoke(std::string_view argument);
     [[nodiscard]] Outcome command(std::string_view line, const std::stop_token& stop);
     void run_tool(std::string_view line, core::ToolCall call, const std::stop_token& stop,
                   const Activity& activity = {}) const;
@@ -418,6 +486,26 @@ core::Result<std::unique_ptr<Runtime>> Runtime::create(ConfigFile file) {
     }
     s->modules_ui = std::make_unique<ModulesUi>(*s->host, s->host->commands(builtin_commands()));
     std::ranges::move(s->host->take_warnings(), std::back_inserter(s->startup_warnings));
+
+    // Règles durables : celles des outils de module ne valent que pour la
+    // version du module accordée.
+    {
+        ToolVersions versions;
+        for (const auto& status : s->host->statuses()) {
+            for (const auto& tool : status.tools) {
+                versions.emplace(tool.name, status.version);
+            }
+        }
+        const State* keeper_state = s.get();
+        s->permissions = std::make_unique<PermissionKeeper>(
+            s->file.config,
+            [keeper_state](const core::AppConfig& updated) {
+                return keeper_state->file.save(updated);
+            },
+            std::move(versions));
+        std::ranges::move(s->permissions->take_warnings(), std::back_inserter(s->startup_warnings));
+        options.rules = s->permissions->rules();
+    }
 
     // Modèles entre lesquels basculer ; passer à un modèle distant se
     // confirme (directive n° 17).
@@ -589,9 +677,9 @@ core::Result<std::unique_ptr<Runtime>> Runtime::create(ConfigFile file) {
         }
     }
 
-    s->agent =
-        std::make_unique<core::Agent>(std::move(*llm), std::move(registry),
-                                      std::make_unique<UiConfirmation>(), std::move(options));
+    s->agent = std::make_unique<core::Agent>(std::move(*llm), std::move(registry),
+                                             std::make_unique<UiConfirmation>(s->permissions.get()),
+                                             std::move(options));
     s->page_reader = s->agent.get();
     s->switcher->attach(*s->agent);
     if (config.agent.verify_replies) {
@@ -852,6 +940,15 @@ void Runtime::State::print_help() const {
     out += command("/arreter", "arrêter Avenoir (le démon), pas seulement cette fenêtre") + "\n";
     out += command("/demarrage [oui|non]", "lancer Avenoir à l'ouverture de session") + "\n";
     out += command("/quitter", "quitter cette fenêtre (ou Ctrl+D) ; Avenoir continue") + "\n";
+    out += title("Permissions") + "\n";
+    out += command("/permissions", "actions toujours autorisées ou refusées, permissions des "
+                                   "modules") +
+           "\n";
+    out += command("/revoquer <outil|module|tout>", "retirer une règle, ou les permissions d'un "
+                                                    "module (le désactive)") +
+           "\n";
+    out +=
+        command("/accorder <module>", "accorder ses permissions à un module et l'activer") + "\n";
     out += title("Modules") + "\n";
     out += command("/modules", "modules installés, permissions et outils") + "\n";
     out +=
@@ -992,6 +1089,77 @@ void Runtime::State::change_setting(std::string_view argument) {
     display().info("Pour l'appliquer dès maintenant : /redemarrer.");
 }
 
+/// /permissions : règles durables des outils, puis permissions des modules.
+void Runtime::State::print_permissions() const {
+    const auto gray = [](std::string_view text) { return paint(text, {.color = Color::Gray}); };
+    display().plain(paint("Actions toujours autorisées ou refusées", {.bold = true}));
+    const auto rules = permissions->written();
+    if (rules.empty()) {
+        display().plain("  " + gray("aucune : répondez « t » (toujours) ou « j » (jamais) à une "
+                                    "confirmation"));
+    }
+    for (const auto& [tool, rule] : rules) {
+        const bool allow = rule.policy == core::Policy::Allow;
+        std::string line = std::format(
+            "  {} {}", terminal::pad(paint(tool, {.bold = true}), 28),
+            paint(describe_rule(rule), {.color = allow ? Color::Yellow : Color::Green}));
+        if (permissions->inactive(tool)) {
+            line += gray("  (hors vigueur : autre version du module)");
+        }
+        display().plain(line);
+    }
+    display().plain(paint("Permissions des modules", {.bold = true}));
+    const auto statuses = host->statuses();
+    if (statuses.empty()) {
+        display().plain("  " + gray("aucun module installé"));
+    }
+    for (const auto& status : statuses) {
+        std::string state;
+        switch (status.state) {
+        case modules::ModuleState::Running:
+        case modules::ModuleState::Failed:
+            state = status.origin == modules::Origin::Bundled ? "fourni avec Avenoir" : "accordées";
+            break;
+        case modules::ModuleState::Disabled:
+            state = "désactivé";
+            break;
+        case modules::ModuleState::AwaitingGrant:
+            state = "à accorder : " + permission_list(status.missing);
+            break;
+        }
+        display().plain(std::format("  {} {}  {}",
+                                    terminal::pad(paint(status.id, {.bold = true}), 28),
+                                    permission_list(status.permissions), gray(state)));
+    }
+    display().plain(gray("Retirer : /revoquer <outil | module | tout> · accorder : /accorder "
+                         "<module>"));
+}
+
+/// /revoquer : règle d'un outil, toutes les règles, ou permissions d'un
+/// module (ce qui le désactive : une permission ne peut pas encore être
+/// retirée seule, faute de bac à sable).
+void Runtime::State::revoke(std::string_view argument) {
+    if (argument.empty()) {
+        display().warning("Usage : /revoquer <outil | module | tout> (voir /permissions)");
+        return;
+    }
+    const auto rules = permissions->written();
+    const bool is_rule = rules.contains(argument) || argument == "tout" || argument == "toutes";
+    const auto known = modules_ui->known_modules();
+    if (!is_rule && std::ranges::contains(known, argument, &KnownModule::id)) {
+        change_setting(std::format("modules.{}.enabled non", argument));
+        return;
+    }
+    auto revoked = permissions->revoke(argument);
+    if (!revoked) {
+        display().warning(revoked.error().message);
+        return;
+    }
+    for (const auto& tool : *revoked) {
+        display().success(std::format("{} : de nouveau confirmé selon son risque", tool));
+    }
+}
+
 /// Environnement des agents d'un plan, créé dans le fil de la requête : leur
 /// affichage et leurs questions vont au client de cette requête.
 agents::Environment Runtime::State::agent_environment() const {
@@ -1033,8 +1201,11 @@ agents::Environment Runtime::State::agent_environment() const {
     // Une question d'agent à la fois au coordinateur (son modèle sert déjà
     // la requête en cours).
     const auto questions = std::make_shared<std::mutex>();
-    environment.confirmer = [] { return std::make_unique<UiConfirmation>(); };
+    environment.confirmer = [keeper = permissions.get()] {
+        return std::make_unique<UiConfirmation>(keeper);
+    };
     environment.policy = file.config.permissions;
+    environment.rules = permissions->rules();
     environment.base_prompt = base_prompt;
     // Provenance : seules les demandes de l'utilisateur sont « demandées ».
     core::Agent* coordinator = t_coordinator != nullptr ? t_coordinator : agent.get();
@@ -1108,6 +1279,7 @@ Runtime::State::make_project_agent(const std::string& name) const {
     }
     core::AgentOptions options;
     options.policy = file.config.permissions;
+    options.rules = permissions->rules();
     options.max_steps = file.config.agent.max_steps;
     options.name = "projet " + name;
     options.system_prompt =
@@ -1574,6 +1746,16 @@ Outcome Runtime::State::command(std::string_view line, const std::stop_token& st
         }
     } else if (name == "/modules") {
         modules_ui->print_status();
+    } else if (name == "/permissions") {
+        print_permissions();
+    } else if (name == "/revoquer") {
+        revoke(argument);
+    } else if (name == "/accorder") {
+        if (argument.empty()) {
+            display().warning("Usage : /accorder <module> (voir /modules)");
+        } else {
+            change_setting(std::format("modules.{}.enabled oui", argument));
+        }
     } else if (name == "/risque") {
         modules_ui->risk(argument, conversations->store());
     } else if (const auto* own = modules_ui->find_command(name.substr(1))) {

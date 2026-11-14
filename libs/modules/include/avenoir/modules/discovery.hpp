@@ -60,4 +60,12 @@ default_search_directories(const std::optional<std::filesystem::path>& user_data
 [[nodiscard]] bool is_enabled(const DiscoveredModule& module,
                               const core::ModuleSettings* settings) noexcept;
 
+/// Permissions du manifeste que l'utilisateur n'a pas accordées
+/// (`[modules.<id>] granted`) à un module qu'il a installé : tant qu'il en
+/// manque, le module n'est pas lancé. Un module fourni avec Avenoir reçoit
+/// les siennes avec lui (elles restent montrées, et révocables en le
+/// désactivant) : rien ne lui manque.
+[[nodiscard]] std::vector<std::string> missing_permissions(const DiscoveredModule& module,
+                                                           const core::ModuleSettings* settings);
+
 } // namespace avenoir::modules

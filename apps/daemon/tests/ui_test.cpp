@@ -20,7 +20,8 @@ TEST_CASE("ProjectUi : en arrière-plan, rien ne se confirme", "[projets]") {
                               .input_schema = nlohmann::json::object(),
                               .risk = core::RiskLevel::Reversible};
     const core::ToolCall call{.id = "1", .name = "set_volume", .arguments = {{"level", 80}}};
-    CHECK_FALSE(ui.confirm(spec, call));
+    CHECK(ui.confirm(spec, call, daemon::ConfirmChoices{.always = true, .never = true}) ==
+          daemon::ConfirmAnswer::No);
     CHECK(ui.last_reply().empty());
     ui.assistant("Site prêt.");
     CHECK(ui.last_reply() == "Site prêt.");

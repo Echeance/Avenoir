@@ -15,6 +15,7 @@ add_library(avenoir_daemon_lib STATIC
     src/conversations.cpp
     src/lock_theme.cpp
     src/modules.cpp
+    src/permissions.cpp
     src/runtime.cpp
     src/server.cpp
     src/settings_catalog.cpp
@@ -47,6 +48,7 @@ if(AVENOIR_BUILD_TESTS)
     # Ce qui se décide sans terminal ni réseau : création guidée, réglages.
     add_executable(avenoir_daemon_tests
         tests/lock_theme_test.cpp
+        tests/permissions_test.cpp
         tests/settings_catalog_test.cpp
         tests/ui_test.cpp
         tests/setup_plan_test.cpp)

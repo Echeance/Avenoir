@@ -364,7 +364,7 @@ class Client {
         return yes;
     }
 
-    bool confirm(const json& params) {
+    json confirm(const json& params) {
         const json spec_json = params.value("spec", json::object());
         core::ToolSpec spec;
         spec.name = spec_json.value("name", "");
@@ -372,15 +372,44 @@ class Client {
         spec.risk = core::risk_level_from_string(spec_json.value("risk", "sensitive"))
                         .value_or(core::RiskLevel::Sensitive);
         const core::ToolCall call = call_from(params.value("call", json::object()));
+        const json choices = params.value("choices", json::object());
+        const bool always = choices.value("always", false);
+        const bool never = choices.value("never", false);
         const Questioning questioning(questioning_);
         display().suspend_thinking();
         display().confirmation(spec, call);
-        const bool approved =
-            prompt_ != nullptr &&
-            prompt_->ask_yes_no(
-                "  " + paint("Autoriser ?", {.color = Color::Yellow, .bold = true}) + " [o/N] ");
+        std::string keys = "[o/N";
+        std::string legend;
+        if (always) {
+            keys += "/t";
+            legend += "t : toujours autoriser cet outil";
+        }
+        if (never) {
+            keys += "/j";
+            legend += std::string(legend.empty() ? "" : " · ") + "j : ne jamais l'autoriser";
+        }
+        if (!legend.empty()) {
+            display().plain("  " +
+                            paint(legend + " (révocable : /permissions)", {.color = Color::Gray}));
+        }
+        const auto answer =
+            prompt_ == nullptr
+                ? std::nullopt
+                : prompt_->ask_short("  " +
+                                     paint("Autoriser ?", {.color = Color::Yellow, .bold = true}) +
+                                     " " + keys + "] ");
         display().resume_thinking();
-        return approved;
+        // Réponse au démon : vrai, faux, « always » ou « never ».
+        if (!answer) {
+            return false;
+        }
+        if (always && (*answer == "t" || *answer == "toujours")) {
+            return "always";
+        }
+        if (never && (*answer == "j" || *answer == "jamais")) {
+            return "never";
+        }
+        return *answer == "o" || *answer == "oui" || *answer == "y" || *answer == "yes";
     }
 
     /// Installe un paquet de la liste fermée (packages.hpp) dans ce terminal :

@@ -222,6 +222,13 @@ TEST_CASE("format_config est relu à l'identique", "[config]") {
     config.web.searxng_idle_minutes = 3;
     config.modules["meteo"].enabled = false;
     config.modules["autre.module"].risk.emplace("lire", RiskLevel::Sensitive);
+    config.modules["calendrier"].enabled = true;
+    config.modules["calendrier"].granted = {"network", "files.read"};
+    config.permissions.tools.emplace(
+        "meteo__get_forecast",
+        ToolRule{.policy = Policy::Allow, .risk = RiskLevel::Reversible, .version = "1.2.0"});
+    config.permissions.tools.emplace(
+        "power", ToolRule{.policy = Policy::Deny, .risk = RiskLevel::Sensitive, .version = {}});
 
     const std::string text = format_config(config);
     const auto parsed = parse_config(text);
@@ -319,4 +326,46 @@ TEST_CASE("[agents.<nom>] : refus", "[config]") {
     CHECK_FALSE(parse_config("[agents.a]\nrole = \"x\"\nmax_steps = 0\n").has_value());
     CHECK_FALSE(parse_config("[orchestration]\nmode = \"libre\"\n").has_value());
     CHECK_FALSE(parse_config("[orchestration]\nmax_parallel = 99\n").has_value());
+}
+
+TEST_CASE("[permissions.tools] et granted : lus, refus lisibles", "[config][rules]") {
+    const auto config = parse_config(R"(
+        [models.m]
+        provider = "claude_code"
+
+        [permissions.tools]
+        lock_screen = { policy = "allow", risk = "reversible" }
+        power = { policy = "deny" }
+
+        [modules.calendrier]
+        enabled = true
+        granted = ["network"]
+    )");
+    REQUIRE(config.has_value());
+    REQUIRE(config->permissions.tools.size() == 2);
+    const auto& lock = config->permissions.tools.at("lock_screen");
+    CHECK(lock.policy == Policy::Allow);
+    CHECK(lock.risk == RiskLevel::Reversible);
+    CHECK_FALSE(lock.version.has_value());
+    CHECK(config->permissions.tools.at("power").policy == Policy::Deny);
+    CHECK(config->modules.at("calendrier").granted == std::vector<std::string>{"network"});
+
+    const auto expect_error = [](const std::string& body, const std::string& fragment) {
+        const std::string toml = "[models.m]\nprovider = \"claude_code\"\n" + body;
+        const auto parsed = parse_config(toml);
+        INFO(toml);
+        REQUIRE_FALSE(parsed.has_value());
+        CHECK(parsed.error().message.find(fragment) != std::string::npos);
+    };
+    // « confirmer » n'est pas une règle durable ; « autoriser » exige le risque accordé.
+    expect_error("[permissions.tools]\nx = { policy = \"confirm\" }", "allow ou deny");
+    expect_error("[permissions.tools]\nx = { policy = \"allow\" }", "permissions.tools.x.risk");
+    expect_error("[permissions.tools]\nx = { policy = \"allow\", risk = \"rien\" }",
+                 "permissions.tools.x.risk");
+    expect_error("[permissions.tools]\n\"a;b\" = { policy = \"deny\" }", "nom d'outil invalide");
+    expect_error("[permissions.tools]\nx = { policy = \"deny\", toujours = true }", "clé inconnue");
+    expect_error("[permissions.tools]\nx = \"allow\"", "table attendue");
+    expect_error("[permissions]\ntools = 3", "permissions.tools");
+    expect_error("[modules.a]\ngranted = \"network\"", "modules.a.granted");
+    expect_error("[modules.a]\ngranted = [\"rés eau\"]", "permission invalide");
 }

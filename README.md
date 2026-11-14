@@ -131,6 +131,8 @@ La configuration est enregistrée dans `~/.config/avenoir/config.toml` (ou `$XDG
 
 Une configuration existante est scellée au premier lancement. Sans trousseau, la clé est gardée dans un fichier lisible par vous seul : protection plus faible, signalée à chaque lancement. Un fichier donné en argument (`avenoir chemin/config.toml`) n'est pas scellé : c'est le mode développement, signalé lui aussi. Pour changer un réglage : le menu `/settings` les présente par famille, `/reglages` les montre avec leur valeur, `/reglage <clé> <valeur>` en change un (appliqué au prochain lancement) ; les modèles se choisissent avec `/configurer`. Un changement qui **affaiblit** la sécurité (permissions plus larges, « local uniquement » ou vérification des réponses coupés, commandes shell activées, instance SearXNG externe, module installé par vous activé) demande, après un avertissement, de taper **« Je sais ce que je fais »** . Même les actions sensibles (éteindre, redémarrer…) peuvent passer sans confirmation (`/reglage permissions.sensitive autoriser`), au prix du même avertissement et d'une alerte à chaque lancement ; une action dont un argument vient d'une page web ou d'un module, et les commandes shell, restent toujours confirmées.
 
+À une confirmation, vous pouvez aussi répondre **« t »** (toujours autoriser cet outil) ou **« j »** (ne jamais l'autoriser) : la règle est enregistrée dans les réglages scellés et vaut tout de suite. « Toujours » ne lève que la confirmation de confort : les confirmations de sécurité (argument venu d'une page ou d'un module, commandes shell, modèle distant) reviennent quand même ; pour une action sensible, il faut taper « Je sais ce que je fais ». `/permissions` montre les règles, `/revoquer <outil>` (ou `tout`) en retire.
+
 **Commandes shell** (désactivées par défaut, `/reglage agent.shell oui`) : l'assistant peut alors proposer une commande (`run_command`). Avenoir l'analyse d'abord : il refuse d'office sudo et équivalents, les destructions du système (`rm -rf ~`…), les scripts téléchargés exécutés (`curl … | sh`), les shells inversés et tout accès à ses propres réglages ; il signale le reste (suppression, secrets, envoi sur le réseau, commande masquée…) et, au moindre doute, décrit les programmes (manuel local) et demande un avis à part au modèle. La commande exacte et ses alertes s'affichent, et **rien ne s'exécute sans votre accord**, même si les actions sensibles sont autorisées.
 
 > Le sceau est une **preuve de falsification** : il arrête les éditions à la main, les scripts et les programmes sans accès à votre trousseau, pas un logiciel malveillant qui tourne sous votre compte et peut le lire.
@@ -166,7 +168,7 @@ model = "sonnet"
 
 En local, gardez `reasoning_effort = "none"` : sans lui, les modèles qui « réfléchissent » avant de répondre prennent plusieurs secondes de plus. Le détail, et les modèles à éviter : [`evals/resultats/COMPARAISON.md`](evals/resultats/COMPARAISON.md).
 
-Les autres sections règlent l'agent (`[agent]`), les permissions par niveau de risque (`[permissions]`) et les modules (`[modules.<id>]` : activation, risque relevé). Tout est commenté dans [`config.example.toml`](config.example.toml).
+Les autres sections règlent l'agent (`[agent]`), les permissions par niveau de risque (`[permissions]`, et `[permissions.tools]` pour les règles « toujours / jamais ») et les modules (`[modules.<id>]` : activation, risque relevé, permissions accordées). Tout est commenté dans [`config.example.toml`](config.example.toml).
 
 > [!IMPORTANT]
 > À partir du jalon 3, les réglages ne se modifieront **que depuis Avenoir** : le fichier sera scellé et toute modification faite en dehors sera refusée ([PROJECT.md § 5.1](docs/PROJECT.md#51-réglages-modifiables-uniquement-par-avenoir)).
@@ -266,6 +268,9 @@ Plusieurs **projets** peuvent avancer en même temps, en arrière-plan : `/proje
 | `/historique` | réafficher toute la conversation |
 | `/modules` | modules installés : état, permissions, outils |
 | `/risque [outil niveau]` | voir ou changer le risque d'un outil de module (`lecture`, `réversible`, `sensible`, `défaut`) |
+| `/permissions` | actions toujours autorisées ou refusées, permissions des modules |
+| `/revoquer <outil\|module\|tout>` | retirer une règle (retour à la confirmation), ou les permissions d'un module (ce qui le désactive) |
+| `/accorder <module>` | accorder ses permissions à un module installé et l'activer |
 | `/meteo [ville]` · `/previsions [ville]` · `/ville <ville>` | commandes du module météo |
 | `/quitter` | quitter |
 
@@ -286,7 +291,7 @@ Les conversations sont enregistrées dans `avenoir.db`, dans le dossier de donn�
 
 ### Modules
 
-Les modules fournis sont dans `modules/`, à côté de l'exécutable ; ceux que vous installez vont dans `modules/` du dossier de données (un sous-dossier par module, avec son `module.toml`). Un module que vous installez reste **désactivé** tant que vous ne l'activez pas dans `config.toml` (`[modules.<id>] enabled = true`). Leurs messages d'erreur vont dans `logs/modules/<id>.log`, leurs données dans `module-data/<id>/`.
+Les modules fournis sont dans `modules/`, à côté de l'exécutable ; ceux que vous installez vont dans `modules/` du dossier de données (un sous-dossier par module, avec son `module.toml`). Un module que vous installez reste **désactivé** tant que vous ne l'activez pas avec `/accorder <id>` : ses permissions (réseau, fichiers, onglet web) vous sont montrées et vous les lui accordez ; s'il en demande de nouvelles après une mise à jour, il n'est plus lancé avant un nouvel accord. `/revoquer <id>` les lui retire, ce qui le désactive. Leurs messages d'erreur vont dans `logs/modules/<id>.log`, leurs données dans `module-data/<id>/`.
 
 Le module **météo** utilise [Open-Meteo](https://open-meteo.com) (données CC BY 4.0, sans clé d'API) : seuls le nom de la ville et ses coordonnées sont envoyés. Réglez votre ville une fois (*« ma ville est Lyon »* ou `/ville Lyon`, annulable) ; précisez le pays en cas d'homonymes (*« météo à Brest, France »*).
 

@@ -108,6 +108,9 @@ struct ReplyStream {
 
 struct AgentOptions {
     PermissionPolicy policy;
+    /// Règles durables en vigueur (« toujours autoriser / refuser »),
+    /// partagées entre agents ; absentes : aucune règle.
+    std::shared_ptr<const ToolRules> rules;
     std::string system_prompt{kDefaultSystemPrompt};
     std::size_t max_steps = 10;       ///< Allers-retours LLM ↔ outils maximum par requête (≥ 1).
     std::optional<FastRouter> router; ///< Voie rapide ; absente = tout passe par le LLM.

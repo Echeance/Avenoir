@@ -235,6 +235,7 @@ struct ModuleHost::Entry {
     DiscoveredModule discovered;
     ModuleState state = ModuleState::Disabled;
     std::string message;
+    std::vector<std::string> missing; ///< Permissions à accorder.
     std::shared_ptr<Module> module;
     std::vector<std::shared_ptr<ModuleTool>> tools;
     std::vector<ModuleToolInfo> tool_infos;
@@ -273,6 +274,19 @@ void ModuleHost::load(const Discovery& discovery,
         const core::ModuleSettings* own = found == settings.end() ? nullptr : &found->second;
         if (!is_enabled(module, own)) {
             entry.state = ModuleState::Disabled;
+            continue;
+        }
+        // Permissions non accordées : le module n'est pas lancé (directive 15).
+        if (auto missing = missing_permissions(module, own); !missing.empty()) {
+            entry.state = ModuleState::AwaitingGrant;
+            entry.missing = std::move(missing);
+            std::string list;
+            for (const auto& permission : entry.missing) {
+                list += (list.empty() ? "" : ", ") + permission;
+            }
+            entry.message = "permissions à accorder : " + list;
+            warn(std::format("module « {} » non lancé : permissions à accorder ({}) — /accorder {}",
+                             module.manifest.id, list, module.manifest.id));
             continue;
         }
         start(entry, own);
@@ -510,6 +524,7 @@ std::vector<ModuleStatus> ModuleHost::statuses() const {
             .state = entry.state,
             .message = entry.message,
             .permissions = manifest.permissions,
+            .missing = entry.missing,
             .env = manifest.env,
             .tools = entry.tool_infos,
             .directory = manifest.directory,

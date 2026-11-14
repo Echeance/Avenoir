@@ -58,9 +58,10 @@ class LogUi final : public Ui {
         return std::nullopt;
     }
     [[nodiscard]] bool ask_yes_no(std::string_view /*question*/) override { return false; }
-    [[nodiscard]] bool confirm(const core::ToolSpec& /*spec*/,
-                               const core::ToolCall& /*call*/) override {
-        return false;
+    [[nodiscard]] ConfirmAnswer confirm(const core::ToolSpec& /*spec*/,
+                                        const core::ToolCall& /*call*/,
+                                        ConfirmChoices /*choices*/) override {
+        return ConfirmAnswer::No;
     }
 };
 
@@ -188,15 +189,34 @@ bool RemoteUi::ask_yes_no(std::string_view question) {
     return answer && answer->is_boolean() && answer->get<bool>();
 }
 
-bool RemoteUi::confirm(const core::ToolSpec& spec, const core::ToolCall& call) {
+ConfirmAnswer RemoteUi::confirm(const core::ToolSpec& spec, const core::ToolCall& call,
+                                ConfirmChoices choices) {
     const json params{{"spec",
                        {{"name", spec.name},
                         {"description", spec.description},
                         {"risk", core::to_string(spec.risk)}}},
-                      {"call", call_to_json(call)}};
+                      {"call", call_to_json(call)},
+                      {"choices", {{"always", choices.always}, {"never", choices.never}}}};
     const std::scoped_lock lock(question_mutex_);
     const auto answer = peer_->call("confirm", params, never());
-    return answer && answer->is_boolean() && answer->get<bool>(); // client parti : refusé
+    // Réponse du client : vrai, faux, « always » ou « never » (seulement si
+    // proposés) ; client parti ou réponse inattendue : refusé.
+    if (!answer) {
+        return ConfirmAnswer::No;
+    }
+    if (answer->is_boolean()) {
+        return answer->get<bool>() ? ConfirmAnswer::Yes : ConfirmAnswer::No;
+    }
+    if (answer->is_string()) {
+        const auto text = answer->get<std::string>();
+        if (text == "always" && choices.always) {
+            return ConfirmAnswer::Always;
+        }
+        if (text == "never" && choices.never) {
+            return ConfirmAnswer::Never;
+        }
+    }
+    return ConfirmAnswer::No;
 }
 
 void BroadcastUi::broadcast(std::string_view text) {
@@ -261,11 +281,12 @@ bool ProjectUi::ask_yes_no(std::string_view question) {
     return false;
 }
 
-bool ProjectUi::confirm(const core::ToolSpec& spec, const core::ToolCall& /*call*/) {
+ConfirmAnswer ProjectUi::confirm(const core::ToolSpec& spec, const core::ToolCall& /*call*/,
+                                 ConfirmChoices /*choices*/) {
     note(std::format("action « {} » refusée : une action à confirmer ne se fait pas en "
                      "arrière-plan ; refaites la demande au premier plan.",
                      spec.name));
-    return false;
+    return ConfirmAnswer::No;
 }
 
 std::string ProjectUi::last_reply() const {

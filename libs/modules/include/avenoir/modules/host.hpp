@@ -62,6 +62,9 @@ struct RiskDecision {
 
 enum class ModuleState : std::uint8_t {
     Disabled, ///< Désactivé par l'utilisateur (ou module utilisateur non activé).
+    /// Activé, mais des permissions de son manifeste n'ont pas été accordées
+    /// (module installé par l'utilisateur, nouvelle version qui en demande plus).
+    AwaitingGrant,
     Running,
     Failed, ///< Lancement ou poignée de main échoué, ou arrêté depuis.
 };
@@ -82,6 +85,7 @@ struct ModuleStatus {
     ModuleState state = ModuleState::Disabled;
     std::string message; ///< Raison d'un échec.
     std::vector<std::string> permissions;
+    std::vector<std::string> missing; ///< Permissions à accorder (`AwaitingGrant`).
     std::vector<std::string> env;
     std::vector<ModuleToolInfo> tools;
     std::filesystem::path directory;

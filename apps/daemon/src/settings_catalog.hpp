@@ -17,7 +17,14 @@ namespace avenoir::daemon {
 struct KnownModule {
     std::string id;
     bool bundled = false; ///< Fourni avec Avenoir (sinon : installé par l'utilisateur).
+    /// Permissions de son manifeste (`network`…), accordées en l'activant.
+    std::vector<std::string> permissions;
 };
+
+/// Libellé français d'une permission de module (« réseau »…).
+[[nodiscard]] std::string permission_label(std::string_view permission);
+/// « réseau, onglet web », ou « aucune ».
+[[nodiscard]] std::string permission_list(const std::vector<std::string>& permissions);
 
 /// Ligne de /reglages.
 struct SettingLine {

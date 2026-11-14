@@ -93,6 +93,15 @@ read_only = "allow"
 reversible = "allow"
 sensitive = "confirm"
 
+# Règles durables par outil, posées en répondant « t » (toujours autoriser) ou
+# « j » (ne jamais autoriser) à une confirmation ; /permissions les liste,
+# /revoquer les retire. « allow » ne lève que la confirmation de la politique
+# ci-dessus, jusqu'au risque `risk` ; pour un outil de module, seulement pour
+# sa `version`. Dans les réglages scellés, elles ne s'écrivent pas à la main.
+# [permissions.tools]
+# lock_screen = { policy = "allow", risk = "reversible" }
+# power = { policy = "deny" }
+
 # ─── Modules ───────────────────────────────────────────────────────────────
 # Les modules fournis avec Avenoir sont dans `<installation>/modules/<id>/`,
 # ceux que vous installez dans le dossier de données d'Avenoir
@@ -105,7 +114,9 @@ sensitive = "confirm"
 # enabled = false             # désactiver un module fourni
 #
 # [modules.calendrier]
-# enabled = true              # activer un module installé par vous
+# enabled = true              # activer un module installé par vous (/accorder)
+# granted = ["network"]       # permissions de son manifeste que vous lui
+#                             # accordez : s'il en manque, il n'est pas lancé
 # # Relever le risque d'un outil (nom court, sans « calendrier__ ») :
 # risk = { update_event = "sensitive" }
 # # L'ABAISSER sous celui du manifeste se fait uniquement par la commande

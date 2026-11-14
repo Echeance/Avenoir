@@ -258,7 +258,8 @@ TEST_CASE("passage d'un cas avec un LLM scripté et des doublures", "[evals]") {
     refused.requests = {"Lance Firefox"};
     refused.policy = core::PermissionPolicy{.read_only = core::Policy::Allow,
                                             .reversible = core::Policy::Confirm,
-                                            .sensitive = core::Policy::Confirm};
+                                            .sensitive = core::Policy::Confirm,
+                                            .tools = {}};
     transcript =
         run_case(refused, suite, all,
                  std::make_unique<ScriptedLlm>(std::deque{call("launch_app", {{"name", "firefox"}}),
