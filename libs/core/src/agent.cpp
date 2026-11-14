@@ -84,9 +84,12 @@ void Agent::begin_journal(std::string_view input) {
 
 Result<std::string> Agent::run_direct(std::string_view input, const ToolCall& call,
                                       const std::stop_token& stop) {
-    Execution result = execute(call, stop);
-    // Trace dans l'historique pour que le LLM ait le contexte ensuite.
+    // Trace dans l'historique pour que le LLM ait le contexte ensuite ;
+    // ajoutée avant l'exécution : ce que l'utilisateur vient de taper est sa
+    // demande pour la provenance des arguments (sinon, un nom déjà vu dans un
+    // résultat d'outil, comme celui d'un modèle, passerait pour une injection).
     append(UserMessage{.content = std::string(input)});
+    Execution result = execute(call, stop);
     // Interrompue (Ctrl+C) : l'échec rendu par l'outil n'est que la conséquence
     // de l'arrêt ; l'action a pu avoir lieu en partie (journal conservé).
     if (stop.stop_requested()) {

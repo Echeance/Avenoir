@@ -1025,3 +1025,23 @@ TEST_CASE("règles durables : les protections imposées confirment quand même",
         CHECK(*offers == std::vector<bool>{false});
     }
 }
+
+TEST_CASE("provenance : une commande de l'utilisateur est sa demande", "[agent]") {
+    // Le nom d'un modèle, vu dans un résultat d'outil, puis tapé par
+    // l'utilisateur dans une commande (/modele ministral-3) : pas d'alerte.
+    const Fixture f;
+    auto agent = f.make_agent({call_tool("flag"), answer("listé")}, RiskLevel::Reversible,
+                              std::make_unique<AutoReject>(), {}, "modèles : ministral-3, qwen");
+    REQUIRE(agent.handle("quels modèles ?").has_value());
+    REQUIRE(*f.tool_calls == 1);
+    const auto reply =
+        agent.run_tool("/modele ministral-3",
+                       ToolCall{.id = {}, .name = "flag", .arguments = {{"name", "ministral-3"}}});
+    REQUIRE(reply.has_value());
+    CHECK(*f.tool_calls == 2); // exécuté sans confirmation (AutoReject l'aurait refusé)
+    // Toujours vrai pour une valeur que la commande ne contient pas.
+    const auto other = agent.run_tool(
+        "/modele", ToolCall{.id = {}, .name = "flag", .arguments = {{"name", "qwen"}}});
+    CHECK(*f.tool_calls == 2);
+    CHECK(other.value_or("").contains("refusé"));
+}
