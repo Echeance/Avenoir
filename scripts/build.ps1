@@ -98,33 +98,51 @@ function Get-SourceFile([string[]]$Patterns) {
 # Fichiers changés depuis le dernier push (ou depuis le dernier commit sans
 # branche suivie) : commités, modifiés ou nouveaux, sans les supprimés.
 function Get-ChangedFile([string[]]$Patterns) {
+    # Sans branche suivie, git écrit une erreur : avec « Stop », Windows
+    # PowerShell 5.1 s'arrêterait malgré la redirection.
+    $previous = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
     $base = git merge-base HEAD '@{upstream}' 2>$null
+    $ErrorActionPreference = $previous
     if ($LASTEXITCODE -ne 0 -or -not $base) { $base = 'HEAD' }
     $files = @(git diff --name-only --diff-filter=d $base -- @Patterns) +
         @(git ls-files --others --exclude-standard -- @Patterns)
     return @($files | Where-Object { $_ } | Sort-Object -Unique)
 }
 
-# .cpp à analyser : ceux dont la compilation lit un fichier changé (le .cpp
-# lui-même ou un en-tête, même inclus indirectement), d'après les dépendances
-# relevées par Ninja à la compilation.
+# .cpp à analyser : ceux qui ont changé, et ceux dont la compilation lit un
+# en-tête changé (même inclus indirectement), d'après les dépendances relevées
+# par Ninja. Le .cpp d'un objet se déduit de son nom
+# (`<dossier>/CMakeFiles/<cible>.dir/<chemin>.cpp.obj` → `<dossier>/<chemin>.cpp`) :
+# avec MSVC, Ninja ne le compte pas parmi les dépendances.
 function Get-AffectedSource {
+    $changed = @(Get-ChangedFile '*.cpp', '*.hpp')
     $wanted = @{}
-    foreach ($file in (Get-ChangedFile '*.cpp', '*.hpp')) { $wanted[$file] = $true }
-    $prefix = ($Root -replace '\\', '/') + '/'
     $found = @{}
+    foreach ($file in $changed) {
+        $wanted[$file] = $true
+        if ($file -like '*.cpp') { $found[$file] = $true }
+    }
+    $prefix = ($Root -replace '\\', '/') + '/'
     $source = $null
     foreach ($line in (ninja -C $BuildDir -t deps)) {
-        if ($line -notmatch '^\s') { $source = $null; continue }
+        if ($line -notmatch '^\s') {
+            $source = $null
+            if ($line -match '^(.*)CMakeFiles/[^/]+\.dir/(.+\.cpp)\.(o|obj):') {
+                $source = $Matches[1] + $Matches[2]
+            }
+            continue
+        }
+        if (-not $source) { continue }
         $path = $line.Trim() -replace '\\', '/'
         if ($path.StartsWith($prefix, [StringComparison]::OrdinalIgnoreCase)) {
             $path = $path.Substring($prefix.Length)
         }
-        if (-not $source) { $source = $path }
-        if ($wanted.ContainsKey($path) -and $source -like '*.cpp') { $found[$source] = $true }
+        while ($path.StartsWith('../')) { $path = $path.Substring(3) }
+        if ($wanted.ContainsKey($path)) { $found[$source] = $true }
     }
     if ($LASTEXITCODE -ne 0) { Exit-WithError 'ninja -t deps a échoué' }
-    return @($found.Keys | Sort-Object)
+    return @($found.Keys | Where-Object { Test-Path $_ } | Sort-Object)
 }
 
 # clang-tidy en parallèle (un lot de fichiers par processeur) : sortie de

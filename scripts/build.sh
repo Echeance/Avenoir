@@ -82,22 +82,38 @@ changed() {
     } | sort -u
 }
 
-# .cpp à analyser : ceux dont la compilation lit un fichier changé (le .cpp
-# lui-même ou un en-tête, même inclus indirectement), d'après les dépendances
-# relevées par Ninja à la compilation.
+# .cpp à analyser : ceux qui ont changé, et ceux dont la compilation lit un
+# en-tête changé (même inclus indirectement), d'après les dépendances relevées
+# par Ninja. Le .cpp d'un objet se déduit de son nom
+# (`<dossier>/CMakeFiles/<cible>.dir/<chemin>.cpp.o` → `<dossier>/<chemin>.cpp`) :
+# avec MSVC, Ninja ne le compte pas parmi les dépendances.
 affected_sources() {
     local list
     list="$(mktemp)"
     changed '*.cpp' '*.hpp' >"$list"
-    ninja -C "$build_dir" -t deps | awk -v root="$root/" -v list="$list" '
-        BEGIN { while ((getline line < list) > 0) wanted[line] = 1 }
-        /^[^ ]/ { source = ""; next }
-        {
-            path = $1
-            if (index(path, root) == 1) path = substr(path, length(root) + 1)
-            if (source == "") source = path
-            if (path in wanted && source ~ /\.cpp$/) print source
-        }' | sort -u
+    {
+        grep '\.cpp$' "$list" || true
+        ninja -C "$build_dir" -t deps | awk -v root="$root/" -v list="$list" '
+            BEGIN { while ((getline line < list) > 0) wanted[line] = 1 }
+            /^[^ ]/ {
+                source = $1
+                sub(/:$/, "", source)
+                sub(/\.(o|obj)$/, "", source)
+                i = index(source, "CMakeFiles/")
+                rest = substr(source, i + 11)
+                j = index(rest, ".dir/")
+                source = (i && j) ? substr(source, 1, i - 1) substr(rest, j + 5) : ""
+                next
+            }
+            source != "" {
+                path = $1
+                if (index(path, root) == 1) path = substr(path, length(root) + 1)
+                while (substr(path, 1, 3) == "../") path = substr(path, 4)
+                if (path != "" && path in wanted) print source
+            }'
+    } | grep '\.cpp$' | sort -u | while read -r file; do
+        [[ -f "$file" ]] && echo "$file"
+    done
     rm -f "$list"
 }
 
