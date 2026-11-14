@@ -235,8 +235,22 @@ void Prompt::bind_navigation() {
     bind(Key::WHEEL_DOWN, 3, scroll(ScrollStep::WheelDown));
     bind(Key::control(Key::UP), -1, scroll(ScrollStep::LineUp));
     bind(Key::control(Key::DOWN), 1, scroll(ScrollStep::LineDown));
-    // Clic et autres événements de souris : ignorés.
-    replxx_.bind_key(Key::MOUSE, [](char32_t /*code*/) { return Result::CONTINUE; });
+    // Bouton gauche : sélection de texte dans la conversation ; le reste est
+    // ignoré.
+    replxx_.bind_key(Key::MOUSE, [this](char32_t /*code*/) {
+        unsigned int button = 0;
+        int column = 0;
+        int row = 0;
+        bool release = false;
+        if (replxx::avenoir_take_mouse(button, column, row, release) && hooks_.mouse &&
+            column > 0 && row > 0) {
+            if (const auto event = left_button_event(button, static_cast<std::size_t>(column),
+                                                     static_cast<std::size_t>(row), release)) {
+                hooks_.mouse(*event);
+            }
+        }
+        return Result::CONTINUE;
+    });
 }
 
 Prompt::Input Prompt::read_menu(const std::string& prompt, const Menu& menu) {

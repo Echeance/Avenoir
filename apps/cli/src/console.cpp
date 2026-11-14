@@ -166,6 +166,24 @@ std::optional<ScrollStep> KeyReader::poll() {
             const auto delta = static_cast<short>(HIWORD(record.Event.MouseEvent.dwButtonState));
             return delta > 0 ? ScrollStep::WheelUp : ScrollStep::WheelDown;
         }
+        if (record.EventType == MOUSE_EVENT) {
+            // Bouton gauche : clic, glissé, relâché (sélection de texte).
+            const auto& mouse = record.Event.MouseEvent;
+            const bool left = (mouse.dwButtonState & FROM_LEFT_1ST_BUTTON_PRESSED) != 0;
+            const auto column = static_cast<std::size_t>(mouse.dwMousePosition.X) + 1;
+            const auto row = static_cast<std::size_t>(mouse.dwMousePosition.Y) + 1;
+            if (mouse.dwEventFlags == 0 && left != left_down_) {
+                left_down_ = left;
+                if (auto event = left_button_event(0, column, row, !left)) {
+                    mouse_.push_back(*event);
+                }
+            } else if (mouse.dwEventFlags == MOUSE_MOVED && left && left_down_) {
+                if (auto event = left_button_event(32, column, row, false)) {
+                    mouse_.push_back(*event);
+                }
+            }
+            continue;
+        }
         if (record.EventType != KEY_EVENT || record.Event.KeyEvent.bKeyDown == 0) {
             continue;
         }
@@ -206,8 +224,10 @@ void KeyReader::parse() {}
 #else
 
 void set_mouse_reporting(bool on) {
-    // Boutons et molette (1000), coordonnées en mode SGR (1006).
-    const std::string_view sequence = on ? "\x1b[?1000h\x1b[?1006h" : "\x1b[?1006l\x1b[?1000l";
+    // Boutons, molette et déplacements bouton tenu (1002 : sélection),
+    // coordonnées en mode SGR (1006).
+    const std::string_view sequence =
+        on ? "\x1b[?1002h\x1b[?1006h" : "\x1b[?1006l\x1b[?1002l\x1b[?1000l";
     (void)std::fwrite(sequence.data(), 1, sequence.size(), stdout);
     (void)std::fflush(stdout);
 }
@@ -297,8 +317,9 @@ void KeyReader::parse() {
             step_ = ScrollStep::LineUp;
         } else if (sequence == "\x1b[1;5B") {
             step_ = ScrollStep::LineDown;
-        } else if (sequence.starts_with("\x1b[<") && sequence.ends_with('M')) {
-            // Souris SGR : « ESC [ < bouton ; x ; y M » ; 64/65 : molette.
+        } else if (sequence.starts_with("\x1b[<")) {
+            // Souris SGR : « ESC [ < bouton ; x ; y M|m » ; 64/65 : molette ;
+            // bouton gauche : sélection.
             unsigned int button = 0;
             for (const char digit : std::string_view(sequence).substr(3)) {
                 if (digit < '0' || digit > '9' || button > 1000) {
@@ -306,16 +327,27 @@ void KeyReader::parse() {
                 }
                 button = (button * 10) + static_cast<unsigned int>(digit - '0');
             }
-            if ((button & ~0x1CU) == 64) {
+            if (sequence.ends_with('M') && (button & ~0x1CU) == 64) {
                 step_ = ScrollStep::WheelUp;
-            } else if ((button & ~0x1CU) == 65) {
+            } else if (sequence.ends_with('M') && (button & ~0x1CU) == 65) {
                 step_ = ScrollStep::WheelDown;
+            } else if (auto event = parse_sgr_mouse(sequence)) {
+                mouse_.push_back(*event);
             }
         }
     }
 }
 
 #endif
+
+std::optional<MouseEvent> KeyReader::take_mouse() {
+    if (mouse_.empty()) {
+        return std::nullopt;
+    }
+    MouseEvent event = mouse_.front();
+    mouse_.pop_front();
+    return event;
+}
 
 std::string KeyReader::take_typed() {
     std::string typed;

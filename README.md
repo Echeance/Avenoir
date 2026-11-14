@@ -285,7 +285,7 @@ Plusieurs **projets** peuvent avancer en même temps, en arrière-plan : `/proje
 | <kbd>↑</kbd> / <kbd>↓</kbd> | saisies précédentes (conservées entre deux lancements) |
 | <kbd>Tab</kbd> | complète les commandes |
 | molette · <kbd>PgUp</kbd> / <kbd>PgDn</kbd> · <kbd>Ctrl</kbd>+<kbd>↑</kbd> / <kbd>↓</kbd> | remonte dans la conversation (aussi pendant une réponse) ; une nouvelle requête ramène en bas |
-| <kbd>Maj</kbd> + glisser | sélectionne du texte (la souris sert au défilement) |
+| glisser (bouton gauche) | sélectionne du texte de la conversation et le **copie** dans le presse-papiers au relâché |
 
 Dans un terminal, Avenoir s'ouvre **en plein écran**, comme vim ou htop : l'en-tête (le loup, le modèle, la conversation, les outils) reste en haut, la barre de saisie en bas, et la conversation défile entre les deux. À la sortie, le terminal retrouve son contenu d'avant. Le texte tapé pendant une réponse ouvre la saisie suivante.
 

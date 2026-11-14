@@ -8,6 +8,7 @@
 #include <filesystem>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include <windows.h>
@@ -125,6 +126,35 @@ std::optional<std::string> read_hidden_line() {
     WideCharToMultiByte(CP_UTF8, 0, buffer.data(), static_cast<int>(buffer.size()), line.data(),
                         size, nullptr, nullptr);
     return line;
+}
+
+bool copy_to_clipboard(std::string_view text) {
+    const int size =
+        MultiByteToWideChar(CP_UTF8, 0, text.data(), static_cast<int>(text.size()), nullptr, 0);
+    if (size < 0 || OpenClipboard(nullptr) == FALSE) {
+        return false;
+    }
+    bool copied = false;
+    const std::size_t bytes = (static_cast<std::size_t>(size) + 1) * sizeof(wchar_t);
+    if (EmptyClipboard() != FALSE) {
+        // Mémoire globale cédée au presse-papiers en cas de succès.
+        HGLOBAL memory = GlobalAlloc(GMEM_MOVEABLE, bytes);
+        if (memory != nullptr) {
+            auto* target = static_cast<wchar_t*>(GlobalLock(memory));
+            if (target != nullptr) {
+                MultiByteToWideChar(CP_UTF8, 0, text.data(), static_cast<int>(text.size()), target,
+                                    size);
+                target[size] = L'\0';
+                GlobalUnlock(memory);
+                copied = SetClipboardData(CF_UNICODETEXT, memory) != nullptr;
+            }
+            if (!copied) {
+                GlobalFree(memory);
+            }
+        }
+    }
+    CloseClipboard();
+    return copied;
 }
 
 } // namespace avenoir::cli

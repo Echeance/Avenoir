@@ -21,6 +21,8 @@
 #include "avenoir/terminal/style.hpp"
 
 #include "console.hpp"
+#include "launcher.hpp"
+#include "mouse.hpp"
 #include "wolf.hpp"
 
 namespace avenoir::cli {
@@ -329,6 +331,11 @@ std::vector<std::string> Display::append(std::string_view text) {
     while (lines_.size() > kHistoryLines) {
         for (std::size_t i = 0; i < line_rows_.front() && !screen_.empty(); ++i) {
             screen_.pop_front();
+            ++dropped_rows_;
+        }
+        if (selection_ &&
+            std::min(selection_->anchor_line, selection_->head_line) < dropped_rows_) {
+            selection_.reset(); // le début de la sélection a quitté l'historique
         }
         lines_.pop_front();
         line_rows_.pop_front();
@@ -340,6 +347,8 @@ void Display::relayout() {
     // Appelé verrou pris : lignes d'écran recalculées à la nouvelle largeur.
     layout_width_ = std::max<std::size_t>(columns_, 1);
     screen_.clear();
+    selection_.reset(); // les lignes d'écran changent
+    dropped_rows_ = 0;
     line_rows_.clear();
     for (const auto& line : lines_) {
         const auto rows = terminal::layout(line, layout_width_);
@@ -418,11 +427,23 @@ void Display::write(std::string_view text, std::FILE* stream) {
 }
 
 std::string Display::bottom_line() const {
-    // Dernière ligne de la zone : vide, ou l'indicateur de défilement.
-    if (scroll_ == 0) {
+    // Dernière ligne de la zone : vide, l'indicateur de défilement, ou un
+    // message bref (texte copié).
+    if (scroll_ == 0 && note_.empty()) {
         return {};
     }
-    std::string text = std::format(" ↓ {} ligne{} plus bas", scroll_, scroll_ > 1 ? "s" : "");
+    std::string text;
+    if (!note_.empty()) {
+        text = " " + note_;
+    }
+    if (scroll_ == 0) {
+        text += ' ';
+        const std::size_t used = terminal::display_width(text) + 2;
+        return paint("──", kFrame) + paint(text, kLabel) +
+               paint(repeat("─", columns_ > used + 1 ? columns_ - used - 1 : 0), kFrame);
+    }
+    text += std::format("{} ↓ {} ligne{} plus bas", note_.empty() ? "" : " ·", scroll_,
+                        scroll_ > 1 ? "s" : "");
     if (unseen_ > 0) {
         text += std::format(" · {} nouvelle{}", unseen_, unseen_ > 1 ? "s" : "");
     }
@@ -433,6 +454,157 @@ std::string Display::bottom_line() const {
     const std::size_t used = terminal::display_width(text) + 2;
     return paint("──", kFrame) + paint(text, kLabel) +
            paint(repeat("─", columns_ > used + 1 ? columns_ - used - 1 : 0), kFrame);
+}
+
+std::optional<std::pair<std::size_t, std::size_t>>
+Display::view_position(std::size_t row, std::size_t column, bool clamp) const {
+    // Même calcul que draw_view : la conversation alignée en bas de la zone.
+    const std::size_t top = view_top();
+    const std::size_t content = view_height() > 1 ? view_height() - 1 : 1;
+    const std::size_t end = screen_.size() - std::min(scroll_, screen_.size());
+    const std::size_t start = end > content ? end - content : 0;
+    const std::size_t shown = end - start;
+    if (shown == 0) {
+        return std::nullopt;
+    }
+    const std::size_t blank = content - shown;
+    const std::size_t first_row = top + blank; // première ligne écrite de la zone
+    std::size_t col = column > 0 ? column - 1 : 0;
+    if (row < first_row || row >= top + content) {
+        if (!clamp) {
+            return std::nullopt;
+        }
+        if (row < first_row) {
+            row = first_row;
+            col = 0;
+        } else {
+            row = top + content - 1;
+            col = columns_;
+        }
+    }
+    const std::size_t index = start + (row - first_row);
+    return std::pair{dropped_rows_ + index, col};
+}
+
+std::string Display::render_row(std::size_t index) const {
+    const std::string& row = screen_[index];
+    if (!selection_) {
+        return row;
+    }
+    const std::size_t line = dropped_rows_ + index;
+    auto begin = std::pair{selection_->anchor_line, selection_->anchor_column};
+    auto end = std::pair{selection_->head_line, selection_->head_column};
+    if (end < begin) {
+        std::swap(begin, end);
+    }
+    if (begin == end || line < begin.first || line > end.first) {
+        return row;
+    }
+    // Surlignée en vidéo inverse, sans ses couleurs le temps de la sélection.
+    const std::string plain = terminal::strip_styles(row);
+    const std::size_t from = line == begin.first ? begin.second : 0;
+    const std::size_t to = line == end.first ? end.second + 1 : std::string::npos;
+    return columns_slice(plain, 0, from) + "\x1b[7m" + columns_slice(plain, from, to) + "\x1b[27m" +
+           columns_slice(plain, to, std::string::npos);
+}
+
+std::string Display::selected_text() const {
+    if (!selection_) {
+        return {};
+    }
+    auto begin = std::pair{selection_->anchor_line, selection_->anchor_column};
+    auto end = std::pair{selection_->head_line, selection_->head_column};
+    if (end < begin) {
+        std::swap(begin, end);
+    }
+    std::string text;
+    for (std::size_t line = begin.first; line <= end.first; ++line) {
+        if (line < dropped_rows_ || line - dropped_rows_ >= screen_.size()) {
+            continue;
+        }
+        const std::string plain = terminal::strip_styles(screen_[line - dropped_rows_]);
+        const std::size_t from = line == begin.first ? begin.second : 0;
+        const std::size_t to = line == end.first ? end.second + 1 : std::string::npos;
+        std::string piece = columns_slice(plain, from, to);
+        while (!piece.empty() && piece.back() == ' ') {
+            piece.pop_back();
+        }
+        if (line != begin.first) {
+            text += '\n';
+        }
+        text += piece;
+    }
+    return text;
+}
+
+void Display::mouse(const MouseEvent& event) {
+    std::string copied;
+    {
+        const std::scoped_lock lock(mutex_);
+        if (!pinned_ || panel_) {
+            return;
+        }
+        switch (event.kind) {
+        case MouseEvent::Kind::Press: {
+            note_.clear();
+            const auto position = view_position(event.row, event.column, /*clamp=*/false);
+            if (!position) {
+                if (selection_) {
+                    selection_.reset();
+                    draw_view();
+                }
+                return;
+            }
+            selection_ = Selection{.anchor_line = position->first,
+                                   .anchor_column = position->second,
+                                   .head_line = position->first,
+                                   .head_column = position->second,
+                                   .dragging = true};
+            draw_view();
+            return;
+        }
+        case MouseEvent::Kind::Drag: {
+            if (!selection_ || !selection_->dragging) {
+                return;
+            }
+            const auto position = view_position(event.row, event.column, /*clamp=*/true);
+            if (!position) {
+                return;
+            }
+            selection_->head_line = position->first;
+            selection_->head_column = position->second;
+            draw_view();
+            return;
+        }
+        case MouseEvent::Kind::Release:
+            if (!selection_ || !selection_->dragging) {
+                return;
+            }
+            selection_->dragging = false;
+            if (selection_->anchor_line == selection_->head_line &&
+                selection_->anchor_column == selection_->head_column) {
+                selection_.reset(); // simple clic
+                draw_view();
+                return;
+            }
+            copied = selected_text();
+            if (copied.empty()) {
+                selection_.reset();
+                draw_view();
+                return;
+            }
+            // OSC 52 : le terminal copie lui-même (même par SSH).
+            emit("\x1b]52;c;" + base64(copied) + "\x07");
+            break;
+        }
+    }
+    // Hors du verrou : un programme du système peut prendre un instant.
+    const bool system = copy_to_clipboard(copied);
+    const std::size_t characters = terminal::display_width(copied);
+    const std::scoped_lock lock(mutex_);
+    note_ = std::format("copié : {} caractère{}{}", characters, characters > 1 ? "s" : "",
+                        system ? "" : " (par le terminal)");
+    emit_view(go_to(region_bottom()) + "\x1b[2K" + bottom_line());
 }
 
 void Display::draw_view() const {
@@ -448,7 +620,7 @@ void Display::draw_view() const {
         out += go_to(top + i) + "\x1b[2K";
         const std::size_t blank = content - shown;
         if (i >= blank) {
-            out += screen_[start + i - blank];
+            out += render_row(start + i - blank);
         }
     }
     out += go_to(region_bottom()) + "\x1b[2K" + bottom_line();
@@ -704,6 +876,7 @@ void Display::scroll(ScrollStep step) {
     if (!pinned_ || panel_) {
         return;
     }
+    note_.clear();
     const std::size_t page = view_height() > 3 ? view_height() - 2 : 1;
     std::size_t up = 0;
     std::size_t down = 0;
@@ -748,6 +921,8 @@ void Display::clear() {
     lines_.clear();
     line_rows_.clear();
     screen_.clear();
+    selection_.reset();
+    dropped_rows_ = 0;
     scroll_ = 0;
     unseen_ = 0;
     if (pinned_) {

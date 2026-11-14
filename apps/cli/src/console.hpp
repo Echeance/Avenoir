@@ -1,8 +1,10 @@
 #pragma once
 
+#include <deque>
 #include <optional>
 #include <string>
 
+#include "mouse.hpp"
 #include "scroll.hpp"
 
 namespace avenoir::cli {
@@ -23,9 +25,10 @@ void install_console();
 void raise_interrupt() noexcept;
 
 /// Souris rapportée à Avenoir (plein écran : la molette fait défiler la
-/// conversation) ou rendue au terminal. Linux : mode souris SGR (DECSET
-/// 1000 et 1006), la sélection de texte se fait alors avec Maj ; Windows :
-/// console en ENABLE_MOUSE_INPUT, sans la sélection rapide.
+/// conversation, un glissé du bouton gauche y sélectionne du texte, copié au
+/// relâché) ou rendue au terminal. Linux : mode souris SGR avec les
+/// déplacements bouton tenu (DECSET 1002 et 1006) ; Windows : console en
+/// ENABLE_MOUSE_INPUT, sans la sélection rapide.
 void set_mouse_reporting(bool on);
 
 /// Touches lues pendant une requête, quand aucune saisie n'est en cours :
@@ -42,8 +45,11 @@ class KeyReader {
     KeyReader(KeyReader&&) = delete;
     KeyReader& operator=(KeyReader&&) = delete;
 
-    /// Prochain défilement demandé, sans attendre ; le texte tapé est mis de côté.
+    /// Prochain défilement demandé, sans attendre ; le texte tapé est mis de
+    /// côté, les événements du bouton gauche aussi (`take_mouse`).
     [[nodiscard]] std::optional<ScrollStep> poll();
+    /// Prochain événement du bouton gauche lu par `poll`.
+    [[nodiscard]] std::optional<MouseEvent> take_mouse();
     /// Texte tapé depuis le début (sans les retours à la ligne).
     [[nodiscard]] std::string take_typed();
 
@@ -54,9 +60,11 @@ class KeyReader {
     std::string pending_; ///< Octets lus, pas encore interprétés.
     std::string typed_;
     std::optional<ScrollStep> step_;
+    std::deque<MouseEvent> mouse_;
     int idle_polls_ = 0; ///< Lectures sans rien de neuf (Échap seul).
 #ifdef _WIN32
     unsigned long saved_mode_ = 0;
+    bool left_down_ = false;
 #endif
 };
 

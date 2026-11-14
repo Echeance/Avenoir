@@ -222,6 +222,9 @@ class Client {
                 // Pas pendant une question : la saisie lit le clavier.
                 while (keys && !questioning_) {
                     const auto step = keys->poll();
+                    while (const auto event = keys->take_mouse()) {
+                        display().mouse(*event);
+                    }
                     if (!step) {
                         break;
                     }
@@ -540,6 +543,7 @@ int run(int argc, char** argv) {
         .poll = [&client] { return client.take_notes(); },
         .notify = [](const std::string& message) { display().notify(message); },
         .scroll = [](cli::ScrollStep step) { display().scroll(step); },
+        .mouse = [](const cli::MouseEvent& event) { display().mouse(event); },
     });
     client.attach(prompt);
     ipc::Peer peer(std::move(*connection));

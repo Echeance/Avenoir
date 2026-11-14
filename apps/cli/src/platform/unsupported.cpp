@@ -1,5 +1,6 @@
 #include <optional>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include "avenoir/core/error.hpp"
@@ -18,6 +19,10 @@ std::optional<int> run_in_terminal(const std::vector<std::string>& /*arguments*/
 
 std::optional<std::string> read_hidden_line() {
     return std::nullopt;
+}
+
+bool copy_to_clipboard(std::string_view /*text*/) {
+    return false;
 }
 
 } // namespace avenoir::cli

@@ -99,7 +99,7 @@ En-têtes publics dans `libs/<nom>/include/avenoir/<nom>/`, tests Catch2 dans `l
 - Concurrence : synchrone + `std::jthread` / `std::stop_token` ; pas d'état partagé sans synchronisation.
 - Logs : `spdlog` ; audit des outils sur le logger `audit` ; niveau via `AVENOIR_LOG`.
 - Nommage : `PascalCase` (types), `snake_case` (fonctions, variables), membres privés suffixés `_`, constantes `kPascalCase`, espaces de noms `avenoir::<bibliothèque>`.
-- Bibliothèques retenues : `nlohmann/json`, `toml++`, `cpr`, `reproc`, `spdlog`, `Catch2`, `replxx` (saisie de la CLI ; **port vcpkg local patché** dans `ports/replxx` : molette de la souris, décision 57 — garder le patch à jour si la version de replxx change), `sqlite3` (conversations), `libsodium` (sceau des réglages : HMAC-SHA256, aléa). Trousseau sans bibliothèque : `CredReadW`/`CredWriteW` sous Windows, programme `secret-tool` sous Linux (libsecret est LGPL). En ajouter une → la justifier et l'inscrire dans `vcpkg.json`.
+- Bibliothèques retenues : `nlohmann/json`, `toml++`, `cpr`, `reproc`, `spdlog`, `Catch2`, `replxx` (saisie de la CLI ; **port vcpkg local patché** dans `ports/replxx` : molette et sélection à la souris, décisions 57 et 64 — garder le patch à jour si la version de replxx change), `sqlite3` (conversations), `libsodium` (sceau des réglages : HMAC-SHA256, aléa). Trousseau sans bibliothèque : `CredReadW`/`CredWriteW` sous Windows, programme `secret-tool` sous Linux (libsecret est LGPL). En ajouter une → la justifier et l'inscrire dans `vcpkg.json`.
 - Fonctionnalités lourdes (voix, UI) derrière des options CMake.
 
 ## Multiplateforme

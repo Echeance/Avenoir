@@ -15,6 +15,7 @@
 #include "avenoir/core/message.hpp"
 #include "avenoir/core/tool.hpp"
 
+#include "mouse.hpp"
 #include "scroll.hpp"
 
 namespace avenoir::cli {
@@ -79,6 +80,11 @@ class Display {
     /// Fait défiler la conversation (molette, PgUp/PgDn, Ctrl+↑/↓) ; sans
     /// effet hors du mode plein écran ou quand un panneau est ouvert.
     void scroll(ScrollStep step);
+
+    /// Bouton gauche dans la conversation (plein écran) : un glissé la
+    /// sélectionne (surlignée), le relâché copie le texte (OSC 52 et
+    /// presse-papiers du système) ; un clic ailleurs efface la sélection.
+    void mouse(const MouseEvent& event);
 
     /// Bordure de la barre de saisie (ligne bleu nuit sur toute la largeur).
     [[nodiscard]] static std::string bar_rule();
@@ -212,6 +218,26 @@ class Display {
     std::size_t layout_width_ = 0;      ///< Largeur de découpe de `screen_`.
     std::size_t scroll_ = 0;            ///< Lignes d'écran remontées (0 : en bas).
     std::size_t unseen_ = 0;            ///< Lignes arrivées pendant qu'on remontait.
+    /// Sélection à la souris : lignes comptées depuis le début de
+    /// l'historique (`dropped_rows_` + indice dans `screen_`), colonnes
+    /// d'affichage à partir de 0, fin incluse.
+    struct Selection {
+        std::size_t anchor_line = 0;
+        std::size_t anchor_column = 0;
+        std::size_t head_line = 0;
+        std::size_t head_column = 0;
+        bool dragging = false;
+    };
+    std::optional<Selection> selection_;
+    std::size_t dropped_rows_ = 0; ///< Lignes d'écran retirées du début de `screen_`.
+    std::string note_;             ///< Message bref de la dernière ligne (« copié »).
+    /// Ligne absolue et colonne sous la case (`row`, `column`) du terminal ;
+    /// `clamp` : hors de la conversation, la plus proche.
+    [[nodiscard]] std::optional<std::pair<std::size_t, std::size_t>>
+    view_position(std::size_t row, std::size_t column, bool clamp) const;
+    /// Ligne d'écran `index`, surlignée là où elle est sélectionnée.
+    [[nodiscard]] std::string render_row(std::size_t index) const;
+    [[nodiscard]] std::string selected_text() const;
     std::chrono::steady_clock::time_point since_;
     std::chrono::steady_clock::time_point last_frame_;
     std::vector<PendingCall> pending_;

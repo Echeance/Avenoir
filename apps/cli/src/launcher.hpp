@@ -2,6 +2,7 @@
 
 #include <optional>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include "avenoir/core/error.hpp"
@@ -25,5 +26,11 @@ namespace avenoir::cli {
 /// Lit une ligne dans ce terminal sans l'afficher (clé d'API) ; rien si
 /// l'entrée n'est pas un terminal, si elle se ferme ou sur ce système.
 [[nodiscard]] std::optional<std::string> read_hidden_line();
+
+/// Copie `text` dans le presse-papiers du système : `wl-copy` (Wayland),
+/// sinon `xclip` ou `xsel` (X11) sous Linux, l'API du presse-papiers sous
+/// Windows. Faux si aucun moyen n'a marché (la CLI envoie aussi la séquence
+/// OSC 52, que beaucoup de terminaux comprennent).
+bool copy_to_clipboard(std::string_view text);
 
 } // namespace avenoir::cli

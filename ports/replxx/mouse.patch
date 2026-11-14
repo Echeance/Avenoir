@@ -1,0 +1,183 @@
+diff --git a/include/replxx.hxx b/include/replxx.hxx
+index ab3c5e5..49a6273 100644
+--- a/include/replxx.hxx
++++ b/include/replxx.hxx
+@@ -132,6 +132,8 @@ public:
+ 		static char32_t const MOUSE        = F24       + 1;
+ 		static char32_t const PASTE_START  = MOUSE     + 1;
+ 		static char32_t const PASTE_FINISH = PASTE_START + 1;
++		static char32_t const WHEEL_UP     = PASTE_FINISH + 1; /* Avenoir : molette (mode souris SGR ou console Windows) */
++		static char32_t const WHEEL_DOWN   = WHEEL_UP  + 1;
+ 		static constexpr char32_t shift( char32_t key_ ) {
+ 			return ( key_ | BASE_SHIFT );
+ 		}
+@@ -687,6 +689,14 @@ Replxx::Color rgb666( int red, int green, int blue );
+ 
+ }
+ 
++/* Avenoir : dernier événement de souris (hors molette) qui a donné la touche
++ * MOUSE : bouton au codage SGR (0 : gauche, +32 : déplacement bouton tenu),
++ * colonne et ligne (à partir de 1), relâché ou non. Faux s'il n'y en a pas
++ * de nouveau. */
++bool avenoir_take_mouse( unsigned int& button_, int& column_, int& row_, bool& release_ );
++/* Avenoir : enregistre un événement de souris (console Windows). */
++void avenoir_store_mouse( unsigned int button_, int column_, int row_, bool release_ );
++
+ }
+ 
+ #endif /* HAVE_REPLXX_HXX_INCLUDED */
+diff --git a/src/escape.cxx b/src/escape.cxx
+index dda1ab0..f6416b8 100644
+--- a/src/escape.cxx
++++ b/src/escape.cxx
+@@ -808,6 +808,37 @@ static char32_t escLeftBracket9Routine(char32_t c) {
+ 	return escFailureRoutine(c);
+ }
+ 
++// Avenoir : ESC [ < bouton ; x ; y M|m, événement de souris en mode SGR
++// (DECSET 1006). La molette donne WHEEL_UP / WHEEL_DOWN, tout autre événement
++// MOUSE (à ignorer) : sans cela, la séquence serait tapée comme du texte.
++static char32_t sgrMouseRoutine(char32_t) {
++	unsigned int fields[3] = { 0, 0, 0 };
++	int field = 0;
++	for (int i = 0; i < 32; ++i) {
++		char32_t c = read_unicode_character();
++		if (c == 0) return 0;
++		if (c == 'M' || c == 'm') {
++			if (c == 'M' && field == 2) {
++				switch (fields[0] & ~0x1cU) { // sans Maj, Méta, Ctrl
++					case 64: return Replxx::KEY::WHEEL_UP;
++					case 65: return Replxx::KEY::WHEEL_DOWN;
++					default: break;
++				}
++			}
++			if (field == 2) {
++				::replxx::avenoir_store_mouse( fields[0], static_cast<int>( fields[1] ), static_cast<int>( fields[2] ), c == 'm' );
++			}
++			return Replxx::KEY::MOUSE;
++		}
++		if (c == ';') {
++			if (field < 2) ++field;
++		} else if (c >= '0' && c <= '9' && fields[field] < 100000) {
++			fields[field] = fields[field] * 10 + static_cast<unsigned int>(c - '0');
++		}
++	}
++	return Replxx::KEY::MOUSE;
++}
++
+ // Handle ESC [ <more stuff> escape sequences
+ //
+ static CharacterDispatchRoutine escLeftBracketRoutines[] = {
+@@ -817,9 +848,9 @@ static CharacterDispatchRoutine escLeftBracketRoutines[] = {
+ 	escLeftBracket0Routine, escLeftBracket1Routine, escLeftBracket2Routine,
+ 	escLeftBracket3Routine, escLeftBracket4Routine, escLeftBracket5Routine,
+ 	escLeftBracket6Routine, escLeftBracket7Routine, escLeftBracket8Routine,
+-	escLeftBracket9Routine, escFailureRoutine
++	escLeftBracket9Routine, sgrMouseRoutine,        escFailureRoutine
+ };
+-static CharacterDispatch escLeftBracketDispatch = {17, "ABCDHFZ0123456789",
++static CharacterDispatch escLeftBracketDispatch = {18, "ABCDHFZ0123456789<",
+ 																									 escLeftBracketRoutines};
+ 
+ // Handle ESC O <char> escape sequences
+diff --git a/src/terminal.cxx b/src/terminal.cxx
+index 75b0e59..a43decc 100644
+--- a/src/terminal.cxx
++++ b/src/terminal.cxx
+@@ -42,6 +42,33 @@ using namespace std;
+ 
+ namespace replxx {
+ 
++// Avenoir : dernier événement de souris (voir replxx.hxx).
++static bool avenoirMousePending = false;
++static unsigned int avenoirMouseButton = 0;
++static int avenoirMouseColumn = 0;
++static int avenoirMouseRow = 0;
++static bool avenoirMouseRelease = false;
++
++void avenoir_store_mouse( unsigned int button_, int column_, int row_, bool release_ ) {
++	avenoirMouseButton = button_;
++	avenoirMouseColumn = column_;
++	avenoirMouseRow = row_;
++	avenoirMouseRelease = release_;
++	avenoirMousePending = true;
++}
++
++bool avenoir_take_mouse( unsigned int& button_, int& column_, int& row_, bool& release_ ) {
++	if ( ! avenoirMousePending ) {
++		return false;
++	}
++	avenoirMousePending = false;
++	button_ = avenoirMouseButton;
++	column_ = avenoirMouseColumn;
++	row_ = avenoirMouseRow;
++	release_ = avenoirMouseRelease;
++	return true;
++}
++
+ namespace tty {
+ 
+ bool is_a_tty( int fd_ ) {
+@@ -263,7 +290,9 @@ int Terminal::reset_raw_mode( void ) {
+ #ifdef _WIN32
+ 	SetConsoleMode(
+ 		_consoleIn,
+-		( _origInMode & ~( ENABLE_LINE_INPUT | ENABLE_ECHO_INPUT | ENABLE_PROCESSED_INPUT ) ) | ENABLE_QUICK_EDIT_MODE 
++		( _origInMode & ~( ENABLE_LINE_INPUT | ENABLE_ECHO_INPUT | ENABLE_PROCESSED_INPUT ) )
++		// Avenoir : sélection rapide gardée seulement si l'application ne lit pas la souris.
++		| ( ( _origInMode & ENABLE_MOUSE_INPUT ) != 0 ? 0 : ENABLE_QUICK_EDIT_MODE ) 
+ 	);
+ 	SetConsoleCP( 65001 );
+ 	enable_out();
+@@ -382,6 +411,28 @@ char32_t Terminal::read_char( void ) {
+ 			}
+ 		}
+ #endif
++		// Avenoir : molette de la souris (console en mode ENABLE_MOUSE_INPUT).
++		if ( ( rec.EventType == MOUSE_EVENT ) && ( rec.Event.MouseEvent.dwEventFlags == MOUSE_WHEELED ) ) {
++			return ( static_cast<short>( HIWORD( rec.Event.MouseEvent.dwButtonState ) ) > 0 ? Replxx::KEY::WHEEL_UP : Replxx::KEY::WHEEL_DOWN );
++		}
++		// Avenoir : bouton gauche (clic, glissé, relâché), au codage SGR.
++		if ( rec.EventType == MOUSE_EVENT ) {
++			static bool leftDown = false;
++			MOUSE_EVENT_RECORD const& mouse( rec.Event.MouseEvent );
++			bool left( ( mouse.dwButtonState & FROM_LEFT_1ST_BUTTON_PRESSED ) != 0 );
++			int column( mouse.dwMousePosition.X + 1 );
++			int row( mouse.dwMousePosition.Y + 1 );
++			if ( ( mouse.dwEventFlags == 0 ) && ( left != leftDown ) ) {
++				leftDown = left;
++				avenoir_store_mouse( 0, column, row, ! left );
++				return ( Replxx::KEY::MOUSE );
++			}
++			if ( ( mouse.dwEventFlags == MOUSE_MOVED ) && left && leftDown ) {
++				avenoir_store_mouse( 32, column, row, false );
++				return ( Replxx::KEY::MOUSE );
++			}
++			continue;
++		}
+ 		if ( rec.EventType != KEY_EVENT ) {
+ 			continue;
+ 		}
+@@ -572,6 +623,22 @@ Terminal::EVENT_TYPE Terminal::wait_for_input( int long timeout_ ) {
+ 				DWORD count;
+ 				PeekConsoleInputW( _consoleIn, &rec, 1, &count );
+ 
++				if ( ( rec.EventType == MOUSE_EVENT ) && ( rec.Event.MouseEvent.dwEventFlags == MOUSE_WHEELED ) ) {
++					return ( EVENT_TYPE::KEY_PRESS ); // Avenoir : molette, lue par read_char
++				}
++				// Avenoir : clic ou glissé du bouton gauche, lus par read_char.
++				if (
++					( rec.EventType == MOUSE_EVENT )
++					&& (
++						( rec.Event.MouseEvent.dwEventFlags == 0 )
++						|| (
++							( rec.Event.MouseEvent.dwEventFlags == MOUSE_MOVED )
++							&& ( ( rec.Event.MouseEvent.dwButtonState & FROM_LEFT_1ST_BUTTON_PRESSED ) != 0 )
++						)
++					)
++				) {
++					return ( EVENT_TYPE::KEY_PRESS );
++				}
+ 				if (
+ 					( rec.EventType != KEY_EVENT )
+ 					|| ( !rec.Event.KeyEvent.bKeyDown && ( rec.Event.KeyEvent.wVirtualKeyCode != VK_MENU ) )

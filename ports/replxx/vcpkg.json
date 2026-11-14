@@ -1,8 +1,8 @@
 {
   "name": "replxx",
   "version": "0.0.4",
-  "port-version": 101,
-  "description": "replxx (BSD), avec le patch de la molette de la souris d'Avenoir.",
+  "port-version": 102,
+  "description": "replxx (BSD), avec le patch de la souris d'Avenoir (molette, sélection).",
   "homepage": "https://github.com/AmokHuginnsson/replxx",
   "license": "BSD-3-Clause",
   "supports": "!uwp",

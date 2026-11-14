@@ -11,6 +11,7 @@
 
 #include <replxx.hxx>
 
+#include "mouse.hpp"
 #include "scroll.hpp"
 
 namespace avenoir::cli {
@@ -56,6 +57,8 @@ class Prompt {
         std::function<void(const std::string& message)> notify;
         /// Molette, PgUp/PgDn, Ctrl+↑/↓ : défilement de la conversation.
         std::function<void(ScrollStep step)> scroll;
+        /// Bouton gauche (clic, glissé, relâché) : sélection de texte.
+        std::function<void(const MouseEvent& event)> mouse;
     };
     void set_hooks(Hooks hooks);
     /// Commandes proposées à la complétion (connues du démon une fois
