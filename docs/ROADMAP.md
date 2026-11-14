@@ -13,8 +13,8 @@
 | **0. Conception** | Vision, architecture, directives, choix de la stack | ✅ |
 | **1. Socle** | Projet CMake, CI, cœur (agent, permissions, voie rapide), LLM, premiers outils, hôte de modules v1, CLI, conversations persistantes | ✅ |
 | **2. Assistant du quotidien** | Contrôle système (volume, écran, multimédia), recherche web, applications installées, changer de LLM à tout moment | 🔄 |
-| **3. Résident** | Démon en arrière-plan, IPC, journal structuré, permissions durables et révocables, magasin de modèles | ⬜ |
-| **4. Tâches et modules** | Orchestrateur multi-agents (agents en parallèle, plusieurs projets isolés), fichiers, mémoire, contexte long, appels entre modules, fonctions de fond | ⬜ |
+| **3. Résident** | Démon en arrière-plan, IPC, journal structuré, permissions durables et révocables, magasin de modèles | 🔄 |
+| **4. Tâches et modules** | Orchestrateur multi-agents (agents en parallèle, plusieurs projets isolés), fichiers, mémoire, contexte long, appels entre modules, fonctions de fond | 🔄 |
 | **5. Voix** | Mot de réveil, STT, TTS, confirmations vocales | ⬜ |
 | **6. Interface graphique** | Widget en haut de l'écran (loup animé), application principale, onglets de modules | ⬜ |
 | **7. Identité et présence** | Propriétaire et liste blanche, vérification par la voix et le visage, verrouillage et connexion automatiques | ⬜ |
@@ -226,7 +226,7 @@ L'ordre suit un principe : **chaque jalon produit un assistant utilisable**, plu
 
 ---
 
-## Jalon 3 — Résident ⬜
+## Jalon 3 — Résident 🔄
 
 *But : Avenoir tourne en permanence et répond instantanément.*
 
@@ -252,7 +252,7 @@ L'ordre suit un principe : **chaque jalon produit un assistant utilisable**, plu
 
 ---
 
-## Jalon 4 — Tâches et modules avancés ⬜
+## Jalon 4 — Tâches et modules avancés 🔄
 
 ### Orchestrateur multi-agents (PROJECT.md § 2.11, décision 48)
 - ✅ **P1** Agent configurable : rôle, consigne, modèle, outils et modules permis, autonomie (`[agents.<nom>]`, puis application et CLI : créer, modifier, supprimer, lister)

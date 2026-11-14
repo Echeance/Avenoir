@@ -168,7 +168,7 @@ model = "sonnet"
 
 En local, gardez `reasoning_effort = "none"` : sans lui, les modèles qui « réfléchissent » avant de répondre prennent plusieurs secondes de plus. Le détail, et les modèles à éviter : [`evals/resultats/COMPARAISON.md`](evals/resultats/COMPARAISON.md).
 
-Les autres sections règlent l'agent (`[agent]`), les permissions par niveau de risque (`[permissions]`, et `[permissions.tools]` pour les règles « toujours / jamais ») et les modules (`[modules.<id>]` : activation, risque relevé, permissions accordées). Tout est commenté dans [`config.example.toml`](config.example.toml).
+Les autres sections règlent l'agent (`[agent]`), les permissions par niveau de risque (`[permissions]`, et `[permissions.tools]` pour les règles « toujours / jamais ») les modules (`[modules.<id>]` : activation, risque relevé, permissions accordées), la carte graphique partagée (`[gpu]`), la saisie rapide (`[shortcut]`) et le journal des actions (`[journal]`). Tout est commenté dans [`config.example.toml`](config.example.toml).
 
 > [!IMPORTANT]
 > À partir du jalon 3, les réglages ne se modifieront **que depuis Avenoir** : le fichier sera scellé et toute modification faite en dehors sera refusée ([PROJECT.md § 5.1](docs/PROJECT.md#51-réglages-modifiables-uniquement-par-avenoir)).
@@ -390,8 +390,8 @@ Le workflow `release` vérifie que le numéro du tag correspond à la version du
 | **0 · Conception** | vision, architecture, sécurité, choix techniques | ✅ |
 | **1 · Socle** | cœur, LLM, outils, CLI, conversations, modules v1 | ✅ |
 | **2 · Au quotidien** | volume, écran, multimédia, applications, recherche web, réponses au fil de l'eau, changer de modèle | 🔄 vérification sous Windows |
-| **3 · Résident** | démon, journal, permissions durables, réglages scellés | ⬜ |
-| **4 · Tâches et modules** | orchestrateur multi-agents, plusieurs projets en parallèle, fichiers, mémoire, appels entre modules | ⬜ |
+| **3 · Résident** | démon, journal, permissions durables, réglages scellés, clés au trousseau, magasin de modèles, carte graphique partagée, saisie rapide | 🔄 reste la surveillance des réglages pendant que le démon tourne |
+| **4 · Tâches et modules** | orchestrateur multi-agents, plusieurs projets en parallèle, fichiers, mémoire, appels entre modules | 🔄 équipes d'agents et projets faits |
 | **5 · Voix** | mot de réveil, reconnaissance et synthèse vocales | ⬜ |
 | **6 · Interface graphique** | widget avec le loup animé, application principale | ⬜ |
 | **7 · Identité et présence** | propriétaire et liste blanche, voix et visage, verrouillage automatique | ⬜ |

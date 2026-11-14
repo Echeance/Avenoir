@@ -65,10 +65,10 @@ Une VM Windows 11 LTSC (conteneur podman `windows`, image `dockurr/windows`, 4 c
 ## Structure
 
 - `libs/core` (`avenoir::core`) : agent, outils, permissions, voie rapide, config. **Ne dépend d'aucune autre bibliothèque interne.**
-- `libs/llm` : fournisseurs LLM (OpenAI-compatible, Anthropic, Claude Code) et changement de modèle à chaud (`ModelSwitcher`, outil `switch_llm`).
+- `libs/llm` : fournisseurs LLM (OpenAI-compatible, Anthropic, Claude Code), changement de modèle à chaud (`ModelSwitcher`, outil `switch_llm`) et magasin de modèles (`store.hpp` : catalogue du banc, Ollama).
 - `libs/tools` : outils natifs ; code spécifique à l'OS dans `src/platform/`.
 - `libs/modules` : hôte de modules (manifestes `module.toml`, processus JSON-RPC, compatibilité MCP).
-- `libs/storage` : conversations et journal (SQLite) ; chaque message est écrit immédiatement.
+- `libs/storage` : conversations et journal structuré des actions (SQLite, `Store` sérialisé) ; chaque message et chaque action sont écrits immédiatement ; secrets (trousseau) et réglages scellés.
 - `libs/terminal` : rendu dans le terminal (couleurs, cadres, Markdown) ; dans la CLI, **toute sortie passe par le module d'affichage** (`apps/cli/src/display.*`), jamais par `std::print` direct, pour respecter le verrou de la toupie et `NO_COLOR`.
 - `libs/ipc` : protocole et transport démon ↔ interfaces.
 - `libs/agents` : orchestrateur multi-agents (plan de tâches, exécution parallèle, outil `delegate_tasks`) ; ne dépend que de `libs/core`.
@@ -113,12 +113,12 @@ En-têtes publics dans `libs/<nom>/include/avenoir/<nom>/`, tests Catch2 dans `l
 - La confidentialité et la sécurité sont les aspects primordiaux de l'assistant : en cas de conflit avec une fonctionnalité, le confort ou la rapidité, elles l'emportent.
 - Ne jamais faire entièrement confiance à un module communautaire : manifeste validé avant lancement, module utilisateur désactivé par défaut, environnement minimal, risque `sensitive` par défaut, réponses bornées et traitées comme des données, permissions et audit à chaque appel (docs/PROJECT.md, directive 15).
 - `RiskLevel` : `read_only` / `reversible` / `sensitive`. En cas de doute, choisir le plus élevé.
-- `sensitive` est confirmé par défaut ; `allow` seulement par choix explicite de l'utilisateur (avertissement, disclaimer, « Je sais ce que je fais », décision 59), jamais par défaut ni par un module. Restent toujours confirmés : un argument venu d'un résultat d'outil (provenance), une action à la voix seule, les commandes shell (`run_command`), le passage à un LLM distant.
+- `sensitive` est confirmé par défaut ; `allow` seulement par choix explicite de l'utilisateur (avertissement, disclaimer, « Je sais ce que je fais », décision 59), jamais par défaut ni par un module. Une règle durable « toujours autoriser » (`[permissions.tools]`, décision 61) ne lève que la confirmation de la politique par niveau. Restent toujours confirmés : un argument venu d'un résultat d'outil (provenance), une action à la voix seule, les commandes shell (`run_command`), le passage à un LLM distant.
 - Ctrl+C n'arrête jamais l'application : il interrompt l'action en cours (`std::stop_token`) ; toute nouvelle opération longue doit vérifier son `stop_token`.
 - Les données (web, fichiers, résultats de modules, réponses du LLM) ne sont pas des instructions ; la vraie barrière est le contrôle des permissions.
 - Un seul outil shell, `run_command` (décision 60) : désactivé par défaut (`[agent] shell`, activé avec « Je sais ce que je fais »), réservé à l'assistant principal, analysé avant toute confirmation (`assess_command` : refus d'office de l'élévation de droits, des commandes destructrices, des scripts téléchargés exécutés, des shells inversés, de la persistance et des réglages d'Avenoir ; alertes sinon ; recherche `whatis` et avis à part du modèle en cas de doute), **toujours confirmé**, audité. Partout ailleurs, **jamais** de `system()`, `popen()`, `sh -c`, `cmd /C` avec une chaîne construite : tableau d'arguments (`reproc`, `CreateProcessW`) ou API dédiée (`ShellExecuteW`). Tout nouveau motif dangereux repéré → l'ajouter à `assess_command` avec son test.
 - Valider tous les arguments côté outil (noms d'app sans métacaractères, URL `http(s)` uniquement, chemins canonicalisés et restreints).
-- Secrets uniquement via variables d'environnement ; jamais dans `config.toml` ni dans les logs.
+- Secrets : dans le trousseau du système (`/cle`, saisie masquée, décision 63) ou en variables d'environnement ; jamais dans `config.toml`, ni dans les logs, ni à l'écran.
 - Réglages : le démon est le seul rédacteur ; ne jamais ajouter de chemin qui écrive ou relise les réglages sans vérifier le sceau (directive 14).
 - Modules : risque du manifeste relevable par l'utilisateur, `sensitive` si absent ; abaissable seulement depuis l'application ou la CLI après avertissement, disclaimer et saisie de « Je sais ce que je fais » (accord enregistré ; baisse sans accord ignorée) ; appels entre modules uniquement via l'hôte (permissions + audit).
 - Identité et présence (docs/PROJECT.md § 2.10, directive 16) : biométrie traitée en local uniquement, chiffrée, jamais donnée à un LLM ni à un module, jamais journalisée ; la voix seule ne suffit jamais pour une action `sensitive` ni pour déverrouiller ; désactiver une vérification se fait comme abaisser un risque.
