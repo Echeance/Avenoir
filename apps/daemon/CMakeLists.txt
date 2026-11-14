@@ -55,6 +55,7 @@ if(AVENOIR_BUILD_TESTS)
         tests/permissions_test.cpp
         tests/shortcut_test.cpp
         tests/settings_catalog_test.cpp
+        tests/settings_watch_test.cpp
         tests/ui_test.cpp
         tests/setup_plan_test.cpp)
     target_link_libraries(avenoir_daemon_tests PRIVATE

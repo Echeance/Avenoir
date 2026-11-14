@@ -13,7 +13,7 @@
 | **0. Conception** | Vision, architecture, directives, choix de la stack | ✅ |
 | **1. Socle** | Projet CMake, CI, cœur (agent, permissions, voie rapide), LLM, premiers outils, hôte de modules v1, CLI, conversations persistantes | ✅ |
 | **2. Assistant du quotidien** | Contrôle système (volume, écran, multimédia), recherche web, applications installées, changer de LLM à tout moment | 🔄 |
-| **3. Résident** | Démon en arrière-plan, IPC, journal structuré, permissions durables et révocables, magasin de modèles | 🔄 |
+| **3. Résident** | Démon en arrière-plan, IPC, journal structuré, permissions durables et révocables, magasin de modèles | ✅ |
 | **4. Tâches et modules** | Orchestrateur multi-agents (agents en parallèle, plusieurs projets isolés), fichiers, mémoire, contexte long, appels entre modules, fonctions de fond | 🔄 |
 | **5. Voix** | Mot de réveil, STT, TTS, confirmations vocales | ⬜ |
 | **6. Interface graphique** | Widget en haut de l'écran (loup animé), application principale, onglets de modules | ⬜ |
@@ -226,14 +226,14 @@ L'ordre suit un principe : **chaque jalon produit un assistant utilisable**, plu
 
 ---
 
-## Jalon 3 — Résident 🔄
+## Jalon 3 — Résident ✅
 
 *But : Avenoir tourne en permanence et répond instantanément.*
 
 - ✅ **P1** Config à l'emplacement standard : `$XDG_CONFIG_HOME/avenoir/`, `%APPDATA%\avenoir\` (jamais le dossier courant) ; création guidée au premier lancement : serveurs de modèles de la machine (Ollama, LM Studio, llama.cpp), du réseau local sur demande (confirmés « à moi »), adresse saisie, Claude Code, API Anthropic ; modèles conseillés par le banc en tête ; « local uniquement » proposé ; « aucun » : voie rapide seule, enregistré ; `/configurer` pour refaire le choix ensuite (autres réglages gardés) ; écriture par Avenoir (`core::save_config`, `0600`, atomique)
-- 🔄 **P1** Réglages modifiables uniquement par Avenoir (PROJECT.md § 5.1) : démon seul rédacteur (via l'IPC), changements journalisés — fait : le démon est le seul à lire et écrire les réglages, par `/reglages`, `/reglage <clé> <valeur>` (écrits par le sceau, notés à l'audit ; affaiblir demande « Je sais ce que je fais », décision 52) et `/configurer`, appliqués par `/redemarrer` ; reste la surveillance du fichier pendant que tourne le démon
+- ✅ **P1** Réglages modifiables uniquement par Avenoir (PROJECT.md § 5.1) : démon seul rédacteur (via l'IPC), changements journalisés — fait : le démon est le seul à lire et écrire les réglages, par `/reglages`, `/reglage <clé> <valeur>` (écrits par le sceau, notés à l'audit ; affaiblir demande « Je sais ce que je fais », décision 52) et `/configurer`, appliqués par `/redemarrer` ; fichier surveillé pendant que tourne le démon (ligne suivante)
 - ✅ **P1** Sceau HMAC-SHA256 des réglages, clé dans le trousseau du système (repli : fichier `0600`, signalé) : libsodium ; Credential Manager sous Windows, `secret-tool` sous Linux ; une clé par fichier ; dernier sceau gardé au trousseau contre le rejeu ; fichier donné en argument non scellé (mode développement, signalé)
-- 🔄 **P1** Surveillance du fichier : sceau invalide → refus, restauration de la dernière version valide, alerte (avec le détail des changements), journal — fait **à chaque lancement** (fichier modifié ou supprimé : copie scellée remise, lignes changées montrées ; sceau absent, falsifié ou rejoué : fichier mis de côté, création guidée ; audit) ; reste la surveillance pendant que tourne le démon
+- ✅ **P1** Surveillance du fichier : sceau invalide → refus, restauration de la dernière version valide, alerte (avec le détail des changements), journal — fait **à chaque lancement** (fichier modifié ou supprimé : copie scellée remise, lignes changées montrées ; sceau absent, falsifié ou rejoué : fichier mis de côté, création guidée ; audit) ; et **pendant que le démon tourne** : l'état du fichier et du sceau (date, taille) est comparé toutes les 3 s à celui de la dernière vérification ou écriture d'Avenoir ; s'il diffère, le sceau est revérifié, la version scellée remise, les clients avertis avec les lignes changées, l'audit complété
 - ✅ **P1** Tests : modification à la main, suppression du fichier ou du sceau, sceau refait sans la clé, sceau d'une autre version, rejeu d'un ancien couple, sceau d'un autre fichier → tous refusés (restaurés quand une copie scellée sûre existe) ; secrets en fichier `0600`
 - ✅ **P1** Journal d'audit dans un fichier dédié, avec rotation (`spdlog` rotating sink) : `logs/audit.log` du dossier de données (`0700`), toujours écrit quel que soit `AVENOIR_LOG`, chaque entrée aussitôt sur le disque, 5 × 5 Mo ; vérifié par le test de bout en bout
 - ✅ **P1** Mode démon (`avenoird`, décision 53) : processus de l'utilisateur, lancé à la demande par la CLI (détaché, une seule instance), seul à porter l'agent, les modules, les conversations et les réglages ; démon privé pour une configuration donnée en argument ; `/redemarrer`, `/arreter` ; journal `logs/daemon.log` ; démarrage à l'ouverture de session sur demande (`/demarrage`) : unité systemd utilisateur liée à la session graphique (sinon autostart XDG), entrée `Run` du compte sous Windows ; pas de service Windows (il n'aurait pas accès au bureau)

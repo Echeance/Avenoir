@@ -1,10 +1,12 @@
 #include "server.hpp"
 
+#include <algorithm>
 #include <atomic>
 #include <chrono>
 #include <cstdlib>
 #include <filesystem>
 #include <format>
+#include <iterator>
 #include <list>
 #include <memory>
 #include <mutex>
@@ -29,6 +31,7 @@
 
 #include "conversations.hpp"
 #include "runtime.hpp"
+#include "settings_watch.hpp"
 #include "setup.hpp"
 #include "ui.hpp"
 
@@ -124,7 +127,11 @@ class Server {
                 notices_.warnings.pop_back();
                 return;
             }
-            save_ = [this](const core::AppConfig& updated) { return sealed_->save(updated); };
+            save_ = [this](const core::AppConfig& updated) {
+                auto saved = sealed_->save(updated);
+                remember_settings(); // écriture d'Avenoir : nouvel état de référence
+                return saved;
+            };
         }
         notices_.audit();
         std::error_code missing;
@@ -203,12 +210,66 @@ class Server {
             break;
         }
         notices_.changes = std::move(report->changes);
+        remember_settings();
         if (!secrets_->is_system_keychain()) {
             notices_.warnings.push_back("Trousseau du système indisponible : clé du sceau des "
                                         "réglages gardée dans un " +
                                         secrets_->description() + " (protection plus faible).");
         }
         return true;
+    }
+
+    /// État des réglages tel qu'Avenoir vient de le vérifier ou de l'écrire.
+    void remember_settings() {
+        if (sealed_) {
+            settings_seen_ = settings_stamp(config_path_, sealed_->seal_path());
+        }
+    }
+
+    /// Réglages touchés hors d'Avenoir pendant qu'il tourne (verrou d'Avenoir
+    /// pris) : sceau revérifié, version scellée remise, clients avertis, audit.
+    /// Les réglages en mémoire (ceux du dernier lancement ou du dernier
+    /// changement fait par Avenoir) restent ceux qui servent.
+    void watch_settings() {
+        using Status = storage::SealReport::Status;
+        if (!sealed_ || !settings_seen_ ||
+            settings_stamp(config_path_, sealed_->seal_path()) == *settings_seen_) {
+            return;
+        }
+        auto report = sealed_->verify();
+        remember_settings();
+        std::vector<std::string> messages;
+        if (!report) {
+            messages.push_back("Réglages modifiés hors d'Avenoir, et non vérifiables : " +
+                               core::describe(report.error()));
+        } else if (report->status != Status::Valid && report->status != Status::NoSettings) {
+            messages.push_back("Réglages modifiés hors d'Avenoir pendant qu'il tourne : " +
+                               report->message);
+            for (const auto& change : report->changes) {
+                messages.push_back("  " + change);
+            }
+            messages.emplace_back("Les réglages en cours ne changent pas ; pour en changer un : "
+                                  "/reglage ou /settings.");
+        }
+        const auto audit = spdlog::get("audit");
+        for (const auto& message : messages) {
+            if (audit) {
+                audit->warn("réglages : {}", message);
+            }
+            for (const auto& ui : client_uis()) {
+                ui->notify(message);
+            }
+        }
+        // Sans client : montré au prochain qui se connecte.
+        if (!messages.empty() && client_uis().empty()) {
+            if (notices_.shown) { // les anciens messages ont déjà été vus
+                notices_.warnings.clear();
+                notices_.notes.clear();
+                notices_.changes.clear();
+            }
+            std::ranges::move(messages, std::back_inserter(notices_.warnings));
+            notices_.shown = false;
+        }
     }
 
     /// Construit Avenoir à partir du fichier (verrou d'Avenoir pris, ou au
@@ -400,6 +461,9 @@ class Server {
                 continue;
             }
             const std::unique_lock lock(runtime_mutex_, std::try_to_lock);
+            if (lock.owns_lock()) {
+                watch_settings(); // toutes les 3 s, hors requête
+            }
             if (lock.owns_lock() && runtime_) {
                 for (const auto& message : runtime_->model_changes()) {
                     for (const auto& ui : client_uis()) {
@@ -425,6 +489,8 @@ class Server {
     std::optional<storage::SealedSettings> sealed_;
     SaveSettings save_;
     SettingsNotices notices_;
+    /// État des réglages à la dernière vérification ou écriture d'Avenoir.
+    std::optional<SettingsStamp> settings_seen_;
 
     std::mutex runtime_mutex_; ///< Une requête à la fois : Avenoir n'a qu'un agent.
     std::unique_ptr<Runtime> runtime_;

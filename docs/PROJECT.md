@@ -542,7 +542,7 @@ Emplacement : `$XDG_CONFIG_HOME/avenoir/config.toml` (`~/.config/avenoir/config.
 - **Mode développement** : un fichier donné en argument n'est pas scellé, et c'est signalé au lancement.
 - **Changer un réglage** : `/reglage <clé> <valeur>` (et `/reglages` pour les voir), `/configurer` pour les modèles ; affaiblir la sécurité demande la phrase « Je sais ce que je fais », comme abaisser un risque (décision 52).
 - **Démon seul rédacteur** : depuis la décision 53, seul le démon lit et écrit les réglages ; les interfaces passent par l'IPC (`/reglage`, `/configurer`), un changement s'applique par `/redemarrer` (Avenoir reconstruit).
-- **Reste à faire** : surveillance du fichier pendant que tourne le démon (aujourd'hui : vérifié à chaque démarrage du démon).
+- **Pendant que le démon tourne** : toutes les 3 s, hors requête, l'état du fichier et de son sceau (date de modification, taille) est comparé à celui relevé à la dernière vérification ou écriture d'Avenoir (`settings_watch.hpp`, `Server::watch_settings`) ; s'il diffère, `verify` est relancé : version scellée remise, clients avertis avec les lignes changées (ou le prochain client, s'il n'y en a aucun), audit. Les réglages en mémoire restent ceux qui servent.
 
 ---
 
