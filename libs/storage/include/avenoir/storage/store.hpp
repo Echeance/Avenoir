@@ -11,6 +11,7 @@
 
 #include <nlohmann/json.hpp>
 
+#include "avenoir/core/agent.hpp"
 #include "avenoir/core/error.hpp"
 #include "avenoir/core/message.hpp"
 #include "avenoir/core/tool.hpp"
@@ -33,13 +34,26 @@ struct RiskChoice {
     std::string chosen_at; ///< Heure locale du choix.
 };
 
+/// Action du journal structuré (table `actions`).
+struct ActionEntry {
+    std::int64_t id = 0;
+    std::string at; ///< Heure locale, « AAAA-MM-JJ HH:MM:SS ».
+    /// Conversation en cours lors de l'action ; absente pour un projet en
+    /// arrière-plan, ou si la conversation a été supprimée depuis.
+    std::optional<std::int64_t> conversation;
+    core::ActionEvent event;
+};
+
+/// Arguments gardés par le journal : 2 000 caractères au plus.
+inline constexpr std::size_t kMaxJournalArguments = 2000;
+
 /// Base des conversations (SQLite). Chaque message est écrit dès qu'il est
 /// ajouté. Toutes les requêtes sont paramétrées : un titre ou un message
 /// n'est jamais inséré dans le texte SQL.
 ///
-/// Utilisable depuis plusieurs threads, à condition de ne pas l'appeler en
-/// parallèle (la CLI l'appelle depuis le thread principal ou depuis celui de
-/// la requête en cours, jamais les deux à la fois).
+/// Utilisable depuis plusieurs threads : les appels sont sérialisés (les
+/// agents d'une équipe et les projets écrivent au journal en même temps que
+/// la requête en cours écrit ses messages).
 class Store {
   public:
     /// Ouvre la base (la crée si besoin) et applique les migrations.
@@ -81,6 +95,18 @@ class Store {
     /// utilisé). Absent : `std::nullopt`.
     [[nodiscard]] core::Result<std::optional<std::string>> state(std::string_view key) const;
     [[nodiscard]] core::Result<void> set_state(std::string_view key, std::string_view value);
+
+    /// Journal structuré (décision 62) : ajoute une action ; `conversation`
+    /// est celle en cours (absente pour un projet). Arguments bornés
+    /// (`kMaxJournalArguments`), module déduit du nom (`id__outil`).
+    [[nodiscard]] core::Result<void> append_action(std::optional<std::int64_t> conversation,
+                                                   const core::ActionEvent& event);
+    /// Actions, la plus récente d'abord, `limit` au plus ; `conversation`
+    /// absente : toutes.
+    [[nodiscard]] core::Result<std::vector<ActionEntry>>
+    actions(std::optional<std::int64_t> conversation, std::size_t limit) const;
+    /// Efface les actions de plus de `days` jours ; renvoie leur nombre.
+    [[nodiscard]] core::Result<std::size_t> prune_actions(int days);
 
   private:
     struct Impl;

@@ -1,6 +1,8 @@
 #pragma once
 
+#include <chrono>
 #include <cstddef>
+#include <cstdint>
 #include <deque>
 #include <functional>
 #include <memory>
@@ -106,11 +108,48 @@ struct ReplyStream {
     std::function<void(bool kept)> end;
 };
 
+/// Issue du contrôle des permissions d'une action (journal structuré).
+enum class ActionDecision : std::uint8_t {
+    Allowed,         ///< Autorisée par la politique par niveau.
+    AllowedByRule,   ///< Règle durable « toujours autoriser ».
+    Confirmed,       ///< Confirmée par l'utilisateur.
+    Rejected,        ///< Refusée par l'utilisateur (ou personne pour confirmer).
+    DeniedByPolicy,  ///< Refusée par la politique par niveau.
+    DeniedByRule,    ///< Règle durable « toujours refuser ».
+    RefusedByReview, ///< Refusée d'office par l'examen de l'outil (run_command).
+    UnknownTool,     ///< Outil inconnu demandé par le modèle.
+};
+
+/// « allowed », « allowed_by_rule »… (stockage).
+[[nodiscard]] std::string_view to_string(ActionDecision decision) noexcept;
+[[nodiscard]] std::optional<ActionDecision>
+action_decision_from_string(std::string_view text) noexcept;
+
+/// Une action demandée à l'agent, telle que le journal structuré la garde :
+/// qui, quoi, la décision de permission et pourquoi, le résultat.
+struct ActionEvent {
+    std::string agent; ///< Agent d'une équipe ou projet ; vide pour Avenoir.
+    std::string tool;
+    nlohmann::json arguments;
+    RiskLevel risk = RiskLevel::Sensitive;
+    ActionDecision decision = ActionDecision::UnknownTool;
+    /// Ce qui a imposé une confirmation ou un refus : provenance d'un
+    /// argument, refus ou alertes de l'examen. Vide sinon.
+    std::string reason;
+    bool executed = false;  ///< L'outil a été appelé.
+    bool succeeded = false; ///< …et a réussi.
+    std::string result;     ///< Résultat ou erreur (début).
+    std::chrono::milliseconds duration{0};
+};
+
 struct AgentOptions {
     PermissionPolicy policy;
     /// Règles durables en vigueur (« toujours autoriser / refuser »),
     /// partagées entre agents ; absentes : aucune règle.
     std::shared_ptr<const ToolRules> rules;
+    /// Appelé après chaque action demandée (exécutée ou non), dans le fil de
+    /// l'agent : journal structuré. Absent : rien.
+    std::function<void(const ActionEvent&)> on_action;
     std::string system_prompt{kDefaultSystemPrompt};
     std::size_t max_steps = 10;       ///< Allers-retours LLM ↔ outils maximum par requête (≥ 1).
     std::optional<FastRouter> router; ///< Voie rapide ; absente = tout passe par le LLM.
@@ -222,6 +261,9 @@ class Agent {
         std::string content;
         bool is_error = false;
     };
+    /// Corps de `execute` : remplit `event` (décision, raison, exécution).
+    [[nodiscard]] Execution check_and_run(const ToolCall& call, const std::stop_token& stop,
+                                          ActionEvent& event);
 
     /// Exécute un appel d'outil sous contrôle des permissions. Les échecs sont
     /// rendus sous forme de texte pour que le LLM puisse s'adapter.

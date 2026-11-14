@@ -486,6 +486,16 @@ Result<WebConfig> parse_web(const toml::table& web) {
 
 // ─── [orchestration] et [agents.<nom>] ──────────────────────────────────────
 
+Result<JournalConfig> parse_journal(const toml::table& table) {
+    auto days = optional_integer(table, "journal", "retention_days", 1, 3650);
+    if (!days) {
+        return std::unexpected(std::move(days.error()));
+    }
+    JournalConfig config;
+    config.retention_days = static_cast<int>(days->value_or(config.retention_days));
+    return config;
+}
+
 Result<OrchestrationConfig> parse_orchestration(const toml::table& table) {
     constexpr std::string_view kSection = "orchestration";
     auto enabled = optional_value<bool>(table, kSection, "enabled");
@@ -678,6 +688,17 @@ Result<AppConfig> parse_config(std::string_view toml_text) {
             return std::unexpected(std::move(orchestration.error()));
         }
         config.orchestration = std::move(*orchestration);
+    }
+    auto journal_table = optional_table(root, "journal");
+    if (!journal_table) {
+        return std::unexpected(std::move(journal_table.error()));
+    }
+    if (*journal_table != nullptr) {
+        auto journal = parse_journal(**journal_table);
+        if (!journal) {
+            return std::unexpected(std::move(journal.error()));
+        }
+        config.journal = *journal;
     }
     auto agents = parse_agents(root, config.models);
     if (!agents) {

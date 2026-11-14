@@ -222,6 +222,7 @@ TEST_CASE("format_config est relu à l'identique", "[config]") {
     config.web.searxng_idle_minutes = 3;
     config.modules["meteo"].enabled = false;
     config.modules["autre.module"].risk.emplace("lire", RiskLevel::Sensitive);
+    config.journal.retention_days = 30;
     config.modules["calendrier"].enabled = true;
     config.modules["calendrier"].granted = {"network", "files.read"};
     config.permissions.tools.emplace(
@@ -368,4 +369,13 @@ TEST_CASE("[permissions.tools] et granted : lus, refus lisibles", "[config][rule
     expect_error("[permissions]\ntools = 3", "permissions.tools");
     expect_error("[modules.a]\ngranted = \"network\"", "modules.a.granted");
     expect_error("[modules.a]\ngranted = [\"rés eau\"]", "permission invalide");
+}
+
+TEST_CASE("[journal] : durée de conservation", "[config][journal]") {
+    const auto config = parse_config("[journal]\nretention_days = 7\n");
+    REQUIRE(config.has_value());
+    CHECK(config->journal.retention_days == 7);
+    CHECK(parse_config("").value_or(AppConfig{}).journal.retention_days == 90);
+    CHECK_FALSE(parse_config("[journal]\nretention_days = 0\n").has_value());
+    CHECK_FALSE(parse_config("[journal]\nretention_days = 4000\n").has_value());
 }

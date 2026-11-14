@@ -1,8 +1,10 @@
 #include "avenoir/core/agent.hpp"
 
 #include <algorithm>
+#include <chrono>
 #include <cstddef>
 #include <memory>
+#include <optional>
 #include <ranges>
 #include <stop_token>
 #include <string>
@@ -266,14 +268,40 @@ std::optional<ReplyIssue> Agent::check_reply(std::string_view reply,
 }
 
 Agent::Execution Agent::execute(const ToolCall& call, const std::stop_token& stop) {
+    ActionEvent event{.agent = options_.name,
+                      .tool = call.name,
+                      .arguments = call.arguments,
+                      .risk = RiskLevel::Sensitive,
+                      .decision = ActionDecision::UnknownTool,
+                      .reason = {},
+                      .executed = false,
+                      .succeeded = false,
+                      .result = {},
+                      .duration = {}};
+    const auto start = std::chrono::steady_clock::now();
+    Execution result = check_and_run(call, stop, event);
+    if (options_.on_action) {
+        event.succeeded = event.executed && !result.is_error;
+        event.result = truncate_utf8(result.content, 500);
+        event.duration = std::chrono::duration_cast<std::chrono::milliseconds>(
+            std::chrono::steady_clock::now() - start);
+        options_.on_action(event);
+    }
+    return result;
+}
+
+Agent::Execution Agent::check_and_run(const ToolCall& call, const std::stop_token& stop,
+                                      ActionEvent& event) {
     const auto tool = tools_.find(call.name);
     if (tool == nullptr) {
         spdlog::warn("outil inconnu demandé par le LLM : {}", call.name);
         return {.content = "Outil inconnu : " + call.name, .is_error = true};
     }
     ToolSpec spec = tool->spec();
+    event.risk = spec.risk;
 
     Policy policy = options_.policy.for_risk(spec.risk);
+    bool by_rule = false;
     // Règle durable (« toujours autoriser / refuser ») : elle ne lève qu'une
     // confirmation de la politique par niveau ; les protections suivantes
     // (provenance, examen) peuvent l'imposer à nouveau.
@@ -284,6 +312,7 @@ Agent::Execution Agent::execute(const ToolCall& call, const std::stop_token& sto
                 audit()->info("{}règle durable : {} {}", audit_prefix(), call.name,
                               ruled == Policy::Allow ? "toujours autorisé" : "toujours refusé");
             }
+            by_rule = ruled != policy;
             policy = ruled;
         }
     }
@@ -303,6 +332,8 @@ Agent::Execution Agent::execute(const ToolCall& call, const std::stop_token& sto
                                 "demande : vérifiez avant d'autoriser.";
             policy = Policy::Confirm;
             can_always = false;
+            by_rule = false;
+            event.reason = "provenance : « " + *doubtful + " » vient d'un résultat d'outil";
         }
     }
 
@@ -313,33 +344,42 @@ Agent::Execution Agent::execute(const ToolCall& call, const std::stop_token& sto
         if (review.refusal) {
             audit()->warn("{}refusé par l'examen : {} : {}", audit_prefix(), call.name,
                           *review.refusal);
+            event.decision = ActionDecision::RefusedByReview;
+            event.reason = *review.refusal;
             return {.content = "Refusé par Avenoir : " + *review.refusal, .is_error = true};
         }
         for (const auto& warning : review.warnings) {
             spec.description += "\n▲ " + warning;
+            event.reason += (event.reason.empty() ? "" : " ; ") + warning;
         }
         if (review.always_confirm || !review.warnings.empty()) {
             policy = Policy::Confirm;
             can_always = false;
+            by_rule = false;
         }
     }
 
     switch (policy) {
     case Policy::Allow:
+        event.decision = by_rule ? ActionDecision::AllowedByRule : ActionDecision::Allowed;
         break;
     case Policy::Deny:
+        event.decision = by_rule ? ActionDecision::DeniedByRule : ActionDecision::DeniedByPolicy;
         audit()->info("{}refusé par la politique : {}", audit_prefix(), call.name);
         return {.content = "Action refusée par la politique de sécurité.", .is_error = true};
     case Policy::Confirm:
         if (confirmer_ == nullptr ||
             confirmer_->confirm_action(spec, call, ConfirmContext{.can_always = can_always}) ==
                 Decision::Rejected) {
+            event.decision = ActionDecision::Rejected;
             audit()->info("{}refusé par l'utilisateur : {}", audit_prefix(), call.name);
             return {.content = "L'utilisateur a refusé cette action.", .is_error = true};
         }
+        event.decision = ActionDecision::Confirmed;
         break;
     }
 
+    event.executed = true;
     audit()->info("{}exécution : {} {}", audit_prefix(), call.name, call.arguments.dump());
     auto output = tool->call(call.arguments, stop);
     if (!output) {
@@ -420,6 +460,40 @@ std::vector<UndoOutcome> Agent::undo_last() {
     }
     journals_.erase(std::next(it).base());
     return outcomes;
+}
+
+std::string_view to_string(ActionDecision decision) noexcept {
+    switch (decision) {
+    case ActionDecision::Allowed:
+        return "allowed";
+    case ActionDecision::AllowedByRule:
+        return "allowed_by_rule";
+    case ActionDecision::Confirmed:
+        return "confirmed";
+    case ActionDecision::Rejected:
+        return "rejected";
+    case ActionDecision::DeniedByPolicy:
+        return "denied_by_policy";
+    case ActionDecision::DeniedByRule:
+        return "denied_by_rule";
+    case ActionDecision::RefusedByReview:
+        return "refused_by_review";
+    case ActionDecision::UnknownTool:
+        return "unknown_tool";
+    }
+    return "unknown_tool";
+}
+
+std::optional<ActionDecision> action_decision_from_string(std::string_view text) noexcept {
+    for (const auto decision :
+         {ActionDecision::Allowed, ActionDecision::AllowedByRule, ActionDecision::Confirmed,
+          ActionDecision::Rejected, ActionDecision::DeniedByPolicy, ActionDecision::DeniedByRule,
+          ActionDecision::RefusedByReview, ActionDecision::UnknownTool}) {
+        if (to_string(decision) == text) {
+            return decision;
+        }
+    }
+    return std::nullopt;
 }
 
 std::string Agent::audit_prefix() const {

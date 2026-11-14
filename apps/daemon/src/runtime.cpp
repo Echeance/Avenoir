@@ -1,6 +1,7 @@
 #include "runtime.hpp"
 
 #include <algorithm>
+#include <charconv>
 #include <chrono>
 #include <cstddef>
 #include <filesystem>
@@ -84,7 +85,7 @@ std::vector<std::string> builtin_commands() {
             "ouvrir",       "outils",        "parametres", "q",         "quit",     "quitter",
             "raisonnement", "recharger",     "redemarrer", "reglage",   "reglages", "renommer",
             "reset",        "risque",        "settings",   "supprimer", "tools",    "transcription",
-            "verrouillage", "permissions",   "revoquer",   "accorder"};
+            "verrouillage", "permissions",   "revoquer",   "accorder",  "journal"};
 }
 
 /// Coordinateur de la requête en cours dans ce fil (Avenoir, ou un projet) :
@@ -383,6 +384,10 @@ struct Runtime::State {
     static void startup(std::string_view argument);
     void change_setting(std::string_view argument);
     void print_permissions() const;
+    /// Journal structuré : enregistre une action ; `in_conversation` faux
+    /// pour un projet (aucune conversation).
+    void record_action(const core::ActionEvent& event, bool in_conversation) const;
+    void print_journal(std::string_view argument) const;
     void revoke(std::string_view argument);
     [[nodiscard]] Outcome command(std::string_view line, const std::stop_token& stop);
     void run_tool(std::string_view line, core::ToolCall call, const std::stop_token& stop,
@@ -443,6 +448,23 @@ core::Result<std::unique_ptr<Runtime>> Runtime::create(ConfigFile file) {
     } else {
         s->startup_warnings.emplace_back(
             "dossier de données introuvable — conversations non conservées");
+    }
+
+    // Journal structuré (décision 62) : les actions trop anciennes sont
+    // effacées au démarrage.
+    if (store) {
+        if (auto pruned = store->prune_actions(config.journal.retention_days); !pruned) {
+            s->startup_warnings.push_back(core::describe(pruned.error()));
+        } else if (*pruned > 0) {
+            spdlog::info("journal : {} action(s) de plus de {} jours effacée(s)", *pruned,
+                         config.journal.retention_days);
+        }
+    }
+    {
+        const State* journal_state = s.get();
+        options.on_action = [journal_state](const core::ActionEvent& event) {
+            journal_state->record_action(event, /*in_conversation=*/true);
+        };
     }
 
     if (config.permissions.sensitive == core::Policy::Allow) {
@@ -941,6 +963,9 @@ void Runtime::State::print_help() const {
     out += command("/demarrage [oui|non]", "lancer Avenoir à l'ouverture de session") + "\n";
     out += command("/quitter", "quitter cette fenêtre (ou Ctrl+D) ; Avenoir continue") + "\n";
     out += title("Permissions") + "\n";
+    out += command("/journal [tout] [nombre]", "actions de la conversation (tout : toutes), "
+                                               "décision et résultat") +
+           "\n";
     out += command("/permissions", "actions toujours autorisées ou refusées, permissions des "
                                    "modules") +
            "\n";
@@ -1135,6 +1160,129 @@ void Runtime::State::print_permissions() const {
                          "<module>"));
 }
 
+void Runtime::State::record_action(const core::ActionEvent& event, bool in_conversation) const {
+    storage::Store* store = conversations ? conversations->store() : nullptr;
+    if (store == nullptr) {
+        return;
+    }
+    const auto conversation = in_conversation ? conversations->current_id() : std::nullopt;
+    if (auto written = store->append_action(conversation, event); !written) {
+        spdlog::warn("journal : action non enregistrée : {}", core::describe(written.error()));
+    }
+}
+
+namespace {
+
+std::string_view decision_label(core::ActionDecision decision) {
+    switch (decision) {
+    case core::ActionDecision::Allowed:
+        return "autorisée";
+    case core::ActionDecision::AllowedByRule:
+        return "toujours autorisée";
+    case core::ActionDecision::Confirmed:
+        return "confirmée";
+    case core::ActionDecision::Rejected:
+        return "refusée";
+    case core::ActionDecision::DeniedByPolicy:
+        return "refusée par la politique";
+    case core::ActionDecision::DeniedByRule:
+        return "toujours refusée";
+    case core::ActionDecision::RefusedByReview:
+        return "refusée d'office";
+    case core::ActionDecision::UnknownTool:
+        return "outil inconnu";
+    }
+    return "outil inconnu";
+}
+
+} // namespace
+
+/// /journal [tout] [nombre] : actions de la conversation en cours (ou de
+/// toutes), la plus ancienne en haut, avec décision, résultat et durée.
+void Runtime::State::print_journal(std::string_view argument) const {
+    const storage::Store* store = conversations ? conversations->store() : nullptr;
+    if (store == nullptr) {
+        display().warning("Journal indisponible : la base n'a pas pu être ouverte.");
+        return;
+    }
+    bool everything = false;
+    std::size_t limit = 20;
+    while (!argument.empty()) {
+        const auto space = argument.find(' ');
+        const std::string_view word = argument.substr(0, space);
+        argument =
+            space == std::string_view::npos ? std::string_view{} : trim(argument.substr(space + 1));
+        std::size_t number = 0;
+        const auto [end, error] =
+            std::from_chars(std::to_address(word.begin()), std::to_address(word.end()), number);
+        if (word == "tout" || word == "toutes") {
+            everything = true;
+        } else if (error == std::errc{} && end == std::to_address(word.end()) && number > 0 &&
+                   number <= 500) {
+            limit = number;
+        } else {
+            display().warning("Usage : /journal [tout] [nombre de 1 à 500]");
+            return;
+        }
+    }
+    const auto conversation = everything ? std::nullopt : conversations->current_id();
+    auto entries = store->actions(conversation, limit);
+    if (!entries) {
+        display().error(core::describe(entries.error()));
+        return;
+    }
+    if (entries->empty()) {
+        display().info(everything ? "Aucune action au journal."
+                                  : "Aucune action dans cette conversation (/journal tout : "
+                                    "toutes).");
+        return;
+    }
+    const auto gray = [](std::string_view text) { return paint(text, {.color = Color::Gray}); };
+    display().plain(
+        paint(everything ? "Journal des actions" : "Actions de la conversation", {.bold = true}) +
+        gray(std::format("  ({} dernière(s), {} jours gardés)", entries->size(),
+                         file.config.journal.retention_days)));
+    for (const auto& entry : *entries | std::views::reverse) {
+        const auto& event = entry.event;
+        std::string mark = gray("–");
+        if (event.executed) {
+            mark = event.succeeded ? paint("✓", {.color = Color::Green})
+                                   : paint("✗", {.color = Color::Red});
+        }
+        const bool refused = !event.executed;
+        std::string line = std::format("  {} {} {} {}", gray(entry.at), mark,
+                                       terminal::pad(paint(event.tool, {.bold = true}), 24),
+                                       paint(decision_label(event.decision),
+                                             {.color = refused ? Color::Yellow : Color::Gray}));
+        if (!event.agent.empty()) {
+            line += gray(" · " + event.agent);
+        }
+        if (event.executed) {
+            line += gray(std::format(" · {} ms", event.duration.count()));
+        }
+        if (everything) {
+            line +=
+                gray(entry.conversation ? std::format(" · n° {}", entry.conversation.value_or(0))
+                                        : std::string(" · hors conversation"));
+        }
+        display().plain(line);
+        const std::string arguments = event.arguments.is_string()
+                                          ? event.arguments.get<std::string>()
+                                          : event.arguments.dump();
+        if (arguments != "{}" && !arguments.empty()) {
+            display().plain("      " + gray(terminal::ellipsize(arguments, 100)));
+        }
+        if (!event.reason.empty()) {
+            display().plain("      " + paint("▲ " + terminal::ellipsize(event.reason, 100),
+                                             {.color = Color::Yellow}));
+        }
+        if (event.executed && !event.succeeded) {
+            display().plain("      " +
+                            paint(terminal::ellipsize(event.result, 100), {.color = Color::Red}));
+        }
+    }
+}
+
 /// /revoquer : règle d'un outil, toutes les règles, ou permissions d'un
 /// module (ce qui le désactive : une permission ne peut pas encore être
 /// retirée seule, faute de bac à sable).
@@ -1206,6 +1354,9 @@ agents::Environment Runtime::State::agent_environment() const {
     };
     environment.policy = file.config.permissions;
     environment.rules = permissions->rules();
+    environment.on_action = [this](const core::ActionEvent& event) {
+        record_action(event, /*in_conversation=*/true);
+    };
     environment.base_prompt = base_prompt;
     // Provenance : seules les demandes de l'utilisateur sont « demandées ».
     core::Agent* coordinator = t_coordinator != nullptr ? t_coordinator : agent.get();
@@ -1280,6 +1431,9 @@ Runtime::State::make_project_agent(const std::string& name) const {
     core::AgentOptions options;
     options.policy = file.config.permissions;
     options.rules = permissions->rules();
+    options.on_action = [this](const core::ActionEvent& event) {
+        record_action(event, /*in_conversation=*/false);
+    };
     options.max_steps = file.config.agent.max_steps;
     options.name = "projet " + name;
     options.system_prompt =
@@ -1746,6 +1900,8 @@ Outcome Runtime::State::command(std::string_view line, const std::stop_token& st
         }
     } else if (name == "/modules") {
         modules_ui->print_status();
+    } else if (name == "/journal") {
+        print_journal(argument);
     } else if (name == "/permissions") {
         print_permissions();
     } else if (name == "/revoquer") {

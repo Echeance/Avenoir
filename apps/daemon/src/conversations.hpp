@@ -63,6 +63,11 @@ class Conversations {
     /// Base d'Avenoir, ou `nullptr` si elle n'a pas pu être ouverte.
     [[nodiscard]] storage::Store* store() noexcept { return store_ ? &*store_ : nullptr; }
 
+    /// Numéro de la conversation en cours, s'il y a une base.
+    [[nodiscard]] std::optional<std::int64_t> current_id() const {
+        return store_ ? std::optional<std::int64_t>{current_} : std::nullopt;
+    }
+
     /// « Titre » (n° 3), ou « conversation non conservée ».
     [[nodiscard]] std::string describe_current() const;
 

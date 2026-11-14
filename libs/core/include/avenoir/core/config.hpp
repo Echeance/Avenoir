@@ -149,6 +149,14 @@ struct OrchestrationConfig {
     bool operator==(const OrchestrationConfig&) const = default;
 };
 
+/// Journal structuré des actions (`[journal]`, décision 62).
+struct JournalConfig {
+    /// Les actions plus anciennes sont effacées au démarrage du démon.
+    int retention_days = 90;
+
+    bool operator==(const JournalConfig&) const = default;
+};
+
 struct AppConfig {
     /// Modèles (`[models.<nom>]`), dans l'ordre du fichier : le premier sert
     /// par défaut. Aucun : pas de LLM, seule la voie rapide répond.
@@ -161,6 +169,7 @@ struct AppConfig {
     /// Équipe de l'utilisateur, dans l'ordre du fichier.
     std::vector<AgentProfile> agents;
     OrchestrationConfig orchestration;
+    JournalConfig journal;
 
     bool operator==(const AppConfig&) const = default;
 };

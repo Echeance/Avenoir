@@ -268,6 +268,7 @@ Plusieurs **projets** peuvent avancer en même temps, en arrière-plan : `/proje
 | `/historique` | réafficher toute la conversation |
 | `/modules` | modules installés : état, permissions, outils |
 | `/risque [outil niveau]` | voir ou changer le risque d'un outil de module (`lecture`, `réversible`, `sensible`, `défaut`) |
+| `/journal [tout] [nombre]` | actions de la conversation (ou de toutes) : décision de permission, résultat, durée |
 | `/permissions` | actions toujours autorisées ou refusées, permissions des modules |
 | `/revoquer <outil\|module\|tout>` | retirer une règle (retour à la confirmation), ou les permissions d'un module (ce qui le désactive) |
 | `/accorder <module>` | accorder ses permissions à un module installé et l'activer |
@@ -287,7 +288,7 @@ Plusieurs **projets** peuvent avancer en même temps, en arrière-plan : `/proje
 
 Dans un terminal, Avenoir s'ouvre **en plein écran**, comme vim ou htop : l'en-tête (le loup, le modèle, la conversation, les outils) reste en haut, la barre de saisie en bas, et la conversation défile entre les deux. À la sortie, le terminal retrouve son contenu d'avant. Le texte tapé pendant une réponse ouvre la saisie suivante.
 
-Les conversations sont enregistrées dans `avenoir.db`, dans le dossier de données d'Avenoir (`~/.local/share/avenoir` sous Linux, `%LOCALAPPDATA%\avenoir` sous Windows), lisible par vous seul. Le **journal d'audit** (chaque action exécutée, refusée, échouée ou annulée, avec ses arguments) est écrit dans `logs/audit.log` de ce même dossier, lisible par vous seul : 5 fichiers de 5 Mo au plus, le plus ancien effacé. Pour le voir aussi à l'écran : `AVENOIR_LOG=info`.
+Les conversations sont enregistrées dans `avenoir.db`, dans le dossier de données d'Avenoir (`~/.local/share/avenoir` sous Linux, `%LOCALAPPDATA%\avenoir` sous Windows), lisible par vous seul. Le **journal d'audit** (chaque action exécutée, refusée, échouée ou annulée, avec ses arguments) est écrit dans `logs/audit.log` de ce même dossier, lisible par vous seul : 5 fichiers de 5 Mo au plus, le plus ancien effacé. Pour le voir aussi à l'écran : `AVENOIR_LOG=info`. Le **journal des actions** (`/journal`, ou `/journal tout`) montre, dans la base, chaque action demandée : qui l'a demandée, la décision (autorisée, confirmée, refusée, et pourquoi), le résultat et la durée ; il garde 90 jours par défaut (`/reglage journal.retention_days`).
 
 ### Modules
 

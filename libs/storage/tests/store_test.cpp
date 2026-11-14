@@ -1,5 +1,8 @@
+#include <chrono>
 #include <filesystem>
+#include <optional>
 #include <string>
+#include <thread>
 #include <vector>
 
 #include <catch2/catch_test_macros.hpp>
@@ -202,4 +205,80 @@ TEST_CASE("état gardé d'un lancement à l'autre", "[store]") {
     REQUIRE(active.has_value());
     CHECK(active->value_or("") == "claude");
     CHECK(store.state("autre")->value_or("") == "x'); DROP TABLE app_state; --");
+}
+
+namespace {
+
+core::ActionEvent action(std::string tool, core::ActionDecision decision) {
+    return core::ActionEvent{.agent = {},
+                             .tool = std::move(tool),
+                             .arguments = {{"city", "Lyon"}},
+                             .risk = core::RiskLevel::ReadOnly,
+                             .decision = decision,
+                             .reason = {},
+                             .executed = decision == core::ActionDecision::Allowed,
+                             .succeeded = decision == core::ActionDecision::Allowed,
+                             .result = "7 °C",
+                             .duration = std::chrono::milliseconds{120}};
+}
+
+} // namespace
+
+TEST_CASE("journal structuré : actions par conversation et globales", "[store][journal]") {
+    auto store = memory_store();
+    const auto first = store.create_conversation("Météo");
+    const auto second = store.create_conversation("Autre");
+    REQUIRE(first.has_value());
+    REQUIRE(second.has_value());
+    REQUIRE(
+        store.append_action(first->id, action("meteo__current", core::ActionDecision::Allowed)));
+    REQUIRE(store.append_action(second->id, action("power", core::ActionDecision::Rejected)));
+    REQUIRE(
+        store.append_action(std::nullopt, action("lock_screen", core::ActionDecision::Allowed)));
+
+    const auto all = store.actions(std::nullopt, 10);
+    REQUIRE(all.has_value());
+    REQUIRE(all->size() == 3);
+    CHECK(all->front().event.tool == "lock_screen"); // la plus récente d'abord
+    CHECK_FALSE(all->front().conversation.has_value());
+
+    const auto own = store.actions(first->id, 10);
+    REQUIRE(own.has_value());
+    REQUIRE(own->size() == 1);
+    const auto& entry = own->front();
+    CHECK(entry.event.tool == "meteo__current");
+    CHECK(entry.event.decision == core::ActionDecision::Allowed);
+    CHECK(entry.event.arguments == nlohmann::json{{"city", "Lyon"}});
+    CHECK(entry.event.result == "7 °C");
+    CHECK(entry.event.duration == std::chrono::milliseconds{120});
+    CHECK(entry.event.executed);
+    CHECK_FALSE(entry.at.empty());
+
+    CHECK(store.actions(std::nullopt, 1).value_or(std::vector<storage::ActionEntry>{}).size() == 1);
+
+    // Conversation supprimée : ses actions restent au journal global.
+    REQUIRE(store.remove(second->id));
+    const auto after = store.actions(std::nullopt, 10);
+    REQUIRE(after.has_value());
+    CHECK(after->size() == 3);
+}
+
+TEST_CASE("journal structuré : arguments bornés, effacement des anciennes", "[store][journal]") {
+    auto store = memory_store();
+    auto big = action("write_note", core::ActionDecision::Allowed);
+    big.arguments = {{"text", std::string(5000, 'e') + "é"}};
+    REQUIRE(store.append_action(std::nullopt, big));
+    const auto read = store.actions(std::nullopt, 1);
+    REQUIRE(read.has_value());
+    REQUIRE(read->size() == 1);
+    // Coupés : gardés comme texte, sans dépasser la limite (plus « … »).
+    CHECK(read->front().event.arguments.is_string());
+    CHECK(read->front().event.arguments.get<std::string>().size() <=
+          storage::kMaxJournalArguments + 3);
+
+    CHECK(store.prune_actions(90).value_or(99) == 0); // récente : gardée
+    // Tout ce qui précède maintenant (pause : l'heure est à la milliseconde).
+    std::this_thread::sleep_for(std::chrono::milliseconds{5});
+    CHECK(store.prune_actions(0).value_or(0) == 1);
+    CHECK(store.actions(std::nullopt, 10).value_or(std::vector<storage::ActionEntry>{1}).empty());
 }

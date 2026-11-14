@@ -116,6 +116,9 @@ std::string setting_family(std::string_view key) {
     if (prefix == "modules") {
         return "Modules";
     }
+    if (prefix == "journal") {
+        return "Journal";
+    }
     return std::string(prefix);
 }
 

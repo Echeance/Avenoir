@@ -123,6 +123,12 @@ sensitive = "confirm"
 # # /risque (avertissement + saisie de « Je sais ce que je fais ») : une baisse
 # # écrite ici à la main est ignorée.
 
+# ─── Journal des actions (/journal) ────────────────────────────────────────
+# Chaque action demandée (décision de permission, résultat, durée) est gardée
+# dans la base d'Avenoir ; les plus anciennes sont effacées au démarrage.
+# [journal]
+# retention_days = 90         # 1 à 3650
+
 # ─── Équipe d'agents (orchestrateur, docs/PROJECT.md § 2.11) ────────────────
 # Avenoir peut confier une demande longue à une équipe d'agents qui travaillent
 # en parallèle (outil delegate_tasks). Sans agent configuré, il crée au besoin

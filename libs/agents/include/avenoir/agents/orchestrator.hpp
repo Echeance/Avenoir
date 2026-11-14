@@ -40,6 +40,8 @@ struct Environment {
     core::PermissionPolicy policy;
     /// Règles durables en vigueur (« toujours autoriser / refuser »).
     std::shared_ptr<const core::ToolRules> rules;
+    /// Journal structuré : chaque action d'un agent.
+    std::function<void(const core::ActionEvent&)> on_action;
     /// Demandes de l'utilisateur à l'origine du plan : seules tenues pour
     /// « demandées » par la provenance des arguments des agents.
     std::string requester_text;

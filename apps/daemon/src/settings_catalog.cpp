@@ -268,6 +268,11 @@ std::vector<SettingLine> list_settings(const core::AppConfig& config,
                      .accepted = "1 à 8",
                      .description = "tâches en même temps (un modèle local sert à tour de rôle)",
                      .security = false});
+    lines.push_back({.key = "journal.retention_days",
+                     .value = std::to_string(config.journal.retention_days),
+                     .accepted = "1 à 3650",
+                     .description = "jours de conservation du journal des actions (/journal)",
+                     .security = false});
     for (const auto& module : modules) {
         lines.push_back({.key = std::format("modules.{}.enabled", module.id),
                          .value = std::string(yes_no(module_enabled(config, module))),
@@ -350,6 +355,15 @@ core::Result<SettingChange> change_setting(const core::AppConfig& config, std::s
         change.before = std::to_string(*field);
         change.after = std::to_string(*parsed);
         *field = static_cast<std::size_t>(*parsed);
+        done = {};
+    } else if (key == "journal.retention_days") {
+        const auto parsed = parse_integer(value, 1, 3650);
+        if (!parsed) {
+            return setting_error("journal.retention_days : nombre de jours de 1 à 3650 attendu");
+        }
+        change.before = std::to_string(change.updated.journal.retention_days);
+        change.after = std::to_string(*parsed);
+        change.updated.journal.retention_days = static_cast<int>(*parsed);
         done = {};
     } else if (key == "agent.max_steps") {
         const auto parsed = parse_integer(value, 1, 100);

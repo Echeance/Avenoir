@@ -1,8 +1,11 @@
 #include "avenoir/storage/store.hpp"
 
+#include <chrono>
+#include <cstddef>
 #include <cstdint>
 #include <filesystem>
 #include <memory>
+#include <mutex>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -19,7 +22,7 @@ namespace {
 
 /// Version du schéma (PRAGMA user_version). À incrémenter avec chaque
 /// migration ajoutée dans `migrate`.
-constexpr int kSchemaVersion = 3;
+constexpr int kSchemaVersion = 4;
 
 struct DatabaseDeleter {
     void operator()(sqlite3* db) const noexcept { sqlite3_close_v2(db); }
@@ -53,6 +56,17 @@ class Statement {
             ok_ = false;
         }
         return *this;
+    }
+
+    Statement& bind_null(int index) {
+        if (sqlite3_bind_null(statement_.get(), index) != SQLITE_OK) {
+            ok_ = false;
+        }
+        return *this;
+    }
+
+    [[nodiscard]] bool is_null(int column) const {
+        return sqlite3_column_type(statement_.get(), column) == SQLITE_NULL;
     }
 
     Statement& bind(int index, std::string_view value) {
@@ -202,7 +216,50 @@ core::Result<void> migrate(sqlite3* db) {
             return created;
         }
     }
+    if (version < 4) {
+        // Journal structuré des actions (décision 62). Une conversation
+        // supprimée n'efface pas ses actions : elles restent au journal global.
+        if (auto created = execute(db, R"(
+            BEGIN;
+            CREATE TABLE actions (
+                id              INTEGER PRIMARY KEY,
+                at              TEXT NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M:%f', 'now')),
+                conversation_id INTEGER REFERENCES conversations(id) ON DELETE SET NULL,
+                agent           TEXT NOT NULL,
+                tool            TEXT NOT NULL,
+                module          TEXT,
+                risk            TEXT NOT NULL,
+                decision        TEXT NOT NULL,
+                reason          TEXT NOT NULL,
+                arguments       TEXT NOT NULL,
+                executed        INTEGER NOT NULL,
+                succeeded       INTEGER NOT NULL,
+                result          TEXT NOT NULL,
+                duration_ms     INTEGER NOT NULL
+            );
+            CREATE INDEX actions_by_conversation ON actions(conversation_id, id);
+            CREATE INDEX actions_by_time ON actions(at);
+            PRAGMA user_version = 4;
+            COMMIT;
+        )");
+            !created) {
+            return created;
+        }
+    }
     return {};
+}
+
+/// Texte de `text` coupé à `max` octets au plus, sans couper un caractère.
+std::string truncate_text(std::string text, std::size_t max) {
+    if (text.size() <= max) {
+        return text;
+    }
+    std::size_t end = max;
+    while (end > 0 && (static_cast<unsigned char>(text[end]) & 0xC0U) == 0x80U) {
+        --end;
+    }
+    text.resize(end);
+    return text + "…";
 }
 
 /// Colonnes communes aux requêtes qui renvoient des conversations.
@@ -226,6 +283,8 @@ ConversationInfo read_conversation(const Statement& row) {
 
 struct Store::Impl {
     Database db;
+    /// Un appel à la fois (récursif : une méthode peut en appeler une autre).
+    mutable std::recursive_mutex mutex;
 
     [[nodiscard]] core::Result<std::vector<ConversationInfo>>
     query_conversations(const std::string& sql, std::optional<std::int64_t> id) const {
@@ -293,7 +352,9 @@ core::Result<Store> Store::open(const std::filesystem::path& path) {
             path, std::filesystem::perms::owner_read | std::filesystem::perms::owner_write,
             std::filesystem::perm_options::replace, error);
     }
-    return Store(std::make_unique<Impl>(Impl{.db = std::move(db)}));
+    auto impl = std::make_unique<Impl>();
+    impl->db = std::move(db);
+    return Store(std::move(impl));
 }
 
 core::Result<Store> Store::open_in_memory() {
@@ -301,6 +362,7 @@ core::Result<Store> Store::open_in_memory() {
 }
 
 core::Result<ConversationInfo> Store::create_conversation(std::string_view title) {
+    const std::scoped_lock lock(impl_->mutex);
     auto statement = Statement::prepare(
         impl_->db.get(), "INSERT INTO conversations (title, activity) VALUES "
                          "(?1, (SELECT COALESCE(MAX(activity), 0) + 1 FROM conversations))");
@@ -322,11 +384,13 @@ core::Result<ConversationInfo> Store::create_conversation(std::string_view title
 }
 
 core::Result<std::vector<ConversationInfo>> Store::list_conversations() const {
+    const std::scoped_lock lock(impl_->mutex);
     return impl_->query_conversations(
         std::string(kConversationColumns) + "ORDER BY c.activity DESC", std::nullopt);
 }
 
 core::Result<std::optional<ConversationInfo>> Store::conversation(std::int64_t id) const {
+    const std::scoped_lock lock(impl_->mutex);
     auto found =
         impl_->query_conversations(std::string(kConversationColumns) + "WHERE c.id = ?1", id);
     if (!found) {
@@ -339,6 +403,7 @@ core::Result<std::optional<ConversationInfo>> Store::conversation(std::int64_t i
 }
 
 core::Result<std::optional<ConversationInfo>> Store::most_recent() const {
+    const std::scoped_lock lock(impl_->mutex);
     auto found = impl_->query_conversations(
         std::string(kConversationColumns) + "ORDER BY c.activity DESC LIMIT 1", std::nullopt);
     if (!found) {
@@ -351,6 +416,7 @@ core::Result<std::optional<ConversationInfo>> Store::most_recent() const {
 }
 
 core::Result<void> Store::rename(std::int64_t id, std::string_view title) {
+    const std::scoped_lock lock(impl_->mutex);
     auto statement =
         Statement::prepare(impl_->db.get(), "UPDATE conversations SET title = ?1 WHERE id = ?2");
     if (!statement) {
@@ -360,6 +426,7 @@ core::Result<void> Store::rename(std::int64_t id, std::string_view title) {
 }
 
 core::Result<void> Store::remove(std::int64_t id) {
+    const std::scoped_lock lock(impl_->mutex);
     auto statement = Statement::prepare(impl_->db.get(), "DELETE FROM conversations WHERE id = ?1");
     if (!statement) {
         return std::unexpected(std::move(statement.error()));
@@ -368,6 +435,7 @@ core::Result<void> Store::remove(std::int64_t id) {
 }
 
 core::Result<void> Store::append_message(std::int64_t conversation, const core::Message& message) {
+    const std::scoped_lock lock(impl_->mutex);
     const nlohmann::json json = detail::message_to_json(message);
     const std::string role = json["role"].get<std::string>();
     const std::string content = json.dump();
@@ -385,6 +453,7 @@ core::Result<void> Store::append_message(std::int64_t conversation, const core::
 }
 
 core::Result<void> Store::remove_last_message(std::int64_t conversation) {
+    const std::scoped_lock lock(impl_->mutex);
     auto statement = Statement::prepare(
         impl_->db.get(), "DELETE FROM messages WHERE id = "
                          "(SELECT MAX(id) FROM messages WHERE conversation_id = ?1)");
@@ -395,6 +464,7 @@ core::Result<void> Store::remove_last_message(std::int64_t conversation) {
 }
 
 core::Result<void> Store::clear_messages(std::int64_t conversation) {
+    const std::scoped_lock lock(impl_->mutex);
     auto statement =
         Statement::prepare(impl_->db.get(), "DELETE FROM messages WHERE conversation_id = ?1");
     if (!statement) {
@@ -407,6 +477,7 @@ core::Result<void> Store::clear_messages(std::int64_t conversation) {
 }
 
 core::Result<std::vector<core::Message>> Store::messages(std::int64_t conversation) const {
+    const std::scoped_lock lock(impl_->mutex);
     auto statement = Statement::prepare(
         impl_->db.get(), "SELECT content FROM messages WHERE conversation_id = ?1 ORDER BY id");
     if (!statement) {
@@ -435,6 +506,7 @@ core::Result<std::vector<core::Message>> Store::messages(std::int64_t conversati
 // ─── Risque des outils de modules ───────────────────────────────────────────
 
 core::Result<std::vector<RiskChoice>> Store::risk_choices() const {
+    const std::scoped_lock lock(impl_->mutex);
     auto statement = Statement::prepare(
         impl_->db.get(), "SELECT tool, risk, agreed, datetime(chosen_at, 'localtime') "
                          "FROM tool_risks ORDER BY tool");
@@ -463,6 +535,7 @@ core::Result<std::vector<RiskChoice>> Store::risk_choices() const {
 
 core::Result<void> Store::set_risk_choice(std::string_view tool, core::RiskLevel risk,
                                           bool agreed) {
+    const std::scoped_lock lock(impl_->mutex);
     auto statement = Statement::prepare(
         impl_->db.get(),
         "INSERT INTO tool_risks (tool, risk, agreed) VALUES (?1, ?2, ?3) "
@@ -478,6 +551,7 @@ core::Result<void> Store::set_risk_choice(std::string_view tool, core::RiskLevel
 }
 
 core::Result<std::optional<std::string>> Store::state(std::string_view key) const {
+    const std::scoped_lock lock(impl_->mutex);
     auto statement =
         Statement::prepare(impl_->db.get(), "SELECT value FROM app_state WHERE key = ?1");
     if (!statement) {
@@ -495,6 +569,7 @@ core::Result<std::optional<std::string>> Store::state(std::string_view key) cons
 }
 
 core::Result<void> Store::set_state(std::string_view key, std::string_view value) {
+    const std::scoped_lock lock(impl_->mutex);
     auto statement = Statement::prepare(impl_->db.get(),
                                         "INSERT INTO app_state (key, value) VALUES (?1, ?2) "
                                         "ON CONFLICT(key) DO UPDATE SET value = excluded.value, "
@@ -506,11 +581,120 @@ core::Result<void> Store::set_state(std::string_view key, std::string_view value
 }
 
 core::Result<void> Store::remove_risk_choice(std::string_view tool) {
+    const std::scoped_lock lock(impl_->mutex);
     auto statement = Statement::prepare(impl_->db.get(), "DELETE FROM tool_risks WHERE tool = ?1");
     if (!statement) {
         return std::unexpected(std::move(statement.error()));
     }
     return statement->bind(1, tool).run();
+}
+
+// ─── Journal structuré ──────────────────────────────────────────────────────
+
+core::Result<void> Store::append_action(std::optional<std::int64_t> conversation,
+                                        const core::ActionEvent& event) {
+    const std::scoped_lock lock(impl_->mutex);
+    auto statement = Statement::prepare(
+        impl_->db.get(),
+        "INSERT INTO actions (conversation_id, agent, tool, module, risk, decision, reason, "
+        "arguments, executed, succeeded, result, duration_ms) "
+        "VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)");
+    if (!statement) {
+        return std::unexpected(std::move(statement.error()));
+    }
+    const std::string arguments = truncate_text(
+        event.arguments.dump(-1, ' ', false, nlohmann::json::error_handler_t::replace),
+        kMaxJournalArguments);
+    const auto separator = event.tool.find("__");
+    const std::string module =
+        separator == std::string::npos ? std::string{} : event.tool.substr(0, separator);
+    if (conversation) {
+        statement->bind(1, *conversation);
+    } else {
+        statement->bind_null(1);
+    }
+    statement->bind(2, event.agent).bind(3, event.tool);
+    if (module.empty()) {
+        statement->bind_null(4);
+    } else {
+        statement->bind(4, module);
+    }
+    return statement->bind(5, core::to_string(event.risk))
+        .bind(6, core::to_string(event.decision))
+        .bind(7, event.reason)
+        .bind(8, arguments)
+        .bind(9, std::int64_t{event.executed ? 1 : 0})
+        .bind(10, std::int64_t{event.succeeded ? 1 : 0})
+        .bind(11, event.result)
+        .bind(12, static_cast<std::int64_t>(event.duration.count()))
+        .run();
+}
+
+core::Result<std::vector<ActionEntry>> Store::actions(std::optional<std::int64_t> conversation,
+                                                      std::size_t limit) const {
+    const std::scoped_lock lock(impl_->mutex);
+    const std::string sql =
+        std::string("SELECT id, datetime(at, 'localtime'), conversation_id, agent, tool, risk, "
+                    "decision, reason, arguments, executed, succeeded, result, duration_ms "
+                    "FROM actions ") +
+        (conversation ? "WHERE conversation_id = ?1 " : "") + "ORDER BY id DESC LIMIT ?2";
+    auto statement = Statement::prepare(impl_->db.get(), sql);
+    if (!statement) {
+        return std::unexpected(std::move(statement.error()));
+    }
+    if (conversation) {
+        statement->bind(1, *conversation);
+    }
+    statement->bind(2, static_cast<std::int64_t>(limit));
+    std::vector<ActionEntry> out;
+    while (true) {
+        auto row = statement->step();
+        if (!row) {
+            return std::unexpected(std::move(row.error()));
+        }
+        if (!*row) {
+            return out;
+        }
+        ActionEntry entry;
+        entry.id = statement->integer(0);
+        entry.at = statement->text(1);
+        if (!statement->is_null(2)) {
+            entry.conversation = statement->integer(2);
+        }
+        auto& event = entry.event;
+        event.agent = statement->text(3);
+        event.tool = statement->text(4);
+        event.risk =
+            core::risk_level_from_string(statement->text(5)).value_or(core::RiskLevel::Sensitive);
+        event.decision = core::action_decision_from_string(statement->text(6))
+                             .value_or(core::ActionDecision::UnknownTool);
+        event.reason = statement->text(7);
+        // Arguments coupés à la limite : gardés comme texte.
+        const std::string arguments = statement->text(8);
+        event.arguments = nlohmann::json::parse(arguments, nullptr, /*allow_exceptions=*/false);
+        if (event.arguments.is_discarded()) {
+            event.arguments = arguments;
+        }
+        event.executed = statement->integer(9) != 0;
+        event.succeeded = statement->integer(10) != 0;
+        event.result = statement->text(11);
+        event.duration = std::chrono::milliseconds{statement->integer(12)};
+        out.push_back(std::move(entry));
+    }
+}
+
+core::Result<std::size_t> Store::prune_actions(int days) {
+    const std::scoped_lock lock(impl_->mutex);
+    auto statement = Statement::prepare(
+        impl_->db.get(), "DELETE FROM actions WHERE at < strftime('%Y-%m-%d %H:%M:%f', 'now', ?1)");
+    if (!statement) {
+        return std::unexpected(std::move(statement.error()));
+    }
+    const std::string offset = "-" + std::to_string(days) + " days";
+    if (auto deleted = statement->bind(1, offset).run(); !deleted) {
+        return std::unexpected(std::move(deleted.error()));
+    }
+    return static_cast<std::size_t>(sqlite3_changes(impl_->db.get()));
 }
 
 } // namespace avenoir::storage

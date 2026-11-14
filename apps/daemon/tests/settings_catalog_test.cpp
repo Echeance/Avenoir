@@ -192,3 +192,14 @@ TEST_CASE("change_setting : activer un module installé accorde ses permissions"
     REQUIRE(bundled.has_value());
     CHECK(bundled->updated.modules.at("meteo").granted.empty());
 }
+
+TEST_CASE("change_setting : conservation du journal", "[reglages][journal]") {
+    const core::AppConfig config;
+    auto days = daemon::change_setting(config, "journal.retention_days", "30", known());
+    REQUIRE(days.has_value());
+    CHECK(days->updated.journal.retention_days == 30);
+    CHECK(days->before == "90");
+    CHECK_FALSE(days->weakening.has_value());
+    CHECK_FALSE(daemon::change_setting(config, "journal.retention_days", "0", known()));
+    CHECK_FALSE(daemon::change_setting(config, "journal.retention_days", "beaucoup", known()));
+}

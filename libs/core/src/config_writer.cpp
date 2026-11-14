@@ -303,6 +303,10 @@ std::string format_config(const AppConfig& config) {
         format_module(out, id, settings);
     }
     section(out, "orchestration", format_orchestration(config.orchestration));
+    if (config.journal != JournalConfig{}) {
+        section(out, "journal",
+                std::format("retention_days = {}\n", config.journal.retention_days));
+    }
     for (const auto& agent : config.agents) {
         format_agent_profile(out, agent);
     }

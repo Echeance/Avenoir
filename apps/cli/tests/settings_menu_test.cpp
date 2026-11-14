@@ -27,6 +27,7 @@ TEST_CASE("menu des réglages : familles et filtre", "[settings]") {
     CHECK(setting_family("agent.local_only") == "Assistant");
     CHECK(setting_family("permissions.sensitive") == "Permissions");
     CHECK(setting_family("modules.meteo.enabled") == "Modules");
+    CHECK(setting_family("journal.retention_days") == "Journal");
     CHECK(setting_family("inconnu.x") == "inconnu");
 
     const std::vector<SettingEntry> entries = {
