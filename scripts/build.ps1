@@ -152,10 +152,10 @@ function Invoke-ClangTidy([string[]]$Files) {
     Write-Host "$($Files.Count) fichier(s) à analyser ($count en parallèle)."
     $jobs = for ($i = 0; $i -lt $count; $i++) {
         $chunk = @(for ($j = $i; $j -lt $Files.Count; $j += $count) { $Files[$j] })
-        Start-Job -ArgumentList $Root, $BuildDir, $chunk -ScriptBlock {
-            param($JobRoot, $JobBuildDir, [string[]]$Chunk)
-            Set-Location $JobRoot
-            $output = & clang-tidy -p $JobBuildDir --quiet @Chunk 2>&1 | Out-String
+        Start-Job -ScriptBlock {
+            Set-Location $using:Root
+            $arguments = @('-p', $using:BuildDir, '--quiet') + $using:chunk
+            $output = & clang-tidy @arguments 2>&1 | Out-String
             [pscustomobject]@{ Output = $output; Code = $LASTEXITCODE }
         }
     }
