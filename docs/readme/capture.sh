@@ -16,7 +16,7 @@ set -euo pipefail
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 config="${1:?Usage : $0 <config.toml>}"
 config="$(cd "$(dirname "$config")" && pwd)/$(basename "$config")"
-avenoir="$root/build/debug/apps/cli/avenoir"
+avenoir="$root/build/debug/bin/avenoir"
 [[ -x "$avenoir" ]] || { echo "Compilez d'abord : scripts/build.sh" >&2; exit 1; }
 
 rows=50

@@ -184,5 +184,5 @@ fi
 # ─── Lancement ───────────────────────────────────────────────────────────────
 if $run; then
     step "Lancement d'avenoir"
-    exec "$build_dir/apps/cli/avenoir" "${run_args[@]}"
+    exec "$build_dir/bin/avenoir" "${run_args[@]}"
 fi

@@ -46,7 +46,7 @@ add_executable(avenoird src/main.cpp)
 target_link_libraries(avenoird PRIVATE avenoir_daemon_lib avenoir::options)
 avenoir_utf8_manifest(avenoird)
 set_target_properties(avenoird PROPERTIES
-    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/apps/cli")
+    RUNTIME_OUTPUT_DIRECTORY "${AVENOIR_BIN_DIR}")
 
 if(AVENOIR_BUILD_TESTS)
     # Ce qui se décide sans terminal ni réseau : création guidée, réglages.

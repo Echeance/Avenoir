@@ -47,6 +47,10 @@ if(AVENOIR_BUILD_TESTS)
 endif()
 
 # ─── Bibliothèques et applications ──────────────────────────────────────────
+# Exécutables, page et modules fournis réunis dans `bin/`, comme dans l'archive
+# livrée : chacun trouve les autres à côté de lui.
+set(AVENOIR_BIN_DIR "${CMAKE_BINARY_DIR}/bin")
+
 add_subdirectory(libs/core)
 add_subdirectory(libs/llm)
 add_subdirectory(libs/tools)
@@ -61,7 +65,7 @@ add_subdirectory(apps/ui)
 
 # ─── Modules fournis ────────────────────────────────────────────────────────
 # Placés dans `modules/` à côté de l'exécutable : l'hôte les y trouve.
-set(AVENOIR_MODULES_OUTPUT_DIR "${CMAKE_BINARY_DIR}/apps/cli/modules")
+set(AVENOIR_MODULES_OUTPUT_DIR "${AVENOIR_BIN_DIR}/modules")
 if(AVENOIR_MODULE_METEO)
     add_subdirectory(modules/meteo)
 endif()

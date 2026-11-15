@@ -264,6 +264,6 @@ if ($Check -or $CheckAll) {
 # ─── Lancement ───────────────────────────────────────────────────────────────
 if ($Run) {
     Write-Step 'Lancement d''avenoir'
-    & (Join-Path $BuildDir 'apps/cli/avenoir.exe') @RunArgs
+    & (Join-Path $BuildDir 'bin/avenoir.exe') @RunArgs
     exit $LASTEXITCODE
 }

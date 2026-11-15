@@ -29,7 +29,9 @@ target_link_libraries(avenoir_cli_lib PUBLIC
     PRIVATE avenoir::options)
 
 add_executable(avenoir_cli src/main.cpp)
-set_target_properties(avenoir_cli PROPERTIES OUTPUT_NAME avenoir)
+set_target_properties(avenoir_cli PROPERTIES
+    OUTPUT_NAME avenoir
+    RUNTIME_OUTPUT_DIRECTORY "${AVENOIR_BIN_DIR}")
 avenoir_utf8_manifest(avenoir_cli)
 target_link_libraries(avenoir_cli PRIVATE avenoir_cli_lib avenoir::options)
 # La CLI lance le démon, placé à côté d'elle.

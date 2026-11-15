@@ -63,7 +63,7 @@ endif()
 
 set_target_properties(avenoir_ui PROPERTIES
     OUTPUT_NAME avenoir-ui
-    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/apps/cli")
+    RUNTIME_OUTPUT_DIRECTORY "${AVENOIR_BIN_DIR}")
 target_link_libraries(avenoir_ui PRIVATE
     avenoir_ui_lib avenoir_cli_lib avenoir::ipc avenoir::options)
 avenoir_utf8_manifest(avenoir_ui)
@@ -74,7 +74,7 @@ add_dependencies(avenoir_ui avenoird)
 find_program(AVENOIR_NPM NAMES npm.cmd npm)
 if(AVENOIR_NPM)
     set(_ui_root "${CMAKE_SOURCE_DIR}/ui")
-    set(_ui_out "${CMAKE_BINARY_DIR}/apps/cli/ui")
+    set(_ui_out "${AVENOIR_BIN_DIR}/ui")
     file(GLOB_RECURSE _ui_sources CONFIGURE_DEPENDS
         "${_ui_root}/src/*" "${_ui_root}/index.html" "${_ui_root}/package-lock.json"
         "${_ui_root}/vite.config.ts" "${_ui_root}/svelte.config.js")

@@ -98,18 +98,18 @@ jobs:
           mkdir -p dist/avenoir
           cp README.md LICENSE.md config.example.toml dist/avenoir/
           # Modules fournis (programme + module.toml), à côté de l'exécutable.
-          cp -r build/release/apps/cli/modules dist/avenoir/
+          cp -r build/release/bin/modules dist/avenoir/
           # Interface graphique : l'hôte des fenêtres et sa page (ui/).
-          cp -r build/release/apps/cli/ui dist/avenoir/
+          cp -r build/release/bin/ui dist/avenoir/
           # La CLI (avenoir), le démon qu'elle lance (avenoird) et l'interface
           # graphique (avenoir-ui), côte à côte.
           if [ "$RUNNER_OS" = "Windows" ]; then
-            cp build/release/apps/cli/avenoir.exe build/release/apps/cli/avenoird.exe \
-              build/release/apps/cli/avenoir-ui.exe dist/avenoir/
+            cp build/release/bin/avenoir.exe build/release/bin/avenoird.exe \
+              build/release/bin/avenoir-ui.exe dist/avenoir/
             (cd dist && 7z a -bso0 "${{ matrix.archive }}" avenoir)
           else
-            cp build/release/apps/cli/avenoir build/release/apps/cli/avenoird \
-              build/release/apps/cli/avenoir-ui dist/avenoir/
+            cp build/release/bin/avenoir build/release/bin/avenoird \
+              build/release/bin/avenoir-ui dist/avenoir/
             tar -C dist -czf "dist/${{ matrix.archive }}" avenoir
           fi
 

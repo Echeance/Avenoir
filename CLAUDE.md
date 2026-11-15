@@ -42,8 +42,8 @@ cmake --preset debug               # configuration (vcpkg en mode manifeste)
 cmake --build --preset debug       # build
 ctest --preset debug               # tests
 cmake --preset release && cmake --build --preset release   # exécutable `avenoir`
-./build/release/apps/cli/avenoir [chemin/config.toml]   # défaut : ~/.config/avenoir/config.toml ; lance le démon avenoird (à côté) au besoin
-AVENOIR_LOG=debug ./build/debug/apps/cli/avenoir   # logs du démon : logs/daemon.log du dossier de données
+./build/release/bin/avenoir [chemin/config.toml]   # défaut : ~/.config/avenoir/config.toml ; lance le démon avenoird (à côté) au besoin
+AVENOIR_LOG=debug ./build/debug/bin/avenoir   # logs du démon : logs/daemon.log du dossier de données
 ```
 
 La CLI est un client du **démon** `avenoird` (décision 53) : après une modification du démon, l'arrêter (`/arreter`) pour que la CLI lance le nouveau. Une configuration donnée en argument a son propre démon, arrêté avec la CLI ; le test de bout en bout fonctionne ainsi.
