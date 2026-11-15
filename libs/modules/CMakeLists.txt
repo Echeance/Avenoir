@@ -13,6 +13,7 @@ avenoir_add_library(modules
     SOURCES
         src/discovery.cpp
         src/host.cpp
+        src/install.cpp
         src/tabs.cpp
         src/manifest.cpp
         src/module.cpp
@@ -31,6 +32,7 @@ avenoir_add_tests(modules
     SOURCES
         tests/discovery_test.cpp
         tests/host_test.cpp
+        tests/install_test.cpp
         tests/tabs_test.cpp
         tests/manifest_test.cpp)
 

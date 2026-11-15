@@ -40,6 +40,7 @@
 #include "avenoir/llm/store.hpp"
 #include "avenoir/modules/discovery.hpp"
 #include "avenoir/modules/host.hpp"
+#include "avenoir/modules/install.hpp"
 #include "avenoir/storage/store.hpp"
 #include "avenoir/terminal/style.hpp"
 #include "avenoir/tools/searxng.hpp"
@@ -91,15 +92,35 @@ std::string gigabytes(std::uint64_t bytes) {
     return text;
 }
 
+/// Inscrit `message` au journal d'audit.
+void audit_note(const std::string& message) {
+    if (const auto audit = spdlog::get("audit")) {
+        audit->info("{}", message);
+    }
+}
+
+/// Textes séparés par `separator`.
+std::string join(const std::vector<std::string>& items, std::string_view separator) {
+    std::string out;
+    for (const auto& item : items) {
+        if (!out.empty()) {
+            out += separator;
+        }
+        out += item;
+    }
+    return out;
+}
+
 std::vector<std::string> builtin_commands() {
-    return {"agent",        "agents",        "aide",       "annuler",   "arreter",  "charger",
-            "configurer",   "conversations", "decharger",  "demarrage", "help",     "historique",
-            "memoire",      "model",         "modele",     "modules",   "moteur",   "nouvelle",
-            "ouvrir",       "outils",        "parametres", "q",         "quit",     "quitter",
-            "raisonnement", "recharger",     "redemarrer", "reglage",   "reglages", "renommer",
-            "reset",        "risque",        "settings",   "supprimer", "tools",    "transcription",
-            "verrouillage", "permissions",   "revoquer",   "accorder",  "journal",  "cle",
-            "modeles",      "raccourci"};
+    return {
+        "agent",        "agents",        "aide",       "annuler",     "arreter",  "charger",
+        "configurer",   "conversations", "decharger",  "demarrage",   "help",     "historique",
+        "memoire",      "model",         "modele",     "modules",     "moteur",   "nouvelle",
+        "ouvrir",       "outils",        "parametres", "q",           "quit",     "quitter",
+        "raisonnement", "recharger",     "redemarrer", "reglage",     "reglages", "renommer",
+        "reset",        "risque",        "settings",   "supprimer",   "tools",    "transcription",
+        "verrouillage", "permissions",   "revoquer",   "accorder",    "journal",  "cle",
+        "modeles",      "raccourci",     "installer",  "desinstaller"};
 }
 
 /// Coordinateur de la requête en cours dans ce fil (Avenoir, ou un projet) :
@@ -418,6 +439,8 @@ struct Runtime::State {
     void record_action(const core::ActionEvent& event, bool in_conversation) const;
     void print_journal(std::string_view argument) const;
     void revoke(std::string_view argument);
+    [[nodiscard]] Outcome install_module(std::string_view argument) const;
+    [[nodiscard]] Outcome uninstall_module(std::string_view argument);
     [[nodiscard]] Outcome command(std::string_view line, const std::stop_token& stop);
     void run_tool(std::string_view line, core::ToolCall call, const std::stop_token& stop,
                   const Activity& activity = {}) const;
@@ -557,6 +580,15 @@ core::Result<std::unique_ptr<Runtime>> Runtime::create(ConfigFile file) {
                 }
             } else {
                 s->startup_warnings.push_back(core::describe(choices.error()));
+            }
+        }
+        // Installations et désinstallations préparées avant ce démarrage
+        // (décision 77) : appliquées avant que rien ne tourne depuis ces dossiers.
+        if (directory) {
+            for (auto& message : modules::apply_pending(
+                     *directory / "modules", std::optional{*directory / "module-data"})) {
+                audit_note("modules : " + message);
+                s->startup_warnings.push_back(std::move(message));
             }
         }
         const auto discovery = modules::discover(modules::default_search_directories(directory));
@@ -1374,6 +1406,9 @@ void Runtime::State::print_help() const {
         command("/accorder <module>", "accorder ses permissions à un module et l'activer") + "\n";
     out += title("Modules") + "\n";
     out += command("/modules", "modules installés, permissions et outils") + "\n";
+    out += command("/installer <dossier>", "installer ou mettre à jour un module") + "\n";
+    out +=
+        command("/desinstaller <module>", "désinstaller un module que vous avez installé") + "\n";
     out +=
         command("/risque [outil niveau]", "voir ou changer le risque d'un outil de module") + "\n";
     out += modules_ui->help();
@@ -2120,6 +2155,120 @@ void Runtime::State::revoke(std::string_view argument) {
     }
 }
 
+/// /installer <dossier> : installe ou met à jour un module de l'utilisateur
+/// (décision 77), après avoir montré ce qu'il est et ce qu'il demande ;
+/// appliqué au redémarrage, qui suit. Un nouveau module reste désactivé
+/// jusqu'à /accorder ; une mise à jour qui demande plus attend un nouvel accord.
+Outcome Runtime::State::install_module(std::string_view argument) const {
+    // Chemin éventuellement entre guillemets (copié depuis un gestionnaire de fichiers).
+    if (argument.size() >= 2 && (argument.front() == '"' || argument.front() == '\'') &&
+        argument.back() == argument.front()) {
+        argument = argument.substr(1, argument.size() - 2);
+    }
+    const auto data = storage::data_directory();
+    if (argument.empty() || !data) {
+        display().warning("Usage : /installer <dossier du module> (son module.toml dedans)");
+        return Outcome::Continue;
+    }
+    const auto gray = [](std::string_view text) { return paint(text, {.color = Color::Gray}); };
+    std::vector<std::string> bundled;
+    for (const auto& status : host->statuses()) {
+        if (status.origin == modules::Origin::Bundled) {
+            bundled.push_back(status.id);
+        }
+    }
+    const auto root = *data / "modules";
+    auto plan = modules::prepare_install(
+        std::filesystem::path(std::u8string(argument.begin(), argument.end())), root, bundled);
+    if (!plan) {
+        display().warning("Installation refusée : " + plan.error().message);
+        return Outcome::Continue;
+    }
+    const auto& manifest = plan->manifest;
+    display().info(plan->installed
+                       ? std::format("Mise à jour de « {} » ({}) : version {} → {}", manifest.name,
+                                     manifest.id, plan->installed->version, manifest.version)
+                       : std::format("Installation de « {} » ({}), version {}", manifest.name,
+                                     manifest.id, manifest.version));
+    display().plain(gray(std::format("  {} fichier(s), {} Kio, programme : {}", plan->files,
+                                     (plan->bytes + 1023) / 1024, manifest.run.front())));
+    display().plain(gray("  permissions : " + (manifest.permissions.empty()
+                                                   ? std::string("aucune")
+                                                   : join(manifest.permissions, ", "))));
+    if (plan->installed && !plan->added.empty()) {
+        display().warning("Nouvelles permissions demandées : " + join(plan->added, ", ") +
+                          " — le module ne sera relancé qu'après /accorder " + manifest.id);
+    }
+    display().warning("Un module est du code tiers : n'installez que ce dont vous connaissez "
+                      "la provenance.");
+    if (!display().ask_yes_no(std::format("{} et redémarrer Avenoir ? [o/N]",
+                                          plan->installed ? "Mettre à jour" : "Installer"))) {
+        display().info("Rien n'a été installé.");
+        return Outcome::Continue;
+    }
+    if (auto staged = modules::stage_install(*plan, root); !staged) {
+        display().error(staged.error().message);
+        return Outcome::Continue;
+    }
+    audit_note(std::format("modules : « {} » {} préparé ({})", manifest.id, manifest.version,
+                           plan->installed ? "mise à jour" : "installation"));
+    if (!plan->installed) {
+        display().info(
+            std::format("Après le redémarrage, activez-le avec /accorder {}.", manifest.id));
+    }
+    return Outcome::Restart;
+}
+
+/// /desinstaller <module> : module installé par l'utilisateur seulement ; il
+/// est désactivé (accords retirés), ses choix de risque oubliés, puis son
+/// dossier supprimé au redémarrage (et ses données, si demandé).
+Outcome Runtime::State::uninstall_module(std::string_view argument) {
+    const auto data = storage::data_directory();
+    const auto statuses = host->statuses();
+    const auto found = std::ranges::find(statuses, argument, &modules::ModuleStatus::id);
+    if (argument.empty() || !data || found == statuses.end()) {
+        display().warning("Usage : /desinstaller <module> (voir /modules)");
+        return Outcome::Continue;
+    }
+    if (found->origin == modules::Origin::Bundled) {
+        display().warning(std::format("« {} » est fourni avec Avenoir : il se désactive "
+                                      "(/revoquer {}) mais ne se désinstalle pas",
+                                      found->id, found->id));
+        return Outcome::Continue;
+    }
+    if (!display().ask_yes_no(std::format("Désinstaller « {} » ({}) et redémarrer Avenoir ? "
+                                          "Son dossier sera supprimé. [o/N]",
+                                          found->name, found->id))) {
+        display().info("Rien n'a été désinstallé.");
+        return Outcome::Continue;
+    }
+    const bool erase = display().ask_yes_no(
+        std::format("Effacer aussi ses données (module-data/{}) ? [o/N]", found->id));
+    const std::string id = found->id;
+    if (found->state != modules::ModuleState::Disabled) {
+        change_setting(std::format("modules.{}.enabled non", id));
+    }
+    if (auto* store = conversations->store()) {
+        if (auto choices = store->risk_choices()) {
+            const std::string prefix = id + "__";
+            for (const auto& choice : *choices) {
+                if (choice.tool.starts_with(prefix)) {
+                    if (auto removed = store->remove_risk_choice(choice.tool); !removed) {
+                        display().warning(core::describe(removed.error()));
+                    }
+                }
+            }
+        }
+    }
+    if (auto marked = modules::mark_uninstall(*data / "modules", id, erase); !marked) {
+        display().error(marked.error().message);
+        return Outcome::Continue;
+    }
+    audit_note(std::format("modules : « {} » marqué pour désinstallation{}", id,
+                           erase ? " (avec ses données)" : ""));
+    return Outcome::Restart;
+}
+
 /// Environnement des agents d'un plan, créé dans le fil de la requête : leur
 /// affichage et leurs questions vont au client de cette requête.
 agents::Environment Runtime::State::agent_environment() const {
@@ -2730,6 +2879,10 @@ Outcome Runtime::State::command(std::string_view line, const std::stop_token& st
         } else {
             change_setting(std::format("modules.{}.enabled oui", argument));
         }
+    } else if (name == "/installer") {
+        return install_module(argument);
+    } else if (name == "/desinstaller") {
+        return uninstall_module(argument);
     } else if (name == "/risque") {
         modules_ui->risk(argument, conversations->store());
     } else if (const auto* own = modules_ui->find_command(name.substr(1))) {

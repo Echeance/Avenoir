@@ -21,6 +21,19 @@
   async function changeRisk(tool: string, level: string): Promise<void> {
     await report.run(`/risque ${tool} ${level}`);
   }
+
+  // Installer ou mettre à jour depuis un dossier (/installer : Avenoir montre
+  // le module et ses permissions, demande confirmation, puis redémarre).
+  let folder = $state("");
+  async function install(event: SubmitEvent): Promise<void> {
+    event.preventDefault();
+    const path = folder.trim().replace(/[\u0000-\u001f]/g, "");
+    if (path === "") {
+      return;
+    }
+    folder = "";
+    await report.run(`/installer "${path.replaceAll('"', "")}"`);
+  }
 </script>
 
 <Section
@@ -29,6 +42,10 @@
   error={report.error}
   onrefresh={() => void report.load()}
 >
+  <form class="install" onsubmit={(event) => void install(event)}>
+    <input bind:value={folder} placeholder="Dossier d'un module à installer ou mettre à jour (avec son module.toml)" autocomplete="off" spellcheck="false" />
+    <button class="action" type="submit" disabled={folder.trim() === "" || session.running !== null}>Installer</button>
+  </form>
   {#each list(report.data?.["modules"]) as module (str(module["id"]))}
     {@const state = str(module["state"])}
     <h2>
@@ -40,6 +57,9 @@
         <button class="action" onclick={() => void report.run(`/accorder ${str(module["id"])}`)}>Accorder et activer</button>
       {:else}
         <button class="action danger" onclick={() => void report.run(`/revoquer ${str(module["id"])}`)}>Désactiver</button>
+      {/if}
+      {#if module["bundled"] !== true}
+        <button class="action danger" onclick={() => void report.run(`/desinstaller ${str(module["id"])}`)}>Désinstaller</button>
       {/if}
     </p>
     {#if list(module["tools"]).length > 0}
@@ -73,6 +93,19 @@
 </Section>
 
 <style>
+  .install {
+    display: flex;
+    gap: 8px;
+    margin: 4px 0 10px;
+  }
+  .install input {
+    flex: 1;
+    background: var(--night);
+    color: var(--text);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 4px 8px;
+  }
   .state.running {
     color: var(--green);
   }
