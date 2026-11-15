@@ -4,16 +4,32 @@
   import Composer from "./Composer.svelte";
   import Conversation from "./Conversation.svelte";
   import QuestionCard from "./QuestionCard.svelte";
+  import TabView from "./TabView.svelte";
   import Wolf from "./Wolf.svelte";
   import { session } from "../lib/session.svelte";
 
   let hovered = $state(false);
+  /// Onglet affiché : la conversation, ou « module/onglet ».
+  let current = $state("conversation");
+  // Onglets web (permission ui.web) : pas encore affichés.
+  const declarative = $derived(session.tabs.filter((tab) => tab.kind === "declarative"));
+  const shown = $derived(declarative.find((tab) => `${tab.module}/${tab.id}` === current));
+  // Débogage : « #ouvert/meteo » ouvre le premier onglet de ce module.
+  const wantedModule = location.hash.startsWith("#ouvert/") ? location.hash.slice("#ouvert/".length) : "";
+  let chosen = false;
+  $effect(() => {
+    const first = declarative.find((tab) => tab.module === wantedModule);
+    if (!chosen && first !== undefined) {
+      chosen = true;
+      current = `${first.module}/${first.id}`;
+    }
+  });
   let focused = $state(false);
 
   const busy = $derived(session.running !== null);
   // « #ouvert » garde le widget déplié : captures d'écran, débogage
   // (AVENOIR_UI_PIN pour l'hôte, ou l'adresse en développement).
-  const pinned = location.hash === "#ouvert";
+  const pinned = location.hash.startsWith("#ouvert");
   const open = $derived(pinned || hovered || focused || busy || session.question !== null);
   let widget: HTMLElement | undefined = $state();
 
@@ -63,13 +79,30 @@
         {session.view.llm}
       {/if}
     </span>
-    <button class="open" title="Ouvrir Avenoir (réglages, journal, permissions…)" onclick={() => session.openApp()}
+    <button class="launch" title="Ouvrir Avenoir (réglages, journal, permissions…)" onclick={() => session.openApp()}
       >⧉</button
     >
   </header>
   {#if open}
     <div class="panel">
-      <Conversation entries={session.view.entries} />
+      {#if declarative.length > 0}
+        <div class="tabs" role="tablist">
+          <button role="tab" aria-selected={current === "conversation"} class:active={current === "conversation"}
+            onclick={() => (current = "conversation")}>Conversation</button
+          >
+          {#each declarative as tab (`${tab.module}/${tab.id}`)}
+            {@const key = `${tab.module}/${tab.id}`}
+            <button role="tab" aria-selected={current === key} class:active={current === key} onclick={() => (current = key)}
+              >{tab.title}</button
+            >
+          {/each}
+        </div>
+      {/if}
+      {#if shown !== undefined}
+        <TabView module={shown.module} tab={shown.id} onaction={() => (current = "conversation")} />
+      {:else}
+        <Conversation entries={session.view.entries} />
+      {/if}
       {#if session.question !== null}
         <QuestionCard question={session.question} />
       {/if}
@@ -115,7 +148,7 @@
     overflow: hidden;
     text-overflow: ellipsis;
   }
-  .open {
+  .launch {
     flex: none;
     background: transparent;
     border: 0;
@@ -123,8 +156,27 @@
     font-size: 15px;
     padding: 0 2px;
   }
-  .open:hover {
+  .launch:hover {
     color: var(--ice);
+  }
+  .tabs {
+    display: flex;
+    gap: 2px;
+    padding: 4px 10px 0;
+    border-bottom: 1px solid var(--line);
+    flex: none;
+  }
+  .tabs button {
+    background: transparent;
+    border: 0;
+    border-bottom: 2px solid transparent;
+    padding: 4px 10px;
+    color: var(--muted);
+    font-size: 12px;
+  }
+  .tabs button.active {
+    color: var(--ice);
+    border-bottom-color: var(--azure);
   }
   .panel {
     display: flex;

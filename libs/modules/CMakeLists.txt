@@ -13,6 +13,7 @@ avenoir_add_library(modules
     SOURCES
         src/discovery.cpp
         src/host.cpp
+        src/tabs.cpp
         src/manifest.cpp
         src/module.cpp
         src/rpc_client.cpp
@@ -30,6 +31,7 @@ avenoir_add_tests(modules
     SOURCES
         tests/discovery_test.cpp
         tests/host_test.cpp
+        tests/tabs_test.cpp
         tests/manifest_test.cpp)
 
 if(TARGET avenoir_modules_tests)

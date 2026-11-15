@@ -23,6 +23,8 @@ class Session {
   /// Messages d'Avenoir pendant la dernière requête (retour des actions de
   /// l'application : « réglage changé », refus…).
   lastNotes = $state<Extract<Entry, { kind: "note" }>[]>([]);
+  /// Onglets déclarés par les modules lancés (décision 73).
+  tabs = $state<{ module: string; id: string; title: string; kind: string }[]>([]);
 
   private readonly bridge: Bridge;
 
@@ -65,6 +67,20 @@ class Session {
       await this.bridge.call("session/open", { interactive: true }).result;
     } catch (error) {
       this.status = error instanceof Error ? error.message : "session refusée";
+      return;
+    }
+    try {
+      const result = await this.bridge.call("tabs/list", {}).result;
+      const list = Array.isArray(result["tabs"]) ? result["tabs"] : [];
+      this.tabs = list.flatMap((tab) =>
+        typeof tab === "object" && tab !== null && !Array.isArray(tab) &&
+        typeof tab["module"] === "string" && typeof tab["id"] === "string" &&
+        typeof tab["title"] === "string" && typeof tab["kind"] === "string"
+          ? [{ module: tab["module"], id: tab["id"], title: tab["title"], kind: tab["kind"] }]
+          : [],
+      );
+    } catch {
+      this.tabs = []; // démon plus ancien : pas d'onglets
     }
   }
 

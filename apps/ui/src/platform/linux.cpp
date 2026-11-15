@@ -180,6 +180,9 @@ class GtkWidgetWindow final : public Window {
             }
         } else if (options_.pinned) {
             page = "index.html#ouvert";
+            if (is_view_name(options_.view)) {
+                page += "/" + options_.view;
+            }
         }
         const std::string start = std::string(kOrigin) + page;
         webkit_web_view_load_uri(view_, start.c_str());

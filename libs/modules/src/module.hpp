@@ -40,6 +40,9 @@ class Module {
     /// `avenoir/undo` : défait une action d'après le jeton qu'il a renvoyé.
     [[nodiscard]] core::Result<nlohmann::json> undo(std::string_view token) const;
 
+    /// `avenoir/tab` : contenu brut de l'onglet `tab` (à valider par `validate_tab`).
+    [[nodiscard]] core::Result<nlohmann::json> tab(std::string_view tab) const;
+
   private:
     Manifest manifest_;
     std::unique_ptr<RpcClient> client_;

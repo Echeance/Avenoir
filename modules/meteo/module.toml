@@ -23,6 +23,11 @@ public = true
 name = "set_city"
 risk = "reversible"
 
+# Onglet du widget : météo de la ville par défaut, dessinée par Avenoir.
+[[tabs]]
+id = "meteo"
+title = "Météo"
+
 [[commands]]
 name = "meteo"
 tool = "current"

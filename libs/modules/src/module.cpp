@@ -206,6 +206,10 @@ core::Result<nlohmann::json> Module::undo(std::string_view token) const {
     return client_->request("avenoir/undo", {{"token", token}}, call_timeout_);
 }
 
+core::Result<nlohmann::json> Module::tab(std::string_view tab) const {
+    return client_->request("avenoir/tab", {{"tab", tab}}, call_timeout_);
+}
+
 ModuleTool::ModuleTool(std::shared_ptr<const Module> module, std::string short_name,
                        core::ToolSpec spec)
     : module_(std::move(module)), short_name_(std::move(short_name)), spec_(std::move(spec)),

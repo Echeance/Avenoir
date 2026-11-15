@@ -313,7 +313,7 @@ L'ordre suit un principe : **chaque jalon produit un assistant utilisable**, plu
 - ⬜ Bouton « Arrêter » (équivalent de Ctrl+C) et proposition d'annulation ; bouton « Annuler » sur la dernière requête (équivalent de `/annuler`)
 
 ### 6.3 Onglets des modules — P1
-- ⬜ Onglets déclaratifs : format des composants (textes, listes, images, graphiques, boutons, formulaires) et rendu
+- 🔄 Onglets déclaratifs : format des composants (textes, listes, images, graphiques, boutons, formulaires) et rendu — décision 73 : `avenoir/tab`, composants titre, texte, valeur, liste, tableau, bouton (commande du module), validés par l'hôte (`validate_tab`), dessinés dans le widget ; onglet du module météo ; restent images, graphiques et formulaires
 - ⬜ Onglets web (permission `ui.web`) : iframe `sandbox="allow-scripts"`, origine `avenoir-module://<id>/`, CSP sans réseau, `postMessage` validé (directive de sécurité n° 12)
 - ⬜ Tests de sécurité : un onglet web ne peut ni accéder au réseau, ni à l'interface, ni aux autres modules
 

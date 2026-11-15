@@ -140,8 +140,9 @@ Un module est un **programme séparé** décrit par un `module.toml` (PROJECT.md
 2. **Lancement** (`host.cpp`, `rpc_client.cpp`) : API C de `reproc`, tableau d'arguments, sans shell. L'environnement est minimal (variables de base, proxy, celles du manifeste) ; le dossier de données est `AVENOIR_MODULE_DATA` ; stderr va dans `logs/modules/<id>.log`.
 3. **Dialogue** : JSON-RPC 2.0, un message par ligne sur stdin/stdout ; un thread lit les réponses et les écritures sont protégées par un mutex. Les messages sont limités à 8 Mio et chaque requête a un délai maximal. Poignée de main `initialize`, puis `tools/list` (paginé, 128 outils au plus, schémas et descriptions bornés).
 4. **Outils** (`module.cpp`) : chaque outil devient un `ModuleTool` nommé `id__outil`. Son risque est celui du manifeste (`sensitive` s'il est absent), ajusté par `/risque` et `config.toml` (`resolve_risk`). Le texte renvoyé est nettoyé : caractères de contrôle, C1 et marques bidirectionnelles sont retirés.
-5. **Appel** : `tools/call`. Ctrl+C envoie `notifications/cancelled`. Si le module propose une annulation (`_meta["avenoir/undo"]`), elle devient une `UndoAction` qui appelle `avenoir/undo`.
-6. **Panne** : un module qui plante, ne répond pas ou triche renvoie une erreur à l'agent ; l'assistant continue.
+5. **Onglets** : `ModuleHost::tabs` liste les `[[tabs]]` des modules lancés ; `tab_content` appelle `avenoir/tab` (`Module::tab`) puis `validate_tab` (`tabs.cpp`) ; le démon les sert par `tabs/list` et `tabs/content` (`Runtime::report`).
+6. **Appel** : `tools/call`. Ctrl+C envoie `notifications/cancelled`. Si le module propose une annulation (`_meta["avenoir/undo"]`), elle devient une `UndoAction` qui appelle `avenoir/undo`.
+7. **Panne** : un module qui plante, ne répond pas ou triche renvoie une erreur à l'agent ; l'assistant continue.
 
 ## 7. Annulation et Ctrl+C
 

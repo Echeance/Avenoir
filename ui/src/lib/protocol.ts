@@ -14,6 +14,8 @@ export const CALLS = [
   "permissions/list",
   "modules/list",
   "conversations/list",
+  "tabs/list",
+  "tabs/content",
 ] as const;
 export type CallMethod = (typeof CALLS)[number];
 

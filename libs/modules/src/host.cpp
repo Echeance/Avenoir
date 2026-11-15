@@ -25,6 +25,7 @@
 
 #include "avenoir/core/env.hpp"
 #include "avenoir/core/version.hpp"
+#include "avenoir/modules/tabs.hpp"
 
 #include "module.hpp"
 #include "platform.hpp"
@@ -508,6 +509,48 @@ std::optional<ModuleToolInfo> ModuleHost::tool_info(std::string_view tool) const
         }
     }
     return std::nullopt;
+}
+
+std::vector<ModuleTab> ModuleHost::tabs() const {
+    std::vector<ModuleTab> out;
+    for (const auto& entry : entries_) {
+        if (entry.state != ModuleState::Running || !entry.module || !entry.module->alive()) {
+            continue;
+        }
+        for (const auto& tab : entry.discovered.manifest.tabs) {
+            out.push_back(ModuleTab{.module = entry.discovered.manifest.id,
+                                    .id = tab.id,
+                                    .title = tab.title,
+                                    .kind = tab.kind});
+        }
+    }
+    return out;
+}
+
+core::Result<nlohmann::json> ModuleHost::tab_content(std::string_view module,
+                                                     std::string_view tab) const {
+    for (const auto& entry : entries_) {
+        const Manifest& manifest = entry.discovered.manifest;
+        if (manifest.id != module) {
+            continue;
+        }
+        if (entry.state != ModuleState::Running || !entry.module || !entry.module->alive()) {
+            return core::make_error(core::ErrorCode::Module,
+                                    "module « " + manifest.id + " » non lancé");
+        }
+        const auto declared = std::ranges::find(manifest.tabs, tab, &TabDeclaration::id);
+        if (declared == manifest.tabs.end() || declared->kind != TabKind::Declarative) {
+            return core::make_error(core::ErrorCode::Module,
+                                    "onglet déclaratif inconnu : « " + std::string(tab) + " »");
+        }
+        auto raw = entry.module->tab(tab);
+        if (!raw) {
+            return std::unexpected(std::move(raw.error()));
+        }
+        return validate_tab(*raw, manifest);
+    }
+    return core::make_error(core::ErrorCode::Module,
+                            "module inconnu : « " + std::string(module) + " »");
 }
 
 std::vector<ModuleStatus> ModuleHost::statuses() const {

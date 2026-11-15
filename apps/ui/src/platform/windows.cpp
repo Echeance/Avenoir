@@ -282,6 +282,9 @@ class WebViewWindow final : public Window {
             }
         } else if (options_.pinned) {
             page = L"index.html#ouvert";
+            if (is_view_name(options_.view)) {
+                page += L"/" + wide(options_.view);
+            }
         }
         const std::wstring start = std::wstring(kOrigin) + page;
         view_->Navigate(start.c_str());

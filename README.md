@@ -395,7 +395,7 @@ Le workflow `release` vérifie que le numéro du tag correspond à la version du
 | **3 · Résident** | démon, journal, permissions durables, réglages scellés, clés au trousseau, magasin de modèles, carte graphique partagée, saisie rapide | ✅ |
 | **4 · Tâches et modules** | orchestrateur multi-agents, plusieurs projets en parallèle, fichiers, mémoire, appels entre modules | 🔄 équipes d'agents et projets faits |
 | **5 · Voix** | mot de réveil, reconnaissance et synthèse vocales | ⬜ |
-| **6 · Interface graphique** | widget avec le loup animé, application principale | 🔄 widget et application principale sous Linux et Windows ; onglets des modules à venir |
+| **6 · Interface graphique** | widget avec le loup animé, application principale | 🔄 widget, application principale et onglets déclaratifs des modules sous Linux et Windows ; onglets web à venir |
 | **7 · Identité et présence** | propriétaire et liste blanche, voix et visage, verrouillage automatique | ⬜ |
 
 Le détail, étape par étape : **[docs/ROADMAP.md](docs/ROADMAP.md)**.

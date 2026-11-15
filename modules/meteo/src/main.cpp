@@ -9,6 +9,7 @@
 #include <cstdlib>
 #include <exception>
 #include <filesystem>
+#include <format>
 #include <iostream>
 #include <memory>
 #include <optional>
@@ -101,6 +102,65 @@ class Meteo {
             return set_city(arguments);
         }
         return text_result("outil inconnu : " + name, true);
+    }
+
+    /// Onglet « Météo » du widget (`avenoir/tab`) : ville par défaut, météo
+    /// actuelle et prévisions sur 3 jours, en composants qu'Avenoir dessine.
+    [[nodiscard]] json tab(const json& params) const {
+        json components = json::array();
+        const auto heading = [&components](std::string text) {
+            components.push_back({{"type", "heading"}, {"text", std::move(text)}});
+        };
+        const auto note = [&components](std::string text, std::string_view tone) {
+            components.push_back({{"type", "text"}, {"text", std::move(text)}, {"tone", tone}});
+        };
+        if (!params.is_object() || params.value("tab", "") != "meteo") {
+            note("onglet inconnu", "warning");
+            return {{"components", std::move(components)}};
+        }
+        const auto place = cities_.load();
+        if (!place) {
+            heading("Météo");
+            note("Aucune ville par défaut : dites « ma ville est Lyon » ou tapez /ville Lyon.",
+                 "muted");
+            return {{"components", std::move(components)}};
+        }
+        heading(place_label(*place));
+        auto weather = fetch_forecast(*place, kDefaultDays);
+        if (!weather) {
+            note(std::move(weather.error()), "warning");
+        } else {
+            if (weather->current) {
+                const Current& now = *weather->current;
+                const auto stat = [&components](std::string label, std::string value) {
+                    components.push_back({{"type", "stat"},
+                                          {"label", std::move(label)},
+                                          {"value", std::move(value)}});
+                };
+                stat("Maintenant",
+                     std::format("{:.0f} °C, {}", now.temperature, describe_code(now.code)));
+                stat("Ressenti", std::format("{:.0f} °C", now.apparent));
+                stat("Vent", std::format("{:.0f} km/h", now.wind));
+                stat("Humidité", std::format("{} %", now.humidity));
+            }
+            json rows = json::array();
+            for (const auto& day : weather->days) {
+                rows.push_back({day.date, std::string(describe_code(day.code)),
+                                std::format("{:.0f} °C", day.minimum),
+                                std::format("{:.0f} °C", day.maximum),
+                                day.rain_probability ? std::format("{} %", *day.rain_probability)
+                                                     : std::string("–")});
+            }
+            components.push_back({{"type", "table"},
+                                  {"columns", {"Jour", "Ciel", "Min", "Max", "Pluie"}},
+                                  {"rows", std::move(rows)}});
+        }
+        components.push_back(
+            {{"type", "button"}, {"label", "Météo dans la conversation"}, {"command", "meteo"}});
+        components.push_back(
+            {{"type", "button"}, {"label", "Prévisions détaillées"}, {"command", "previsions"}});
+        note("Données Open-Meteo.com (CC BY 4.0).", "muted");
+        return {{"components", std::move(components)}};
     }
 
     [[nodiscard]] json undo(const json& params) const {
@@ -237,6 +297,8 @@ void handle(const Meteo& meteo, const json& message) {
                          params.value("arguments", json::object())));
     } else if (method == "avenoir/undo") {
         reply(meteo.undo(params));
+    } else if (method == "avenoir/tab") {
+        reply(meteo.tab(params));
     } else {
         send({{"jsonrpc", "2.0"},
               {"id", *id},

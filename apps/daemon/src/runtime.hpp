@@ -85,7 +85,9 @@ class Runtime {
     [[nodiscard]] std::vector<SettingLine> settings() const;
     /// Données structurées pour l'application (décision 72), en lecture
     /// seule : « journal » (`all`, `limit`), « permissions », « models »,
-    /// « modules », « conversations ». Erreur pour un autre nom.
+    /// « modules », « conversations », « tabs » (onglets des modules), « tab »
+    /// (`module`, `tab` : contenu validé d'un onglet déclaratif). Erreur pour
+    /// un autre nom.
     [[nodiscard]] core::Result<nlohmann::json> report(std::string_view what,
                                                       const nlohmann::json& params) const;
     [[nodiscard]] const ConfigFile& config() const;

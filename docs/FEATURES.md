@@ -156,6 +156,7 @@ Plateformes : **Linux** et **Windows** (sauf mention contraire).
 ## 7. Modules
 
 - Extension par des **programmes séparés**, dans n'importe quel langage, décrits par un manifeste `module.toml` : outils, commandes, règles de voie rapide, permissions, variables d'environnement.
+- **Onglets déclaratifs** (décision 73) : un module déclare `[[tabs]]` (`id`, `title`) et répond à `avenoir/tab` par des composants : titre, texte (atténué ou d'alerte), valeur (libellé et valeur), liste, tableau (8 colonnes, 50 lignes au plus), bouton (lance une commande `[[commands]]` du module, avec un argument facultatif) ; l'hôte valide tout (composant inconnu écarté, textes sans caractères de contrôle ni marques bidirectionnelles, bornés à 500 octets, 100 composants au plus ; bouton vers une commande non déclarée écarté) ; le widget montre ces onglets à côté de la conversation, avec « Actualiser » ; un bouton lance la commande par la saisie habituelle (permissions, confirmations, audit) puis revient à la conversation. Onglets web : pas encore affichés.
 - **Protocole** : JSON-RPC 2.0 sur stdio, un message par ligne ; protocole `avenoir` = sur-ensemble de MCP (`initialize`, `tools/list` paginé, `tools/call`, `notifications/cancelled`, `avenoir/undo`).
 - **Compatibilité MCP** : un serveur MCP existant s'utilise comme module (`protocol = "mcp"`).
 - Modules fournis à côté de l'exécutable (activés par défaut) et modules de l'utilisateur dans son dossier de données (**désactivés** tant qu'il ne les a pas activés) ; un module ne peut pas remplacer un module fourni.
@@ -176,6 +177,7 @@ Plateformes : **Linux** et **Windows** (sauf mention contraire).
 
 ## 8. Module météo
 
+- **Onglet « Météo »** du widget : ville par défaut, météo actuelle (température, ciel, ressenti, vent, humidité), prévisions sur 3 jours en tableau, boutons « Météo dans la conversation » et « Prévisions détaillées » ; sans ville : comment la régler.
 - Fourni avec Avenoir, activé par défaut, données **Open-Meteo** (CC BY 4.0, sans clé d'API) ; seuls le nom de la ville et ses coordonnées sont envoyés.
 - Conditions actuelles (température, ressenti, ciel, vent, humidité) et prévisions jour par jour jusqu'à 7 jours (ciel, minimum, maximum, probabilité et cumul de pluie), en phrases françaises.
 - Ville par défaut réglée par l'utilisateur (« ma ville est Lyon », `/ville Lyon`), **annulable** ; pas de géolocalisation.

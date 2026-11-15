@@ -336,7 +336,7 @@ class Server {
         });
         // Données de l'application principale, en lecture seule (décision 72).
         for (const char* report :
-             {"journal", "permissions", "models", "modules", "conversations"}) {
+             {"journal", "permissions", "models", "modules", "conversations", "tabs"}) {
             peer->on_request(std::string(report) + "/list",
                              [this, report](const json& params, const std::stop_token&) {
                                  const std::scoped_lock lock(runtime_mutex_);
@@ -347,6 +347,13 @@ class Server {
                                  return runtime_->report(report, params);
                              });
         }
+        peer->on_request("tabs/content", [this](const json& params, const std::stop_token&) {
+            const std::scoped_lock lock(runtime_mutex_);
+            if (!runtime_) {
+                return core::Result<json>(core::make_error(core::ErrorCode::Config, build_error_));
+            }
+            return runtime_->report("tab", params);
+        });
         peer->on_request("session/describe", [this](const json&, const std::stop_token&) {
             const std::scoped_lock lock(runtime_mutex_);
             return core::Result<json>(

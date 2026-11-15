@@ -12,6 +12,8 @@
 #include <string_view>
 #include <vector>
 
+#include <nlohmann/json.hpp>
+
 #include "avenoir/core/config.hpp"
 #include "avenoir/core/router.hpp"
 #include "avenoir/core/tool.hpp"
@@ -100,6 +102,14 @@ struct ModuleCommand {
     std::string description;
 };
 
+/// Onglet d'un module lancé (pour l'interface).
+struct ModuleTab {
+    std::string module; ///< Identifiant du module.
+    std::string id;
+    std::string title;
+    TabKind kind = TabKind::Declarative;
+};
+
 class Module;
 
 /// Hôte de modules : lance les modules activés, vérifie ce qu'ils exposent et
@@ -142,6 +152,15 @@ class ModuleHost {
     [[nodiscard]] core::Result<RiskDecision> clear_risk(std::string_view tool);
     /// Informations sur un outil de module chargé, ou rien.
     [[nodiscard]] std::optional<ModuleToolInfo> tool_info(std::string_view tool) const;
+
+    /// Onglets des modules lancés, dans l'ordre de découverte.
+    [[nodiscard]] std::vector<ModuleTab> tabs() const;
+    /// Contenu validé de l'onglet déclaratif `tab` du module `module`
+    /// (`validate_tab`). Erreur si le module n'est pas lancé, si l'onglet
+    /// n'est pas déclaré déclaratif dans son manifeste, ou si sa réponse est
+    /// mal formée.
+    [[nodiscard]] core::Result<nlohmann::json> tab_content(std::string_view module,
+                                                           std::string_view tab) const;
 
     /// État de chaque module découvert (y compris désactivés ou en échec).
     [[nodiscard]] std::vector<ModuleStatus> statuses() const;

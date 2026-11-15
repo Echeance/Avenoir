@@ -24,7 +24,8 @@ struct WindowOptions {
     /// Fenêtre de l'application principale (`--app`) : ordinaire, avec
     /// bordure, redimensionnable, dans la barre des tâches.
     bool application = false;
-    /// Vue de départ de l'application (AVENOIR_UI_VIEW : settings, journal…).
+    /// Vue de départ (AVENOIR_UI_VIEW) : de l'application (settings,
+    /// journal…), ou, avec `pinned`, le module dont le widget montre l'onglet.
     std::string view;
 };
 

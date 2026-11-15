@@ -992,6 +992,20 @@ core::Result<nlohmann::json> Runtime::report(std::string_view what,
         }
         return json{{"modules", std::move(list)}};
     }
+    if (what == "tabs") {
+        json list = json::array();
+        for (const auto& tab : s.host->tabs()) {
+            list.push_back({{"module", tab.module},
+                            {"id", tab.id},
+                            {"title", tab.title},
+                            {"kind", tab.kind == modules::TabKind::Web ? "web" : "declarative"}});
+        }
+        return json{{"tabs", std::move(list)}};
+    }
+    if (what == "tab") {
+        // Contenu validé par l'hôte de modules (validate_tab).
+        return s.host->tab_content(params.value("module", ""), params.value("tab", ""));
+    }
     if (what == "conversations") {
         const storage::Store* store = s.conversations ? s.conversations->store() : nullptr;
         if (store == nullptr) {
