@@ -299,7 +299,7 @@ L'ordre suit un principe : **chaque jalon produit un assistant utilisable**, plu
 
 ### 6.1 Fondations — P1
 - ✅ Choisir le framework web et la bibliothèque C++ de vue web — décision 68 : **Svelte 5** ; hôte **écrit à la main** (WebKitGTK 6 + gtk4-layer-shell du système sous Linux, SDK WebView2 sous Windows), lié dynamiquement (LGPL acceptée pour ce seul exécutable)
-- 🔄 Hôte C++ des fenêtres (`apps/ui`) : WebView2 sous Windows, WebKitGTK sous Linux ; un processus, deux fenêtres — fait sous Linux : exécutable `avenoir-ui` (GTK 4, WebKitGTK 6, gtk4-layer-shell), client du démon comme la CLI, page servie sous `avenoir://app/` depuis son seul dossier, navigation ailleurs refusée ; sous Windows : fenêtre Win32 au premier plan en haut au centre, WebView2 (chargeur statique, page sous `https://app.avenoir/`), essayée dans la VM ; reste la fenêtre de l'application principale
+- 🔄 Hôte C++ des fenêtres (`apps/ui`) : WebView2 sous Windows, WebKitGTK sous Linux ; un processus, deux fenêtres — fait sous Linux : exécutable `avenoir-ui` (GTK 4, WebKitGTK 6, gtk4-layer-shell), client du démon comme la CLI, page servie sous `avenoir://app/` depuis son seul dossier, navigation ailleurs refusée ; sous Windows : fenêtre Win32 au premier plan en haut au centre, WebView2 (chargeur statique, page sous `https://app.avenoir/`), essayée dans la VM ; application principale : second processus `avenoir-ui --app` (décision 72)
 - ✅ Pont typé interface ↔ hôte C++ ↔ démon (IPC du jalon 3) — page (`ui/src/lib/protocol.ts`, `bridge.ts`) et hôte (`apps/ui/src/relay.cpp`) : messages validés des deux côtés, appels en liste fermée, réponses aux questions vérifiées par type (refus par défaut), question retirée quand le démon l'annule, hauteur de la fenêtre suivie
 - ✅ `avenoir-ui` et sa page dans les archives de release (Linux et Windows) et compilé par la CI Linux
 - ✅ Build de `ui/` intégré à CMake et à la CI ; contrôle de types TypeScript strict — Vite, `npm run check` (svelte-check, TypeScript strict), `npm test` (vitest), `npm run build`, job « Interface web » de la CI ; CMake construit la page à côté de `avenoir-ui` (option `AVENOIR_WITH_UI`, si Node.js et les bibliothèques sont là)
@@ -318,13 +318,13 @@ L'ordre suit un principe : **chaque jalon produit un assistant utilisable**, plu
 - ⬜ Tests de sécurité : un onglet web ne peut ni accéder au réseau, ni à l'interface, ni aux autres modules
 
 ### 6.4 Application principale — P1
-- ⬜ Réglages (fournisseur LLM, permissions par défaut, démarrage automatique…)
-- ⬜ Conversations ; historique des actions et logs, par conversation et global ; annulation possible depuis l'historique pour les actions encore annulables
-- ⬜ Permissions : liste des accords durables et des permissions de modules, révocation
-- ⬜ Modules installés : activation, risque, mise à jour, désinstallation
-- ⬜ Baisse du risque d'un outil : avertissement, disclaimer de responsabilité, saisie de « Je sais ce que je fais » ; baisses listées et annulables dans l'écran Permissions
+- ✅ Réglages (fournisseur LLM, permissions par défaut, démarrage automatique…) — décision 72 : vue Réglages (tous les réglages de `/reglages`, changés par `/reglage`, avec l'accord « Je sais ce que je fais » dans l'application ; « Redémarrer Avenoir ») ; les modèles se choisissent dans la vue Modèles
+- 🔄 Conversations ; historique des actions et logs, par conversation et global ; annulation possible depuis l'historique pour les actions encore annulables — fait : liste des conversations (ouvrir, nouvelle), conversation complète, journal des actions par conversation ou global ; reste les logs et l'annulation depuis l'historique
+- ✅ Permissions : liste des accords durables et des permissions de modules, révocation
+- 🔄 Modules installés : activation, risque, mise à jour, désinstallation — fait : état, outils et risque, accorder et activer, désactiver, changer le risque ; reste mise à jour et désinstallation
+- ✅ Baisse du risque d'un outil : avertissement, disclaimer de responsabilité, saisie de « Je sais ce que je fais » (par `/risque`, question posée dans l'application) ; risque choisi et risque du manifeste montrés dans la vue Modules
 - ⬜ Magasin de modules (P2 : dépend de l'hébergement et de la signature)
-- ⬜ Magasin de modèles et sélecteur de modèle, toujours visible (P2, après le magasin en CLI du jalon 3)
+- ✅ Magasin de modèles et sélecteur de modèle, toujours visible (P2, après le magasin en CLI du jalon 3) — vue Modèles (utiliser, installer, ajouter, retirer), modèle actif dans la barre latérale
 - ⬜ Écran Identité et présence : personnes autorisées, moyens de vérification, comportements, verrouillage (jalon 7)
 
 ---

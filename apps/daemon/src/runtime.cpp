@@ -863,6 +863,158 @@ std::string Runtime::model_status() const {
     return model_label(*state_->switcher);
 }
 
+core::Result<nlohmann::json> Runtime::report(std::string_view what,
+                                             const nlohmann::json& params) const {
+    using nlohmann::json;
+    const State& s = *state_;
+    if (what == "journal") {
+        const storage::Store* store = s.conversations ? s.conversations->store() : nullptr;
+        if (store == nullptr) {
+            return core::make_error(core::ErrorCode::Config, "base indisponible");
+        }
+        const bool everything = params.value("all", false);
+        const std::size_t limit =
+            std::clamp<std::size_t>(params.value("limit", std::size_t{100}), 1, 500);
+        auto entries =
+            store->actions(everything ? std::nullopt : s.conversations->current_id(), limit);
+        if (!entries) {
+            return std::unexpected(std::move(entries.error()));
+        }
+        json list = json::array();
+        for (const auto& entry : *entries) {
+            const auto& event = entry.event;
+            list.push_back(
+                {{"id", entry.id},
+                 {"at", entry.at},
+                 {"conversation", entry.conversation ? json(*entry.conversation) : json(nullptr)},
+                 {"agent", event.agent},
+                 {"tool", event.tool},
+                 {"arguments", event.arguments},
+                 {"risk", core::to_string(event.risk)},
+                 {"decision", core::to_string(event.decision)},
+                 {"reason", event.reason},
+                 {"executed", event.executed},
+                 {"succeeded", event.succeeded},
+                 {"result", event.result},
+                 {"duration_ms", event.duration.count()}});
+        }
+        return json{{"actions", std::move(list)},
+                    {"retention_days", s.file.config.journal.retention_days}};
+    }
+    if (what == "permissions") {
+        json rules = json::array();
+        for (const auto& [tool, rule] : s.permissions->written()) {
+            rules.push_back({{"tool", tool},
+                             {"policy", core::to_string(rule.policy)},
+                             {"risk", core::to_string(rule.risk)},
+                             {"version", rule.version ? json(*rule.version) : json(nullptr)},
+                             {"active", !s.permissions->inactive(tool)},
+                             {"description", describe_rule(rule)}});
+        }
+        json modules = json::array();
+        for (const auto& status : s.host->statuses()) {
+            modules.push_back({{"id", status.id},
+                               {"permissions", status.permissions},
+                               {"missing", status.missing},
+                               {"bundled", status.origin == modules::Origin::Bundled}});
+        }
+        const auto& policy = s.file.config.permissions;
+        return json{{"rules", std::move(rules)},
+                    {"modules", std::move(modules)},
+                    {"policy",
+                     {{"read_only", core::to_string(policy.read_only)},
+                      {"reversible", core::to_string(policy.reversible)},
+                      {"sensitive", core::to_string(policy.sensitive)}}}};
+    }
+    if (what == "models") {
+        json configured = json::array();
+        const auto* active = s.switcher->active();
+        for (const auto& model : s.switcher->models()) {
+            configured.push_back({{"name", model.name},
+                                  {"description", llm::describe(model)},
+                                  {"local", model.local},
+                                  {"active", active != nullptr && active->name == model.name}});
+        }
+        json catalog = json::array();
+        for (const auto& model : llm::model_catalog()) {
+            catalog.push_back({{"name", model.name},
+                               {"tag", model.tag},
+                               {"label", model.label},
+                               {"note", model.note},
+                               {"score", model.score},
+                               {"video_memory_gb", model.video_memory_gb},
+                               {"disk_gb", model.disk_gb}});
+        }
+        const std::string server = llm::ollama_server(s.file.config);
+        json installed = json::array();
+        if (auto list = llm::installed_models(server)) {
+            for (const auto& model : *list) {
+                installed.push_back({{"tag", model.tag}, {"size_bytes", model.size_bytes}});
+            }
+        }
+        return json{{"configured", std::move(configured)},
+                    {"catalog", std::move(catalog)},
+                    {"installed", std::move(installed)},
+                    {"server", server}};
+    }
+    if (what == "modules") {
+        json list = json::array();
+        for (const auto& status : s.host->statuses()) {
+            std::string state = "running";
+            switch (status.state) {
+            case modules::ModuleState::Running:
+                break;
+            case modules::ModuleState::Disabled:
+                state = "disabled";
+                break;
+            case modules::ModuleState::AwaitingGrant:
+                state = "awaiting_grant";
+                break;
+            case modules::ModuleState::Failed:
+                state = "failed";
+                break;
+            }
+            json tools = json::array();
+            for (const auto& tool : status.tools) {
+                tools.push_back({{"name", tool.name},
+                                 {"risk", core::to_string(tool.risk)},
+                                 {"declared", core::to_string(tool.declared)}});
+            }
+            list.push_back({{"id", status.id},
+                            {"name", status.name},
+                            {"version", status.version},
+                            {"bundled", status.origin == modules::Origin::Bundled},
+                            {"state", state},
+                            {"message", status.message},
+                            {"permissions", status.permissions},
+                            {"missing", status.missing},
+                            {"tools", std::move(tools)}});
+        }
+        return json{{"modules", std::move(list)}};
+    }
+    if (what == "conversations") {
+        const storage::Store* store = s.conversations ? s.conversations->store() : nullptr;
+        if (store == nullptr) {
+            return json{{"conversations", json::array()}, {"current", nullptr}};
+        }
+        auto list = store->list_conversations();
+        if (!list) {
+            return std::unexpected(std::move(list.error()));
+        }
+        json out = json::array();
+        for (const auto& conversation : *list) {
+            out.push_back({{"id", conversation.id},
+                           {"title", conversation.title},
+                           {"updated_at", conversation.updated_at},
+                           {"messages", conversation.message_count}});
+        }
+        const auto current = s.conversations->current_id();
+        return json{{"conversations", std::move(out)},
+                    {"current", current ? json(*current) : json(nullptr)}};
+    }
+    return core::make_error(core::ErrorCode::Ipc, "rapport inconnu");
+}
+
 std::vector<SettingLine> Runtime::settings() const {
     return list_settings(state_->file.config, state_->modules_ui->known_modules());
 }

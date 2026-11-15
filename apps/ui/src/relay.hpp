@@ -1,6 +1,7 @@
 #pragma once
 
 #include <atomic>
+#include <chrono>
 #include <cstddef>
 #include <cstdint>
 #include <functional>
@@ -58,8 +59,10 @@ class Relay {
     using Post = std::function<void(const nlohmann::json& message)>;
     /// Hauteur demandée par la page (fil de la fenêtre).
     using Resize = std::function<void(int height)>;
+    /// Ouvre la fenêtre de l'application principale (widget seulement).
+    using OpenApp = std::function<void()>;
 
-    Relay(DaemonLink daemon, Post post, Resize resize = {});
+    Relay(DaemonLink daemon, Post post, Resize resize = {}, OpenApp open_app = {});
     Relay(const Relay&) = delete;
     Relay& operator=(const Relay&) = delete;
     Relay(Relay&&) = delete;
@@ -92,6 +95,8 @@ class Relay {
     DaemonLink daemon_;
     Post post_;
     Resize resize_;
+    OpenApp open_app_;
+    std::chrono::steady_clock::time_point last_open_;
     std::mutex mutex_; ///< Protège ce qui suit.
     bool closing_ = false;
     std::map<std::uint64_t, Running> running_;

@@ -5,6 +5,7 @@
 // La page est servie sous `avenoir://app/` depuis le dossier de l'interface,
 // rien d'autre ne se charge : toute navigation ailleurs est refusée.
 
+#include <cerrno>
 #include <filesystem>
 #include <fstream>
 #include <iterator>
@@ -14,10 +15,15 @@
 #include <string_view>
 #include <system_error>
 #include <utility>
+#include <vector>
 
+#include <fcntl.h>
 #include <gtk/gtk.h>
 #include <gtk4-layer-shell.h>
+#include <spawn.h>
 #include <spdlog/spdlog.h>
+#include <sys/wait.h>
+#include <unistd.h>
 #include <webkit/webkit.h>
 
 #include "avenoir/core/error.hpp"
@@ -59,10 +65,14 @@ class GtkWidgetWindow final : public Window {
         loop_ = g_main_loop_new(nullptr, FALSE);
         window_ = GTK_WINDOW(gtk_window_new());
         gtk_window_set_title(window_, "Avenoir");
-        gtk_window_set_decorated(window_, FALSE);
-        gtk_window_set_resizable(window_, FALSE);
-        gtk_window_set_default_size(window_, kWidgetWidth, kMinHeight);
-        gtk_widget_add_css_class(GTK_WIDGET(window_), "avenoir-widget");
+        if (options_.application) {
+            gtk_window_set_default_size(window_, kAppWidth, kAppHeight);
+        } else {
+            gtk_window_set_decorated(window_, FALSE);
+            gtk_window_set_resizable(window_, FALSE);
+            gtk_window_set_default_size(window_, kWidgetWidth, kMinHeight);
+            gtk_widget_add_css_class(GTK_WIDGET(window_), "avenoir-widget");
+        }
 
         // Fond transparent : seul le widget dessiné par la page se voit.
         GtkCssProvider* css = gtk_css_provider_new();
@@ -75,7 +85,7 @@ class GtkWidgetWindow final : public Window {
 
         // Wayland avec layer-shell (niri, sway, Hyprland, KDE) : en haut au
         // centre, au-dessus des fenêtres, sans réserver de place.
-        if (gtk_layer_is_supported() != FALSE) {
+        if (!options_.application && gtk_layer_is_supported() != FALSE) {
             gtk_layer_init_for_window(window_);
             gtk_layer_set_namespace(window_, "avenoir");
             gtk_layer_set_layer(window_, GTK_LAYER_SHELL_LAYER_TOP);
@@ -113,8 +123,12 @@ class GtkWidgetWindow final : public Window {
         g_object_unref(settings);
         g_object_unref(content);
         g_object_unref(context);
-        const GdkRGBA transparent{.red = 0, .green = 0, .blue = 0, .alpha = 0};
-        webkit_web_view_set_background_color(view_, &transparent);
+        // Widget transparent ; application sur le fond bleu nuit d'Avenoir.
+        const GdkRGBA background =
+            options_.application
+                ? GdkRGBA{.red = 0.043F, .green = 0.063F, .blue = 0.125F, .alpha = 1}
+                : GdkRGBA{.red = 0, .green = 0, .blue = 0, .alpha = 0};
+        webkit_web_view_set_background_color(view_, &background);
         g_signal_connect(view_, "decide-policy", G_CALLBACK(&GtkWidgetWindow::on_policy), this);
         g_signal_connect(view_, "context-menu", G_CALLBACK(&GtkWidgetWindow::on_context_menu),
                          this);
@@ -146,14 +160,22 @@ class GtkWidgetWindow final : public Window {
     }
 
     void resize(int height) override {
-        if (window_ != nullptr) {
+        if (window_ != nullptr && !options_.application) {
             gtk_window_set_default_size(window_, kWidgetWidth, height);
         }
     }
 
     int run() override {
-        const std::string start =
-            std::string(kOrigin) + (options_.pinned ? "index.html#ouvert" : "index.html");
+        std::string page = "index.html";
+        if (options_.application) {
+            page = "index.html#app";
+            if (is_view_name(options_.view)) {
+                page += "/" + options_.view;
+            }
+        } else if (options_.pinned) {
+            page = "index.html#ouvert";
+        }
+        const std::string start = std::string(kOrigin) + page;
         webkit_web_view_load_uri(view_, start.c_str());
         gtk_window_present(window_);
         g_main_loop_run(loop_);
@@ -263,6 +285,39 @@ core::Result<std::unique_ptr<Window>> create_window(WindowOptions options) {
         return std::unexpected(std::move(built.error()));
     }
     return window;
+}
+
+void launch_application(const std::optional<std::filesystem::path>& config) {
+    std::error_code error;
+    const auto executable = std::filesystem::read_symlink("/proc/self/exe", error);
+    if (error) {
+        return;
+    }
+    // `setsid -f` : détaché de ce processus, sans zombie ; aucun descripteur
+    // laissé au programme lancé.
+    std::vector<std::string> arguments{"setsid", "-f", executable.string(), "--app"};
+    if (config) {
+        arguments.push_back(std::filesystem::absolute(*config, error).string());
+    }
+    std::vector<char*> argv;
+    argv.reserve(arguments.size() + 1);
+    for (auto& argument : arguments) {
+        argv.push_back(argument.data());
+    }
+    argv.push_back(nullptr);
+    posix_spawn_file_actions_t actions;
+    posix_spawn_file_actions_init(&actions);
+    posix_spawn_file_actions_addopen(&actions, STDIN_FILENO, "/dev/null", O_RDONLY, 0);
+    posix_spawn_file_actions_addclosefrom_np(&actions, 3);
+    pid_t pid = 0;
+    if (posix_spawnp(&pid, argv.front(), &actions, nullptr, argv.data(), environ) == 0) {
+        int status = 0;
+        while (waitpid(pid, &status, 0) < 0 && errno == EINTR) {
+        }
+    } else {
+        spdlog::warn("interface : application principale impossible à lancer");
+    }
+    posix_spawn_file_actions_destroy(&actions);
 }
 
 std::optional<std::filesystem::path> default_ui_directory() {

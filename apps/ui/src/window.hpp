@@ -1,10 +1,12 @@
 #pragma once
 
+#include <algorithm>
 #include <filesystem>
 #include <functional>
 #include <memory>
 #include <optional>
 #include <string>
+#include <string_view>
 
 #include "avenoir/core/error.hpp"
 
@@ -19,6 +21,11 @@ struct WindowOptions {
     std::function<void(std::string message)> from_page;
     bool developer_tools = false; ///< Inspecteur web (AVENOIR_UI_DEBUG).
     bool pinned = false;          ///< Widget toujours déplié (AVENOIR_UI_PIN).
+    /// Fenêtre de l'application principale (`--app`) : ordinaire, avec
+    /// bordure, redimensionnable, dans la barre des tâches.
+    bool application = false;
+    /// Vue de départ de l'application (AVENOIR_UI_VIEW : settings, journal…).
+    std::string view;
 };
 
 class Window {
@@ -47,7 +54,19 @@ class Window {
 /// Dossier de la page à côté de l'exécutable (`<dossier>/ui`), ou rien.
 [[nodiscard]] std::optional<std::filesystem::path> default_ui_directory();
 
+/// Nom de vue acceptable dans l'adresse : minuscules ASCII, 1 à 16.
+[[nodiscard]] inline bool is_view_name(std::string_view view) {
+    return !view.empty() && view.size() <= 16 &&
+           std::ranges::all_of(view, [](char c) { return c >= 'a' && c <= 'z'; });
+}
+
+/// Lance `avenoir-ui --app [config]` (cet exécutable), détaché, sans shell.
+void launch_application(const std::optional<std::filesystem::path>& config);
+
 /// Largeur du widget, en pixels.
 inline constexpr int kWidgetWidth = 560;
+/// Taille de départ de l'application principale.
+inline constexpr int kAppWidth = 1000;
+inline constexpr int kAppHeight = 700;
 
 } // namespace avenoir::ui

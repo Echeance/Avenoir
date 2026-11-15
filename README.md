@@ -353,7 +353,7 @@ Sous Windows, `scripts\build.ps1` offre les mêmes options et charge tout seul l
 
 **Qualité** : avertissements traités comme des erreurs, `clang-format`, `clang-tidy`, AddressSanitizer + UndefinedBehaviorSanitizer, et plus de 300 tests — dont un test de bout en bout de la CLI. La [CI](https://github.com/echeance/Avenoir/actions) vérifie chaque modification sous Linux (GCC, Clang, sanitizers) et Windows (MSVC).
 
-**Interface graphique** (en cours) : sous Linux avec WebKitGTK 6, GTK 4 et gtk4-layer-shell installés (Arch : `webkitgtk-6.0 gtk4-layer-shell`), sous Windows avec WebView2 (fourni par vcpkg, Edge déjà présent), et avec Node.js pour la page, la compilation produit aussi `avenoir-ui` : `./build/debug/apps/cli/avenoir-ui [config.toml]` pose le widget en haut de l'écran, déplié au survol. Le code web est dans [`ui/`](ui/) (Svelte 5, TypeScript strict). `cd ui && npm install`, puis `npm run dev` l'ouvre dans un navigateur avec un hôte simulé (rien n'est réellement fait) ; `npm run check`, `npm test` et `npm run build` le vérifient et le construisent.
+**Interface graphique** (en cours) : sous Linux avec WebKitGTK 6, GTK 4 et gtk4-layer-shell installés (Arch : `webkitgtk-6.0 gtk4-layer-shell`), sous Windows avec WebView2 (fourni par vcpkg, Edge déjà présent), et avec Node.js pour la page, la compilation produit aussi `avenoir-ui` : `./build/debug/apps/cli/avenoir-ui [config.toml]` pose le widget en haut de l'écran, déplié au survol ; son bouton ⧉ (ou `avenoir-ui --app`) ouvre l'application principale : conversations, réglages, journal, permissions, modèles et modules. Le code web est dans [`ui/`](ui/) (Svelte 5, TypeScript strict). `cd ui && npm install`, puis `npm run dev` l'ouvre dans un navigateur avec un hôte simulé (rien n'est réellement fait) ; `npm run check`, `npm test` et `npm run build` le vérifient et le construisent.
 
 **Essais avec de vrais modèles** : `avenoir-evals` passe les requêtes de référence ([`evals/requetes.toml`](evals/requetes.toml)) sur le modèle de votre configuration, avec de fausses versions des outils (rien n'est lancé), et écrit un rapport dans [`evals/resultats/`](evals/resultats/) :
 
@@ -395,7 +395,7 @@ Le workflow `release` vérifie que le numéro du tag correspond à la version du
 | **3 · Résident** | démon, journal, permissions durables, réglages scellés, clés au trousseau, magasin de modèles, carte graphique partagée, saisie rapide | ✅ |
 | **4 · Tâches et modules** | orchestrateur multi-agents, plusieurs projets en parallèle, fichiers, mémoire, appels entre modules | 🔄 équipes d'agents et projets faits |
 | **5 · Voix** | mot de réveil, reconnaissance et synthèse vocales | ⬜ |
-| **6 · Interface graphique** | widget avec le loup animé, application principale | 🔄 widget sous Linux et Windows ; application principale à venir |
+| **6 · Interface graphique** | widget avec le loup animé, application principale | 🔄 widget et application principale sous Linux et Windows ; onglets des modules à venir |
 | **7 · Identité et présence** | propriétaire et liste blanche, voix et visage, verrouillage automatique | ⬜ |
 
 Le détail, étape par étape : **[docs/ROADMAP.md](docs/ROADMAP.md)**.

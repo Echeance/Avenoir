@@ -88,6 +88,11 @@ export class Bridge {
     return { id, result };
   }
 
+  /// Demande à l'hôte d'ouvrir l'application principale.
+  openApp(): void {
+    this.transport.send({ type: "open_app" });
+  }
+
   /// Hauteur de la page, pour que l'hôte ajuste la fenêtre.
   resize(height: number): void {
     this.transport.send({ type: "resize", height: Math.ceil(height) });

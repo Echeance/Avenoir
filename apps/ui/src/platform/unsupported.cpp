@@ -15,6 +15,8 @@ core::Result<std::unique_ptr<Window>> create_window(WindowOptions /*options*/) {
                             "interface graphique pas encore prise en charge sur ce système");
 }
 
+void launch_application(const std::optional<std::filesystem::path>& /*config*/) {}
+
 std::optional<std::filesystem::path> default_ui_directory() {
     return std::nullopt;
 }

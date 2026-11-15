@@ -31,6 +31,16 @@ body {
   overflow: hidden;
 }
 
+/* Application principale : fond plein. */
+html.application,
+html.application body {
+  background: var(--night);
+}
+
+#app {
+  height: 100%;
+}
+
 button {
   font: inherit;
   color: inherit;

@@ -3,8 +3,8 @@
 
 import { Bridge, nativeTransport, type WebKitWindow } from "./bridge";
 import { mockTransport } from "./mock";
-import type { Json, JsonObject, QuestionMethod } from "./protocol";
-import { initialState, reduce, type ViewState } from "./state";
+import type { CallMethod, Json, JsonObject, QuestionMethod } from "./protocol";
+import { initialState, reduce, type Entry, type ViewState } from "./state";
 
 export interface Question {
   id: number;
@@ -20,6 +20,9 @@ class Session {
   question = $state<Question | null>(null);
   /// Appel « input » en cours (pour « Arrêter »).
   running = $state<number | null>(null);
+  /// Messages d'Avenoir pendant la dernière requête (retour des actions de
+  /// l'application : « réglage changé », refus…).
+  lastNotes = $state<Extract<Entry, { kind: "note" }>[]>([]);
 
   private readonly bridge: Bridge;
 
@@ -73,6 +76,7 @@ class Session {
     }
     const call = this.bridge.call("input", { line: text });
     this.running = call.id;
+    const before = this.view.entries.length;
     try {
       const result = await call.result;
       if (typeof result["llm"] === "string") {
@@ -88,7 +92,20 @@ class Session {
       });
     } finally {
       this.running = null;
+      this.lastNotes = this.view.entries
+        .slice(Math.min(before, this.view.entries.length))
+        .filter((entry): entry is Extract<Entry, { kind: "note" }> => entry.kind === "note");
     }
+  }
+
+  /// Données en lecture seule du démon (journal, permissions, modèles…).
+  async request(method: Exclude<CallMethod, "input" | "session/open">, params: JsonObject = {}): Promise<JsonObject> {
+    return this.bridge.call(method, params).result;
+  }
+
+  /// Ouvre la fenêtre de l'application principale.
+  openApp(): void {
+    this.bridge.openApp();
   }
 
   /// Hauteur de la page (barre pliée ou dépliée), donnée à l'hôte.

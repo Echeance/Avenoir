@@ -132,3 +132,17 @@ TEST_CASE("relais : une question annulée ou une page fermée vaut un refus", "[
         CHECK(secret.is_null());
     }
 }
+
+TEST_CASE("relais : l'application s'ouvre une fois, même sur un double clic", "[ui]") {
+    int opened = 0;
+    ui::Relay relay(ui::DaemonLink{}, [](const json& /*message*/) {}, {}, [&opened] { ++opened; });
+    relay.from_page(R"({"type":"open_app"})");
+    relay.from_page(R"({"type":"open_app"})");
+    CHECK(opened == 1);
+    // Sans fonction d'ouverture (application elle-même) : rien.
+    ui::Relay inside(ui::DaemonLink{}, [](const json& /*message*/) {});
+    inside.from_page(R"({"type":"open_app"})");
+    CHECK(ui::is_allowed_call("journal/list"));
+    CHECK(ui::is_allowed_call("models/list"));
+    CHECK_FALSE(ui::is_allowed_call("models/delete"));
+}

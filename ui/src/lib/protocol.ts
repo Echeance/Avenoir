@@ -4,7 +4,17 @@
 // message mal formé est écarté, jamais interprété.
 
 /// Appels que la page peut demander au démon, par l'hôte.
-export const CALLS = ["session/open", "input", "session/describe", "settings/list"] as const;
+export const CALLS = [
+  "session/open",
+  "input",
+  "session/describe",
+  "settings/list",
+  "journal/list",
+  "models/list",
+  "permissions/list",
+  "modules/list",
+  "conversations/list",
+] as const;
 export type CallMethod = (typeof CALLS)[number];
 
 /// Questions que le démon pose à l'interface.
@@ -20,6 +30,7 @@ export type PageMessage =
   | { type: "cancel"; id: number }
   | { type: "answer"; id: number; result: Json }
   | { type: "resize"; height: number }
+  | { type: "open_app" }
   | { type: "ready" };
 
 /// Hôte → page.

@@ -3,7 +3,9 @@
 // client du démon comme la CLI : il s'y connecte (et le lance s'il ne répond
 // pas), relaie ses messages à la page et les réponses de la page au démon.
 //
-// Usage : avenoir-ui [config.toml]
+// Usage : avenoir-ui [--app] [config.toml]
+//   --app : fenêtre de l'application principale (réglages, journal,
+//           permissions, modèles, modules) au lieu du widget.
 
 #include <cstdio>
 #include <cstdlib>
@@ -47,8 +49,13 @@ int run(int argc, char** argv) {
     setup_logging();
     const std::span<char*> args(argv, static_cast<std::size_t>(argc));
     std::optional<std::filesystem::path> config;
-    if (args.size() > 1) {
-        config = std::filesystem::path(args[1]);
+    bool application = false;
+    for (const auto* argument : args.subspan(1)) {
+        if (std::string_view(argument) == "--app") {
+            application = true;
+        } else if (!config) {
+            config = std::filesystem::path(argument);
+        }
     }
     std::filesystem::path ui_directory;
     if (const auto chosen = core::read_env("AVENOIR_UI_DIR")) {
@@ -88,6 +95,8 @@ int run(int argc, char** argv) {
             },
         .developer_tools = core::read_env("AVENOIR_UI_DEBUG").has_value(),
         .pinned = core::read_env("AVENOIR_UI_PIN").has_value(),
+        .application = application,
+        .view = core::read_env("AVENOIR_UI_VIEW").value_or(""),
     });
     if (!created) {
         spdlog::error("{}", core::describe(created.error()));
@@ -105,7 +114,11 @@ int run(int argc, char** argv) {
                     return peer->call(method, std::move(params), stop, ipc::Peer::OnStop::AwaitEnd);
                 }},
         [&window](const json& message) { window->post(message.dump()); },
-        [&window](int height) { window->resize(height); });
+        [&window](int height) { window->resize(height); },
+        // Le widget ouvre l'application principale (un autre processus, avec
+        // sa propre session : ses questions s'affichent chez elle).
+        application ? ui::Relay::OpenApp{}
+                    : ui::Relay::OpenApp{[config] { ui::launch_application(config); }});
 
     peer->on_notification("ui", [&relay](const json& params) { relay->ui(params); });
     for (const char* question : {"ask", "ask_yes_no", "confirm", "ask_secret"}) {

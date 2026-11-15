@@ -8,6 +8,8 @@
 #include <string_view>
 #include <vector>
 
+#include <nlohmann/json.hpp>
+
 #include "avenoir/core/config.hpp"
 #include "avenoir/core/error.hpp"
 #include "avenoir/storage/secrets.hpp"
@@ -81,6 +83,11 @@ class Runtime {
     [[nodiscard]] std::string model_status() const;
     /// Réglages modifiables et leur valeur (menu /settings de la CLI).
     [[nodiscard]] std::vector<SettingLine> settings() const;
+    /// Données structurées pour l'application (décision 72), en lecture
+    /// seule : « journal » (`all`, `limit`), « permissions », « models »,
+    /// « modules », « conversations ». Erreur pour un autre nom.
+    [[nodiscard]] core::Result<nlohmann::json> report(std::string_view what,
+                                                      const nlohmann::json& params) const;
     [[nodiscard]] const ConfigFile& config() const;
 
   private:

@@ -36,8 +36,11 @@ std::optional<std::uint64_t> id_of(const json& message) {
 } // namespace
 
 bool is_allowed_call(std::string_view method) {
-    constexpr std::array<std::string_view, 4> kCalls{"session/open", "input", "session/describe",
-                                                     "settings/list"};
+    // Session et requêtes, puis données de l'application, en lecture seule.
+    constexpr std::array<std::string_view, 9> kCalls{
+        "session/open",     "input",        "session/describe",
+        "settings/list",    "journal/list", "models/list",
+        "permissions/list", "modules/list", "conversations/list"};
     return std::ranges::find(kCalls, method) != kCalls.end();
 }
 
@@ -74,8 +77,9 @@ json checked_answer(std::string_view method, const json& result) {
     return refusal(method);
 }
 
-Relay::Relay(DaemonLink daemon, Post post, Resize resize)
-    : daemon_(std::move(daemon)), post_(std::move(post)), resize_(std::move(resize)) {}
+Relay::Relay(DaemonLink daemon, Post post, Resize resize, OpenApp open_app)
+    : daemon_(std::move(daemon)), post_(std::move(post)), resize_(std::move(resize)),
+      open_app_(std::move(open_app)) {}
 
 Relay::~Relay() {
     try {
@@ -145,6 +149,15 @@ void Relay::from_page(std::string_view text) {
     const std::string type = message["type"].get<std::string>();
     if (type == "ready") {
         post_(json{{"type", "status"}, {"connected", true}, {"message", "connecté"}});
+        return;
+    }
+    if (type == "open_app") {
+        // Une fois toutes les 2 s au plus : un double clic n'ouvre qu'une fenêtre.
+        const auto now = std::chrono::steady_clock::now();
+        if (open_app_ && now - last_open_ > std::chrono::seconds{2}) {
+            last_open_ = now;
+            open_app_();
+        }
         return;
     }
     if (type == "resize") {

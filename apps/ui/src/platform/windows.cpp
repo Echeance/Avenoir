@@ -106,11 +106,21 @@ class WebViewWindow final : public Window {
         // absent de la barre des tâches.
         RECT area{};
         SystemParametersInfoW(SPI_GETWORKAREA, 0, &area, 0);
-        const int width = pixels(kWidgetWidth);
-        const int left = area.left + ((area.right - area.left - width) / 2);
-        window_ = CreateWindowExW(WS_EX_TOPMOST | WS_EX_TOOLWINDOW, kClassName, L"Avenoir",
-                                  WS_POPUP, left, area.top, width, pixels(kMinHeight), nullptr,
-                                  nullptr, instance, this);
+        if (options_.application) {
+            // Application principale : fenêtre ordinaire, centrée.
+            const int width = pixels(kAppWidth);
+            const int height = pixels(kAppHeight);
+            window_ = CreateWindowExW(0, kClassName, L"Avenoir", WS_OVERLAPPEDWINDOW,
+                                      area.left + ((area.right - area.left - width) / 2),
+                                      area.top + ((area.bottom - area.top - height) / 2), width,
+                                      height, nullptr, nullptr, instance, this);
+        } else {
+            const int width = pixels(kWidgetWidth);
+            const int left = area.left + ((area.right - area.left - width) / 2);
+            window_ = CreateWindowExW(WS_EX_TOPMOST | WS_EX_TOOLWINDOW, kClassName, L"Avenoir",
+                                      WS_POPUP, left, area.top, width, pixels(kMinHeight), nullptr,
+                                      nullptr, instance, this);
+        }
         if (window_ == nullptr) {
             return core::make_error(core::ErrorCode::Config, "fenêtre impossible à créer");
         }
@@ -156,6 +166,9 @@ class WebViewWindow final : public Window {
 
     void resize(int height) override {
         // Appelée depuis le fil de la fenêtre (message de la page).
+        if (options_.application) {
+            return;
+        }
         RECT frame{};
         GetWindowRect(window_, &frame);
         SetWindowPos(window_, HWND_TOPMOST, frame.left, frame.top, pixels(kWidgetWidth),
@@ -164,7 +177,7 @@ class WebViewWindow final : public Window {
     }
 
     int run() override {
-        ShowWindow(window_, SW_SHOWNOACTIVATE);
+        ShowWindow(window_, options_.application ? SW_SHOWNORMAL : SW_SHOWNOACTIVATE);
         MSG message{};
         while (GetMessageW(&message, nullptr, 0, 0) > 0) {
             if (message.hwnd == nullptr && message.message == kQuitMessage) {
@@ -261,8 +274,16 @@ class WebViewWindow final : public Window {
             &token);
 
         fit();
-        const std::wstring start =
-            std::wstring(kOrigin) + (options_.pinned ? L"index.html#ouvert" : L"index.html");
+        std::wstring page = L"index.html";
+        if (options_.application) {
+            page = L"index.html#app";
+            if (is_view_name(options_.view)) {
+                page += L"/" + wide(options_.view);
+            }
+        } else if (options_.pinned) {
+            page = L"index.html#ouvert";
+        }
+        const std::wstring start = std::wstring(kOrigin) + page;
         view_->Navigate(start.c_str());
         return S_OK;
     }
@@ -326,6 +347,27 @@ core::Result<std::unique_ptr<Window>> create_window(WindowOptions options) {
         return std::unexpected(std::move(built.error()));
     }
     return window;
+}
+
+void launch_application(const std::optional<std::filesystem::path>& config) {
+    std::wstring path(MAX_PATH, L'\0');
+    const DWORD size = GetModuleFileNameW(nullptr, path.data(), MAX_PATH);
+    if (size == 0 || size >= MAX_PATH) {
+        return;
+    }
+    path.resize(size);
+    std::wstring command = L"\"" + path + L"\" --app";
+    if (config) {
+        command += L" \"" + std::filesystem::absolute(*config).wstring() + L"\"";
+    }
+    STARTUPINFOW startup{};
+    startup.cb = sizeof(startup);
+    PROCESS_INFORMATION process{};
+    if (CreateProcessW(path.c_str(), command.data(), nullptr, nullptr, FALSE, 0, nullptr, nullptr,
+                       &startup, &process) != FALSE) {
+        CloseHandle(process.hThread);
+        CloseHandle(process.hProcess);
+    }
 }
 
 std::optional<std::filesystem::path> default_ui_directory() {
