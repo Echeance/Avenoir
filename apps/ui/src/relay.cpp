@@ -37,11 +37,11 @@ std::optional<std::uint64_t> id_of(const json& message) {
 
 bool is_allowed_call(std::string_view method) {
     // Session et requêtes, puis données de l'application, en lecture seule.
-    constexpr std::array<std::string_view, 14> kCalls{
+    constexpr std::array<std::string_view, 16> kCalls{
         "session/open",       "input",       "session/describe", "settings/list",
         "journal/list",       "models/list", "permissions/list", "modules/list",
         "conversations/list", "tabs/list",   "tabs/content",     "tabs/event",
-        "undo/list",          "logs/list"};
+        "undo/list",          "logs/list",   "status/list",      "update/list"};
     return std::ranges::find(kCalls, method) != kCalls.end();
 }
 

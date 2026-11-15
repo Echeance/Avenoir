@@ -19,6 +19,8 @@ export const CALLS = [
   "tabs/event",
   "undo/list",
   "logs/list",
+  "status/list",
+  "update/list",
 ] as const;
 export type CallMethod = (typeof CALLS)[number];
 

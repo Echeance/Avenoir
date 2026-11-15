@@ -23,6 +23,7 @@
 
 #include "avenoir/core/config.hpp"
 #include "avenoir/core/error.hpp"
+#include "avenoir/core/version.hpp"
 #include "avenoir/ipc/peer.hpp"
 #include "avenoir/ipc/transport.hpp"
 #include "avenoir/storage/secrets.hpp"
@@ -34,6 +35,7 @@
 #include "settings_watch.hpp"
 #include "setup.hpp"
 #include "ui.hpp"
+#include "updates.hpp"
 
 namespace avenoir::daemon {
 
@@ -336,7 +338,7 @@ class Server {
         });
         // Données de l'application principale, en lecture seule (décision 72).
         for (const char* report : {"journal", "permissions", "models", "modules", "conversations",
-                                   "tabs", "undo", "logs"}) {
+                                   "tabs", "undo", "logs", "status"}) {
             peer->on_request(std::string(report) + "/list",
                              [this, report](const json& params, const std::stop_token&) {
                                  const std::scoped_lock lock(runtime_mutex_);
@@ -358,6 +360,26 @@ class Server {
                 return runtime_->report(report, params);
             });
         }
+        // Mises à jour : à la demande seulement, hors du verrou du runtime
+        // (requête réseau de quelques secondes au plus).
+        peer->on_request("update/list", [](const json& params, const std::stop_token& stop) {
+            const std::string current(core::version());
+            auto releases = fetch_releases(stop);
+            if (!releases) {
+                return core::Result<json>(std::unexpected(std::move(releases.error())));
+            }
+            // Pré-versions proposées tant qu'Avenoir en est une (0.x ou suffixe).
+            const bool prereleases =
+                params.value("prereleases", current.starts_with("0.") || current.contains('-'));
+            const auto latest = latest_release(*releases, prereleases);
+            json out{{"current", current}, {"available", false}};
+            if (latest) {
+                out["latest"] = latest->version;
+                out["url"] = latest->url;
+                out["available"] = is_newer(latest->version, current);
+            }
+            return core::Result<json>(std::move(out));
+        });
         peer->on_request("session/describe", [this](const json&, const std::stop_token&) {
             const std::scoped_lock lock(runtime_mutex_);
             return core::Result<json>(

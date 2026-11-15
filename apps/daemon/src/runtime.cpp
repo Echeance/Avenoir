@@ -35,6 +35,7 @@
 #include "avenoir/core/env.hpp"
 #include "avenoir/core/permission.hpp"
 #include "avenoir/core/router.hpp"
+#include "avenoir/core/version.hpp"
 #include "avenoir/llm/factory.hpp"
 #include "avenoir/llm/models.hpp"
 #include "avenoir/llm/store.hpp"
@@ -368,6 +369,8 @@ std::string model_label(const llm::ModelSwitcher& switcher) {
 struct Runtime::State {
     ConfigFile file;
     std::vector<std::string> startup_warnings;
+    /// Démarrage de ce runtime (onglet « Système » du widget).
+    std::chrono::steady_clock::time_point started = std::chrono::steady_clock::now();
     std::unique_ptr<modules::ModuleHost> host;
     std::unique_ptr<ModulesUi> modules_ui;
     /// Règles durables (« toujours autoriser / refuser ») : déclaré avant les
@@ -410,7 +413,7 @@ struct Runtime::State {
     GpuState gpu;
     /// Raccourci global de la saisie rapide (Windows), retiré avec Avenoir.
     std::unique_ptr<GlobalShortcut> shortcut;
-    std::mutex projects_mutex;
+    mutable std::mutex projects_mutex;
     /// Déclarés en dernier : arrêtés avant tout le reste d'Avenoir.
     std::map<std::string, std::unique_ptr<Project>> projects;
 
@@ -934,6 +937,74 @@ core::Result<nlohmann::json> Runtime::report(std::string_view what,
         }
         return json{{"actions", std::move(list)},
                     {"retention_days", s.file.config.journal.retention_days}};
+    }
+    if (what == "status") {
+        // Onglets « Activité » et « Système » du widget (décision 78).
+        json status{{"version", core::version()},
+                    {"uptime_s", std::chrono::duration_cast<std::chrono::seconds>(
+                                     std::chrono::steady_clock::now() - s.started)
+                                     .count()}};
+        if (s.agent) {
+            if (const auto tool = s.agent->tools().find("system_info")) {
+                if (auto facts = tool->call(json::object(), std::stop_token{})) {
+                    status["system"] = facts->content;
+                }
+            }
+            // Consommation de la conversation, quand le fournisseur la donne.
+            std::uint64_t input = 0;
+            std::uint64_t output = 0;
+            std::optional<double> cost;
+            std::size_t answers = 0;
+            for (const auto& message : s.agent->history()) {
+                const auto* answer = std::get_if<core::AssistantMessage>(&message);
+                if (answer == nullptr || !answer->usage) {
+                    continue;
+                }
+                ++answers;
+                input += answer->usage->input_tokens;
+                output += answer->usage->output_tokens;
+                if (answer->usage->cost_usd) {
+                    cost = cost.value_or(0.0) + *answer->usage->cost_usd;
+                }
+            }
+            status["usage"] = {{"answers", answers},
+                               {"input_tokens", input},
+                               {"output_tokens", output},
+                               {"cost_usd", cost ? json(*cost) : json(nullptr)}};
+        }
+        if (const auto* model = s.switcher ? s.switcher->active() : nullptr) {
+            status["model"] = {
+                {"name", model->name},
+                {"model", std::visit(
+                              [](const auto& config) {
+                                  if constexpr (requires { config.model.value_or(""); }) {
+                                      return config.model.value_or("");
+                                  } else {
+                                      return config.model;
+                                  }
+                              },
+                              model->config)},
+                {"claude_code", std::holds_alternative<core::ClaudeCodeConfig>(model->config)},
+                {"local", model->local}};
+        }
+        json modules = json::array();
+        for (const auto& module : s.host->statuses()) {
+            modules.push_back({{"id", module.id},
+                               {"name", module.name},
+                               {"running", module.state == modules::ModuleState::Running}});
+        }
+        status["modules"] = std::move(modules);
+        json projects = json::array();
+        {
+            const std::scoped_lock lock(s.projects_mutex);
+            for (const auto& [name, project] : s.projects) {
+                projects.push_back({{"name", name},
+                                    {"request", project->request},
+                                    {"running", project->running.load()}});
+            }
+        }
+        status["projects"] = std::move(projects);
+        return status;
     }
     if (what == "undo") {
         // Requêtes encore annulables (en mémoire, depuis le lancement du

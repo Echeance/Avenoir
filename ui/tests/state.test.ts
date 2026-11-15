@@ -129,3 +129,19 @@ describe("onglets déclaratifs : formulaires et graphiques", () => {
     expect(negative.bars[0]?.height).toBeGreaterThan(0);
   });
 });
+
+import { formatCost, formatDuration, formatTokens } from "../src/lib/format";
+
+describe("onglets Activité et Système : mise en forme", () => {
+  it("durées, jetons, coûts", () => {
+    expect(formatDuration(42)).toBe("42 s");
+    expect(formatDuration(720)).toBe("12 min");
+    expect(formatDuration(3 * 3600 + 5 * 60)).toBe("3 h 05");
+    expect(formatDuration(2 * 86400 + 4 * 3600)).toBe("2 j 4 h");
+    expect(formatTokens(850)).toBe("850");
+    expect(formatTokens(12_345)).toBe("12,3 k");
+    expect(formatTokens(1_200_000)).toBe("1,2 M");
+    expect(formatCost(0.0042)).toBe("0,0042 $");
+    expect(formatCost(1.25)).toBe("1,25 $");
+  });
+});

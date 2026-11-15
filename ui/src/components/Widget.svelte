@@ -1,7 +1,9 @@
 <script lang="ts">
   // Widget d'Avenoir : une barre en haut de l'écran, qui se déplie au survol
   // (ou tant qu'une requête ou une question est en cours).
+  import ActivityTab from "./ActivityTab.svelte";
   import Composer from "./Composer.svelte";
+  import SystemTab from "./SystemTab.svelte";
   import Conversation from "./Conversation.svelte";
   import QuestionCard from "./QuestionCard.svelte";
   import TabView from "./TabView.svelte";
@@ -10,7 +12,13 @@
   import { session } from "../lib/session.svelte";
 
   let hovered = $state(false);
-  /// Onglet affiché : la conversation, ou « module/onglet ».
+  /// Onglets d'Avenoir, avant ceux des modules (décision 78).
+  const BUILTIN = [
+    { key: "conversation", label: "Conversation" },
+    { key: "activite", label: "Activité" },
+    { key: "systeme", label: "Système" },
+  ];
+  /// Onglet affiché : la conversation, l'activité, le système, ou « module/onglet ».
   let current = $state("conversation");
   // Onglets des modules : déclaratifs, et web (iframe isolée) là où la vue
   // web les sert.
@@ -21,6 +29,10 @@
   // Débogage : « #ouvert/meteo » ouvre le premier onglet de ce module.
   const wantedModule = location.hash.startsWith("#ouvert/") ? location.hash.slice("#ouvert/".length) : "";
   let chosen = false;
+  if (wantedModule === "activite" || wantedModule === "systeme") {
+    current = wantedModule;
+    chosen = true;
+  }
   $effect(() => {
     const first = declarative.find((tab) => tab.module === wantedModule);
     if (!chosen && first !== undefined) {
@@ -89,20 +101,24 @@
   </header>
   {#if open}
     <div class="panel">
-      {#if declarative.length > 0}
-        <div class="tabs" role="tablist">
-          <button role="tab" aria-selected={current === "conversation"} class:active={current === "conversation"}
-            onclick={() => (current = "conversation")}>Conversation</button
+      <div class="tabs" role="tablist">
+        {#each BUILTIN as { key, label } (key)}
+          <button role="tab" aria-selected={current === key} class:active={current === key} onclick={() => (current = key)}
+            >{label}</button
           >
-          {#each declarative as tab (`${tab.module}/${tab.id}`)}
-            {@const key = `${tab.module}/${tab.id}`}
-            <button role="tab" aria-selected={current === key} class:active={current === key} onclick={() => (current = key)}
-              >{tab.title}</button
-            >
-          {/each}
-        </div>
-      {/if}
-      {#if shown !== undefined && shown.kind === "web"}
+        {/each}
+        {#each declarative as tab (`${tab.module}/${tab.id}`)}
+          {@const key = `${tab.module}/${tab.id}`}
+          <button role="tab" aria-selected={current === key} class:active={current === key} onclick={() => (current = key)}
+            >{tab.title}</button
+          >
+        {/each}
+      </div>
+      {#if current === "activite"}
+        <ActivityTab />
+      {:else if current === "systeme"}
+        <SystemTab />
+      {:else if shown !== undefined && shown.kind === "web"}
         <WebTab module={shown.module} tab={shown.id} title={shown.title} />
       {:else if shown !== undefined}
         <TabView module={shown.module} tab={shown.id} onaction={() => (current = "conversation")} />

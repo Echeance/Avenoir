@@ -16,6 +16,7 @@ add_library(avenoir_daemon_lib STATIC
     src/gpu.cpp
     src/lock_theme.cpp
     src/logs.cpp
+    src/updates.cpp
     src/modules.cpp
     src/permissions.cpp
     src/runtime.cpp
@@ -36,7 +37,7 @@ target_link_libraries(avenoir_daemon_lib PUBLIC
     avenoir::terminal
     avenoir::tools
     spdlog::spdlog
-    PRIVATE avenoir::options reproc++)
+    PRIVATE avenoir::options reproc++ cpr::cpr)
 if(WIN32)
     target_link_libraries(avenoir_daemon_lib PRIVATE advapi32 shell32)
 endif()
@@ -54,6 +55,7 @@ if(AVENOIR_BUILD_TESTS)
         tests/keys_test.cpp
         tests/lock_theme_test.cpp
         tests/logs_test.cpp
+        tests/updates_test.cpp
         tests/permissions_test.cpp
         tests/shortcut_test.cpp
         tests/settings_catalog_test.cpp
