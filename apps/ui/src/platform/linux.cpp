@@ -19,7 +19,9 @@
 
 #include <fcntl.h>
 #include <gtk/gtk.h>
+#ifdef AVENOIR_LAYER_SHELL
 #include <gtk4-layer-shell.h>
+#endif
 #include <spawn.h>
 #include <spdlog/spdlog.h>
 #include <sys/wait.h>
@@ -85,6 +87,7 @@ class GtkWidgetWindow final : public Window {
 
         // Wayland avec layer-shell (niri, sway, Hyprland, KDE) : en haut au
         // centre, au-dessus des fenêtres, sans réserver de place.
+#ifdef AVENOIR_LAYER_SHELL
         if (!options_.application && gtk_layer_is_supported() != FALSE) {
             gtk_layer_init_for_window(window_);
             gtk_layer_set_namespace(window_, "avenoir");
@@ -94,6 +97,9 @@ class GtkWidgetWindow final : public Window {
         } else {
             spdlog::info("interface : layer-shell indisponible, fenêtre ordinaire");
         }
+#else
+        spdlog::info("interface : compilée sans gtk4-layer-shell, fenêtre ordinaire");
+#endif
 
         // Fichiers de la page : schéma propre, servi par resolve_asset.
         WebKitWebContext* context = webkit_web_context_new();
