@@ -6,6 +6,7 @@
 #include <cstddef>
 #include <filesystem>
 #include <format>
+#include <fstream>
 #include <functional>
 #include <iterator>
 #include <map>
@@ -49,6 +50,7 @@
 #include "autostart.hpp"
 #include "conversations.hpp"
 #include "gpu.hpp"
+#include "logs.hpp"
 #include "modules.hpp"
 #include "permissions.hpp"
 #include "settings_catalog.hpp"
@@ -900,6 +902,55 @@ core::Result<nlohmann::json> Runtime::report(std::string_view what,
         }
         return json{{"actions", std::move(list)},
                     {"retention_days", s.file.config.journal.retention_days}};
+    }
+    if (what == "undo") {
+        // Requêtes encore annulables (en mémoire, depuis le lancement du
+        // démon), de la plus récente à la plus ancienne ; /annuler défait la
+        // première, puis la suivante.
+        json requests = json::array();
+        if (s.agent) {
+            for (const auto& journal : s.agent->journals() | std::views::reverse) {
+                if (journal.undoable_count() == 0) {
+                    continue;
+                }
+                json actions = json::array();
+                for (const auto& action : journal.actions) {
+                    actions.push_back(
+                        {{"summary", action.summary},
+                         {"undo", action.undo ? json(action.undo->description) : json(nullptr)}});
+                }
+                requests.push_back({{"request", journal.request}, {"actions", std::move(actions)}});
+            }
+        }
+        return json{{"requests", std::move(requests)}};
+    }
+    if (what == "logs") {
+        // Fin d'un log : celui du démon, ou celui d'un module (son stderr).
+        const std::string source = params.value("source", std::string("daemon"));
+        const auto directory = storage::data_directory();
+        if (!directory) {
+            return core::make_error(core::ErrorCode::Config, "dossier de données introuvable");
+        }
+        std::filesystem::path path;
+        if (source == "daemon") {
+            path = *directory / "logs" / "daemon.log";
+        } else if (s.host && std::ranges::any_of(s.host->statuses(), [&source](const auto& status) {
+                       return status.id == source;
+                   })) {
+            path = *directory / "logs" / "modules" / (source + ".log");
+        } else {
+            return core::make_error(core::ErrorCode::Config, "log inconnu : « " + source + " »");
+        }
+        json sources = json::array({"daemon"});
+        if (s.host) {
+            for (const auto& status : s.host->statuses()) {
+                sources.push_back(status.id);
+            }
+        }
+        constexpr std::size_t kMaxLog = std::size_t{64} * 1024;
+        return json{{"source", source},
+                    {"sources", std::move(sources)},
+                    {"text", read_log_tail(path, kMaxLog)}};
     }
     if (what == "permissions") {
         json rules = json::array();

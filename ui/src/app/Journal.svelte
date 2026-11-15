@@ -5,13 +5,22 @@
 
   let everything = $state(false);
   const report = new Report("journal/list", () => ({ all: everything, limit: 200 }));
+  // Requêtes encore annulables (depuis le lancement d'Avenoir), la plus
+  // récente d'abord : on ne défait que dans l'ordre inverse, comme /annuler.
+  const undo = new Report("undo/list");
 
   $effect(() => {
     void everything;
     if (session.connected) {
       void report.load();
+      void undo.load();
     }
   });
+
+  async function undoLast(): Promise<void> {
+    await undo.run("/annuler"); // demande confirmation, puis défait
+    await report.load();
+  }
 
   const DECISIONS: Record<string, string> = {
     allowed: "autorisée",
@@ -31,6 +40,35 @@
   error={report.error}
   onrefresh={() => void report.load()}
 >
+  {#if list(undo.data?.["requests"]).length > 0}
+    <h2>Encore annulables</h2>
+    <p class="muted">
+      Les actions sont défaites de la plus récente à la plus ancienne, requête par requête, après confirmation.
+    </p>
+    {#each list(undo.data?.["requests"]) as request, index (index)}
+      <div class="undo">
+        <div>
+          <strong>« {str(request["request"])} »</strong>
+          <ul>
+            {#each list(request["actions"]) as action, at (at)}
+              {#if str(action["undo"]) !== ""}
+                <li>↺ {str(action["undo"])}</li>
+              {:else}
+                <li class="muted">✗ {str(action["summary"])} (non annulable)</li>
+              {/if}
+            {/each}
+          </ul>
+        </div>
+        {#if index === 0}
+          <button class="action" disabled={session.running !== null} onclick={() => void undoLast()}>Annuler</button>
+        {:else}
+          <span class="muted next">ensuite</span>
+        {/if}
+      </div>
+    {/each}
+    <h2>Toutes les actions</h2>
+  {/if}
+  {#if undo.error !== ""}<p class="refused">{undo.error}</p>{/if}
   <label class="muted"><input type="checkbox" bind:checked={everything} /> toutes les conversations</label>
   <table>
     <thead><tr><th>Heure</th><th></th><th>Action</th><th>Décision</th><th>Résultat</th></tr></thead>
@@ -69,6 +107,29 @@
   }
   .refused {
     color: var(--yellow);
+  }
+  h2 {
+    font-size: 14px;
+    color: var(--ice);
+    margin: 14px 0 6px;
+  }
+  .undo {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 12px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 8px 12px;
+    margin-bottom: 6px;
+  }
+  .undo ul {
+    margin: 4px 0 0;
+    padding-left: 18px;
+    font-size: 13px;
+  }
+  .next {
+    font-size: 12px;
   }
   .reason {
     font-size: 12px;

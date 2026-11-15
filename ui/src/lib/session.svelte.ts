@@ -25,6 +25,8 @@ class Session {
   lastNotes = $state<Extract<Entry, { kind: "note" }>[]>([]);
   /// Onglets déclarés par les modules lancés (décision 73).
   tabs = $state<{ module: string; id: string; title: string; kind: string }[]>([]);
+  /// Requêtes dont des actions peuvent encore être défaites (`/annuler`).
+  undoable = $state(0);
 
   private readonly bridge: Bridge;
 
@@ -111,6 +113,17 @@ class Session {
       this.lastNotes = this.view.entries
         .slice(Math.min(before, this.view.entries.length))
         .filter((entry): entry is Extract<Entry, { kind: "note" }> => entry.kind === "note");
+      void this.refreshUndo();
+    }
+  }
+
+  /// Relit le nombre de requêtes encore annulables.
+  async refreshUndo(): Promise<void> {
+    try {
+      const result = await this.request("undo/list");
+      this.undoable = Array.isArray(result["requests"]) ? result["requests"].length : 0;
+    } catch {
+      this.undoable = 0;
     }
   }
 

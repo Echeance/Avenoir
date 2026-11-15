@@ -15,6 +15,7 @@ add_library(avenoir_daemon_lib STATIC
     src/conversations.cpp
     src/gpu.cpp
     src/lock_theme.cpp
+    src/logs.cpp
     src/modules.cpp
     src/permissions.cpp
     src/runtime.cpp
@@ -52,6 +53,7 @@ if(AVENOIR_BUILD_TESTS)
         tests/gpu_test.cpp
         tests/keys_test.cpp
         tests/lock_theme_test.cpp
+        tests/logs_test.cpp
         tests/permissions_test.cpp
         tests/shortcut_test.cpp
         tests/settings_catalog_test.cpp

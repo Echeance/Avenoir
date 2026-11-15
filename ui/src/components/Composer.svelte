@@ -4,8 +4,17 @@
     disabled,
     onsend,
     onstop,
-  }: { busy: boolean; disabled: boolean; onsend: (line: string) => void; onstop: () => void } =
-    $props();
+    undoable = false,
+    onundo,
+  }: {
+    busy: boolean;
+    disabled: boolean;
+    onsend: (line: string) => void;
+    onstop: () => void;
+    /// Vrai si la dernière requête annulable peut être défaite (`/annuler`).
+    undoable?: boolean;
+    onundo?: () => void;
+  } = $props();
 
   let line = $state("");
 
@@ -33,6 +42,9 @@
   {#if busy}
     <button type="button" class="stop" onclick={onstop}>Arrêter</button>
   {:else}
+    {#if undoable && onundo !== undefined && line.trim() === ""}
+      <button type="button" class="undo" onclick={onundo} disabled={disabled} title="Défaire les actions de la dernière requête (/annuler)">↺ Annuler</button>
+    {/if}
     <button type="submit" disabled={disabled || line.trim() === ""}>Envoyer</button>
   {/if}
 </form>
@@ -75,5 +87,10 @@
     background: transparent;
     border: 1px solid var(--red);
     color: var(--red);
+  }
+  .undo {
+    background: transparent;
+    border: 1px solid var(--line);
+    color: var(--sky);
   }
 </style>

@@ -117,6 +117,8 @@
         disabled={!session.connected}
         onsend={(line) => void session.send(line)}
         onstop={() => session.stop()}
+        undoable={session.undoable > 0}
+        onundo={() => void session.send("/annuler")}
       />
     </div>
   {/if}

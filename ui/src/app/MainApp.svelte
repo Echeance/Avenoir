@@ -10,16 +10,18 @@
   import { session } from "../lib/session.svelte";
   import Conversations from "./Conversations.svelte";
   import Journal from "./Journal.svelte";
+  import Logs from "./Logs.svelte";
   import Models from "./Models.svelte";
   import Modules from "./Modules.svelte";
   import Permissions from "./Permissions.svelte";
   import Settings from "./Settings.svelte";
 
-  type View = "conversation" | "settings" | "journal" | "permissions" | "models" | "modules";
+  type View = "conversation" | "settings" | "journal" | "logs" | "permissions" | "models" | "modules";
   const views: { id: View; label: string }[] = [
     { id: "conversation", label: "Conversation" },
     { id: "settings", label: "Réglages" },
     { id: "journal", label: "Journal" },
+    { id: "logs", label: "Logs" },
     { id: "permissions", label: "Permissions" },
     { id: "models", label: "Modèles" },
     { id: "modules", label: "Modules" },
@@ -63,6 +65,8 @@
             disabled={!session.connected}
             onsend={(line) => void session.send(line)}
             onstop={() => session.stop()}
+            undoable={session.undoable > 0}
+            onundo={() => void session.send("/annuler")}
           />
         </div>
       </div>
@@ -70,6 +74,8 @@
       <Settings />
     {:else if current === "journal"}
       <Journal />
+    {:else if current === "logs"}
+      <Logs />
     {:else if current === "permissions"}
       <Permissions />
     {:else if current === "models"}

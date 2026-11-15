@@ -335,8 +335,8 @@ class Server {
             return core::Result<json>(json{{"settings", std::move(list)}});
         });
         // Données de l'application principale, en lecture seule (décision 72).
-        for (const char* report :
-             {"journal", "permissions", "models", "modules", "conversations", "tabs"}) {
+        for (const char* report : {"journal", "permissions", "models", "modules", "conversations",
+                                   "tabs", "undo", "logs"}) {
             peer->on_request(std::string(report) + "/list",
                              [this, report](const json& params, const std::stop_token&) {
                                  const std::scoped_lock lock(runtime_mutex_);

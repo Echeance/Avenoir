@@ -310,7 +310,7 @@ L'ordre suit un principe : **chaque jalon produit un assistant utilisable**, plu
 - ✅ Loup animé qui reflète l'état de l'assistant (repos, écoute, réflexion, action) — décision 71 : le loup en braille, animé point par point en CSS (respiration au repos, vague de lumière pendant la réflexion, pulsation dorée quand une réponse est attendue, gris hors connexion) ; l'écoute viendra avec la voix (jalon 5)
 - ⬜ Onglets : activités en cours, historique défilable, informations système, version et mises à jour, chatbox, consommation et limites Claude Code
 - 🔄 Confirmations dessinées par Avenoir (`ConfirmationHandler` graphique), hors de tout contenu de module — carte de confirmation de la page (autoriser, refuser, toujours, jamais ; questions, saisie masquée) ; branchée par l'hôte (questions du démon relayées) ; essayée par les tests du relais, pas encore en vrai à la souris
-- ⬜ Bouton « Arrêter » (équivalent de Ctrl+C) et proposition d'annulation ; bouton « Annuler » sur la dernière requête (équivalent de `/annuler`)
+- ✅ Bouton « Arrêter » (équivalent de Ctrl+C) et proposition d'annulation ; bouton « Annuler » sur la dernière requête (équivalent de `/annuler`) — « Arrêter » pendant une requête (la proposition d'annulation suit, dessinée par Avenoir), « ↺ Annuler » tant qu'une requête reste annulable (décision 76)
 
 ### 6.3 Onglets des modules — P1
 - ✅ Onglets déclaratifs : format des composants (textes, listes, images, graphiques, boutons, formulaires) et rendu — décision 73 : `avenoir/tab`, composants titre, texte, valeur, liste, tableau, bouton (commande du module), validés par l'hôte (`validate_tab`), dessinés dans le widget ; onglet du module météo — décision 75 : images (`data:` matricielles), graphiques (barres, courbes) et formulaires (argument d'une commande du module) ; courbe sur 7 jours et formulaire « Ville » dans l'onglet météo
@@ -319,7 +319,7 @@ L'ordre suit un principe : **chaque jalon produit un assistant utilisable**, plu
 
 ### 6.4 Application principale — P1
 - ✅ Réglages (fournisseur LLM, permissions par défaut, démarrage automatique…) — décision 72 : vue Réglages (tous les réglages de `/reglages`, changés par `/reglage`, avec l'accord « Je sais ce que je fais » dans l'application ; « Redémarrer Avenoir ») ; les modèles se choisissent dans la vue Modèles
-- 🔄 Conversations ; historique des actions et logs, par conversation et global ; annulation possible depuis l'historique pour les actions encore annulables — fait : liste des conversations (ouvrir, nouvelle), conversation complète, journal des actions par conversation ou global ; reste les logs et l'annulation depuis l'historique
+- ✅ Conversations ; historique des actions et logs, par conversation et global ; annulation possible depuis l'historique pour les actions encore annulables — fait : liste des conversations (ouvrir, nouvelle), conversation complète, journal des actions par conversation ou global, requêtes encore annulables avec « Annuler » dans l'ordre inverse, vue Logs (démon et modules) — décision 76
 - ✅ Permissions : liste des accords durables et des permissions de modules, révocation
 - 🔄 Modules installés : activation, risque, mise à jour, désinstallation — fait : état, outils et risque, accorder et activer, désactiver, changer le risque ; reste mise à jour et désinstallation
 - ✅ Baisse du risque d'un outil : avertissement, disclaimer de responsabilité, saisie de « Je sais ce que je fais » (par `/risque`, question posée dans l'application) ; risque choisi et risque du manifeste montrés dans la vue Modules

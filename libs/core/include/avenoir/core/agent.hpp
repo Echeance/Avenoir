@@ -238,6 +238,10 @@ class Agent {
     /// Ctrl+C (requête interrompue) ou avec `/annuler`.
     [[nodiscard]] const RequestJournal* last_undoable() const;
 
+    /// Journaux d'annulation des dernières requêtes (`kMaxUndoJournals` au
+    /// plus), de la plus ancienne à la plus récente.
+    [[nodiscard]] const std::deque<RequestJournal>& journals() const noexcept { return journals_; }
+
     /// Journal de la dernière requête traitée (même sans action), ou
     /// `nullptr`. Après un Ctrl+C, c'est celui de la requête interrompue.
     [[nodiscard]] const RequestJournal* last_journal() const noexcept {
