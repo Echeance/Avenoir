@@ -1,6 +1,7 @@
 #include "avenoir/modules/tabs.hpp"
 
 #include <algorithm>
+#include <array>
 #include <cstddef>
 #include <optional>
 #include <string>
@@ -90,6 +91,116 @@ json strings(const json& value, std::size_t max) {
     return out;
 }
 
+bool own_command(const Manifest& manifest, std::string_view command) {
+    return std::ranges::any_of(manifest.commands, [command](const CommandDeclaration& declared) {
+        return declared.name == command;
+    });
+}
+
+/// Image en adresse `data:` base64 d'un format matriciel connu (pas de SVG :
+/// rien d'actif), bornée ; `null` sinon.
+json image(const json& item) {
+    if (!item.contains("src") || !item["src"].is_string()) {
+        return nullptr;
+    }
+    const auto& src = item["src"].get_ref<const std::string&>();
+    if (src.size() > kMaxTabImage) {
+        return nullptr;
+    }
+    constexpr std::array<std::string_view, 4> kPrefixes{
+        "data:image/png;base64,", "data:image/jpeg;base64,", "data:image/gif;base64,",
+        "data:image/webp;base64,"};
+    std::size_t prefix = 0;
+    for (const std::string_view known : kPrefixes) {
+        if (src.starts_with(known)) {
+            prefix = known.size();
+        }
+    }
+    if (prefix == 0 || src.size() == prefix) {
+        return nullptr;
+    }
+    const bool base64 = std::ranges::all_of(std::string_view(src).substr(prefix), [](char c) {
+        return (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') ||
+               c == '+' || c == '/' || c == '=';
+    });
+    if (!base64) {
+        return nullptr;
+    }
+    json out{{"type", "image"}, {"src", src}};
+    if (auto alt = text_field(item, "alt")) {
+        out["alt"] = *alt;
+    }
+    return out;
+}
+
+/// Graphique en barres ou en courbes : une valeur par étiquette et par série
+/// (manquante ou non numérique : `null`).
+json chart(const json& item) {
+    const std::string kind = item.value("kind", "bar");
+    auto labels = strings(item.value("labels", json()), kMaxTabRows);
+    const json series = item.value("series", json());
+    if ((kind != "bar" && kind != "line") || !labels.is_array() || labels.empty() ||
+        !series.is_array()) {
+        return nullptr;
+    }
+    json out_series = json::array();
+    for (const auto& one : series) {
+        if (out_series.size() >= kMaxChartSeries) {
+            break;
+        }
+        if (!one.is_object() || !one.contains("values") || !one["values"].is_array()) {
+            continue;
+        }
+        json values = json::array();
+        for (std::size_t at = 0; at < labels.size(); ++at) {
+            const json& value = at < one["values"].size() ? one["values"][at] : json();
+            values.push_back(value.is_number() ? json(value.get<double>()) : json());
+        }
+        out_series.push_back(json{{"name", one.contains("name") && one["name"].is_string()
+                                               ? clean(one["name"].get<std::string>(), 100)
+                                               : std::string{}},
+                                  {"values", std::move(values)}});
+    }
+    if (out_series.empty()) {
+        return nullptr;
+    }
+    json out{{"type", "chart"},
+             {"kind", kind},
+             {"labels", std::move(labels)},
+             {"series", std::move(out_series)}};
+    if (auto title = text_field(item, "title")) {
+        out["title"] = *title;
+    }
+    if (item.contains("unit") && item["unit"].is_string()) {
+        out["unit"] = clean(item["unit"].get<std::string>(), 20);
+    }
+    return out;
+}
+
+/// Formulaire d'un champ qui remplit l'argument d'une commande du module.
+json form(const json& item, const Manifest& manifest) {
+    const std::string command = item.value("command", "");
+    auto label = text_field(item, "label");
+    if (!label || !own_command(manifest, command)) {
+        return nullptr;
+    }
+    json out{{"type", "form"},
+             {"command", command},
+             {"label", *label},
+             {"submit", text_field(item, "submit").value_or("Envoyer")}};
+    if (auto placeholder = text_field(item, "placeholder")) {
+        out["placeholder"] = *placeholder;
+    }
+    if (auto options = strings(item.value("options", json()), kMaxFormOptions);
+        options.is_array() && !options.empty()) {
+        for (auto& option : options) {
+            option = clean(option.get<std::string>(), 100);
+        }
+        out["options"] = std::move(options);
+    }
+    return out;
+}
+
 /// Composant validé, ou `null` s'il est écarté.
 json component(const json& item, const Manifest& manifest) {
     if (!item.is_object() || !item.contains("type") || !item["type"].is_string()) {
@@ -142,17 +253,19 @@ json component(const json& item, const Manifest& manifest) {
     } else if (type == "button") {
         auto label = text_field(item, "label");
         const std::string command = item.value("command", "");
-        const bool own =
-            std::ranges::any_of(manifest.commands, [&command](const CommandDeclaration& c) {
-                return c.name == command;
-            });
-        if (label && own) {
+        if (label && own_command(manifest, command)) {
             json out{{"type", type}, {"label", *label}, {"command", command}};
             if (item.contains("argument") && item["argument"].is_string()) {
                 out["argument"] = clean(item["argument"].get<std::string>(), 100);
             }
             return out;
         }
+    } else if (type == "image") {
+        return image(item);
+    } else if (type == "chart") {
+        return chart(item);
+    } else if (type == "form") {
+        return form(item, manifest);
     }
     return nullptr;
 }
@@ -185,13 +298,16 @@ core::Result<json> validate_tab(const json& result, const Manifest& manifest) {
                                 "onglet du module « " + manifest.id + " » mal formé");
     }
     json components = json::array();
+    std::size_t images = 0;
     for (const auto& item : result["components"]) {
         if (components.size() >= kMaxTabComponents) {
             break;
         }
-        if (auto checked = component(item, manifest); !checked.is_null()) {
-            components.push_back(std::move(checked));
+        auto checked = component(item, manifest);
+        if (checked.is_null() || (checked["type"] == "image" && ++images > kMaxTabImages)) {
+            continue;
         }
+        components.push_back(std::move(checked));
     }
     return json{{"components", std::move(components)}};
 }

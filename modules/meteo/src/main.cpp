@@ -121,12 +121,14 @@ class Meteo {
         const auto place = cities_.load();
         if (!place) {
             heading("Météo");
-            note("Aucune ville par défaut : dites « ma ville est Lyon » ou tapez /ville Lyon.",
+            note("Aucune ville par défaut : dites « ma ville est Lyon », ou choisissez-la ici.",
                  "muted");
+            components.push_back(city_form());
             return {{"components", std::move(components)}};
         }
         heading(place_label(*place));
-        auto weather = fetch_forecast(*place, kDefaultDays);
+        // Sept jours : trois dans le tableau, tous dans le graphique.
+        auto weather = fetch_forecast(*place, kMaxDays);
         if (!weather) {
             note(std::move(weather.error()), "warning");
         } else {
@@ -144,7 +146,19 @@ class Meteo {
                 stat("Humidité", std::format("{} %", now.humidity));
             }
             json rows = json::array();
+            json labels = json::array();
+            json minimums = json::array();
+            json maximums = json::array();
             for (const auto& day : weather->days) {
+                // « 15/11 » plutôt que « 2026-11-15 » sous l'axe.
+                labels.push_back(day.date.size() == 10
+                                     ? day.date.substr(8, 2) + "/" + day.date.substr(5, 2)
+                                     : day.date);
+                minimums.push_back(day.minimum);
+                maximums.push_back(day.maximum);
+                if (rows.size() >= static_cast<std::size_t>(kDefaultDays)) {
+                    continue;
+                }
                 rows.push_back({day.date, std::string(describe_code(day.code)),
                                 std::format("{:.0f} °C", day.minimum),
                                 std::format("{:.0f} °C", day.maximum),
@@ -154,13 +168,31 @@ class Meteo {
             components.push_back({{"type", "table"},
                                   {"columns", {"Jour", "Ciel", "Min", "Max", "Pluie"}},
                                   {"rows", std::move(rows)}});
+            components.push_back({{"type", "chart"},
+                                  {"kind", "line"},
+                                  {"title", "Températures sur 7 jours"},
+                                  {"unit", "°C"},
+                                  {"labels", std::move(labels)},
+                                  {"series",
+                                   {{{"name", "max"}, {"values", std::move(maximums)}},
+                                    {{"name", "min"}, {"values", std::move(minimums)}}}}});
         }
         components.push_back(
             {{"type", "button"}, {"label", "Météo dans la conversation"}, {"command", "meteo"}});
         components.push_back(
             {{"type", "button"}, {"label", "Prévisions détaillées"}, {"command", "previsions"}});
+        components.push_back(city_form());
         note("Données Open-Meteo.com (CC BY 4.0).", "muted");
         return {{"components", std::move(components)}};
+    }
+
+    /// Formulaire « Ville » : remplit la commande /ville (annulable).
+    [[nodiscard]] static json city_form() {
+        return {{"type", "form"},
+                {"command", "ville"},
+                {"label", "Ville"},
+                {"placeholder", "Lyon, Brest, France…"},
+                {"submit", "Changer"}};
     }
 
     [[nodiscard]] json undo(const json& params) const {

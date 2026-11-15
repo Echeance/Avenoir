@@ -4,6 +4,9 @@
   // s'exécute dans la page. Un bouton ne lance qu'une commande du module.
   import { isObject, type JsonObject } from "../lib/protocol";
   import { session } from "../lib/session.svelte";
+  import type { Series } from "../lib/chart";
+  import { commandArgument } from "../lib/tabs";
+  import Chart from "./Chart.svelte";
 
   let { module, tab, onaction }: { module: string; tab: string; onaction: () => void } = $props();
 
@@ -37,6 +40,30 @@
     void tab;
     void load();
   });
+
+  const series = (value: unknown): Series[] =>
+    Array.isArray(value)
+      ? value.filter(isObject).map((one) => ({
+          name: str(one["name"]),
+          values: Array.isArray(one["values"])
+            ? one["values"].map((v) => (typeof v === "number" ? v : null))
+            : [],
+        }))
+      : [];
+
+  // Valeurs des formulaires, par position du composant.
+  let fields = $state<Record<number, string>>({});
+
+  function submit(event: SubmitEvent, component: JsonObject, index: number): void {
+    event.preventDefault();
+    const argument = commandArgument(fields[index] ?? "");
+    if (argument === "") {
+      return;
+    }
+    void session.send(`/${str(component["command"])} ${argument}`);
+    fields[index] = "";
+    onaction();
+  }
 
   function run(component: JsonObject): void {
     const argument = str(component["argument"]);
@@ -72,6 +99,38 @@
           {/each}
         </tbody>
       </table>
+    {:else if type === "image"}
+      <img src={str(component["src"])} alt={str(component["alt"])} />
+    {:else if type === "chart"}
+      <Chart
+        kind={str(component["kind"])}
+        labels={items(component["labels"])}
+        series={series(component["series"])}
+        title={str(component["title"])}
+        unit={str(component["unit"])}
+      />
+    {:else if type === "form"}
+      {@const options = items(component["options"])}
+      <form class="form" onsubmit={(event) => submit(event, component, index)}>
+        <label>
+          <span class="label">{str(component["label"])}</span>
+          {#if options.length > 0}
+            <select bind:value={fields[index]}>
+              {#each options as option, at (at)}<option value={option}>{option}</option>{/each}
+            </select>
+          {:else}
+            <input
+              bind:value={fields[index]}
+              placeholder={str(component["placeholder"])}
+              maxlength="100"
+              autocomplete="off"
+            />
+          {/if}
+        </label>
+        <button class="action" type="submit" disabled={session.running !== null}>
+          {str(component["submit"]) || "Envoyer"}
+        </button>
+      </form>
     {:else if type === "button"}
       <button class="action" onclick={() => run(component)} disabled={session.running !== null}>
         {str(component["label"])}
@@ -150,6 +209,31 @@
     border: 0;
     border-radius: 6px;
     padding: 4px 12px;
+  }
+  img {
+    max-width: 100%;
+    border-radius: 6px;
+  }
+  .form {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    width: 100%;
+  }
+  .form label {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    flex: 1;
+  }
+  .form input,
+  .form select {
+    flex: 1;
+    background: var(--night);
+    color: var(--text);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 4px 8px;
   }
   .action:disabled {
     opacity: 0.4;

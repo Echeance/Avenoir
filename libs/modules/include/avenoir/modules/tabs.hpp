@@ -22,12 +22,24 @@ inline constexpr std::size_t kMaxTabRows = 50;
 inline constexpr std::size_t kMaxTabColumns = 8;
 /// Octets d'un texte au plus (au-delà : coupé).
 inline constexpr std::size_t kMaxTabText = 500;
+/// Octets d'une image (adresse `data:` entière) au plus.
+inline constexpr std::size_t kMaxTabImage = std::size_t{256} * 1024;
+/// Images au plus dans un onglet.
+inline constexpr std::size_t kMaxTabImages = 4;
+/// Séries d'un graphique au plus.
+inline constexpr std::size_t kMaxChartSeries = 4;
+/// Choix d'un formulaire au plus.
+inline constexpr std::size_t kMaxFormOptions = 20;
 
 /// Contenu d'un onglet renvoyé par le module (`avenoir/tab`), réduit à ce
 /// qu'Avenoir sait dessiner : `{"components": [...]}` avec, pour chacun,
 /// `heading` (text), `text` (text, tone : « muted » ou « warning »), `stat`
 /// (label, value), `list` (items), `table` (columns, rows), `button` (label,
-/// command, argument). Un composant inconnu ou mal formé est écarté ; les
+/// command, argument), `image` (src : `data:image/png|jpeg|gif|webp;base64,…`,
+/// alt), `chart` (kind : « bar » ou « line », labels, series : name et
+/// values numériques, title, unit) et `form` (command, label, placeholder,
+/// options, submit : un champ qui remplit l'argument d'une commande du
+/// module). Un composant inconnu ou mal formé est écarté ; les
 /// textes sont nettoyés (caractères de contrôle, marques bidirectionnelles)
 /// et bornés ; un bouton ne peut lancer qu'une commande du module
 /// (`manifest.commands`), son argument est borné à 100 octets. Erreur si le

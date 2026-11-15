@@ -105,3 +105,27 @@ describe("événements des onglets web", () => {
     expect(parseTabEvent({ type: "avenoir/event", name: "big", payload: "x".repeat(20000) })).toBeNull();
   });
 });
+
+import { commandArgument } from "../src/lib/tabs";
+import { layout } from "../src/lib/chart";
+
+describe("onglets déclaratifs : formulaires et graphiques", () => {
+  it("nettoie l'argument d'un formulaire", () => {
+    expect(commandArgument("  Lyon ")).toBe("Lyon");
+    expect(commandArgument("Lyon\n/arreter")).toBe("Lyon /arreter");
+    expect(commandArgument("a‮b")).toBe("a b");
+    expect(commandArgument("x".repeat(150))).toHaveLength(100);
+  });
+  it("calcule barres et courbes", () => {
+    const bars = layout("bar", ["a", "b"], [{ name: "s", values: [1, null] }]);
+    expect(bars.bars).toHaveLength(1);
+    expect(bars.labels).toHaveLength(2);
+    const lines = layout("line", ["a", "b", "c", "d"], [{ name: "s", values: [1, 2, null, 3] }]);
+    expect(lines.lines).toHaveLength(2); // coupée à la valeur absente
+    expect(lines.ticks.map((tick) => tick.label)).toEqual(["1", "2", "3"]);
+    const temperatures = layout("line", ["a", "b"], [{ name: "s", values: [10.2, 18.3] }]);
+    expect(temperatures.ticks.map((tick) => tick.label)).toEqual(["10", "15", "20"]);
+    const negative = layout("bar", ["a"], [{ name: "s", values: [-5] }]);
+    expect(negative.bars[0]?.height).toBeGreaterThan(0);
+  });
+});

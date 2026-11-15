@@ -30,3 +30,15 @@ export function parseTabEvent(data: unknown): TabEvent | null {
   }
   return size <= MAX_EVENT_BYTES ? { name, payload } : null;
 }
+
+/// Argument de commande saisi dans un formulaire d'onglet : sur une ligne,
+/// sans caractère de contrôle, 100 caractères au plus, espaces aux bords
+/// retirés. La commande passe ensuite par la saisie habituelle (permissions,
+/// confirmations, audit).
+export function commandArgument(value: string): string {
+  // eslint-disable-next-line no-control-regex
+  return Array.from(value.replace(/[\u0000-\u001f\u007f-\u009f‎‏‪-‮⁦-⁩]/g, " "))
+    .slice(0, 100)
+    .join("")
+    .trim();
+}

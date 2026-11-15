@@ -105,3 +105,71 @@ TEST_CASE("onglets web : données bornées, noms d'événements stricts", "[tabs
     CHECK_FALSE(modules::is_tab_event_name("../x"));
     CHECK_FALSE(modules::is_tab_event_name(std::string(65, 'a')));
 }
+
+TEST_CASE("onglets : images en data: matricielles seulement, bornées", "[tabs]") {
+    const std::string png = "data:image/png;base64,iVBORw0KGgo=";
+    const json result{
+        {"components",
+         {{{"type", "image"}, {"src", png}, {"alt", "carte"}},
+          {{"type", "image"}, {"src", "data:image/svg+xml;base64,PHN2Zz4="}},
+          {{"type", "image"}, {"src", "https://example.com/a.png"}},
+          {{"type", "image"}, {"src", "data:image/png;base64,<script>"}},
+          {{"type", "image"}, {"src", "data:image/png;base64,"}},
+          {{"type", "image"},
+           {"src", "data:image/png;base64," + std::string(modules::kMaxTabImage, 'A')}}}}};
+    const auto tab = modules::validate_tab(result, manifest());
+    REQUIRE(tab.has_value());
+    const json components = tab.value_or(json{})["components"];
+    REQUIRE(components.size() == 1);
+    CHECK(components[0] == json{{"type", "image"}, {"src", png}, {"alt", "carte"}});
+
+    json many = json::array();
+    for (int i = 0; i < 6; ++i) {
+        many.push_back({{"type", "image"}, {"src", png}});
+    }
+    CHECK(modules::validate_tab(json{{"components", many}}, manifest())
+              .value_or(json{})["components"]
+              .size() == modules::kMaxTabImages);
+}
+
+TEST_CASE("onglets : graphiques alignés sur les étiquettes", "[tabs]") {
+    const json result{
+        {"components",
+         {{{"type", "chart"},
+           {"kind", "line"},
+           {"title", "Températures"},
+           {"unit", "°C"},
+           {"labels", {"lun.", "mar.", "mer."}},
+           {"series",
+            {{{"name", "max"}, {"values", {9, "x", 11.5, 99}}},
+             {{"name", "min"}, {"values", {2}}},
+             "pas une série"}}},
+          {{"type", "chart"}, {"kind", "pie"}, {"labels", {"a"}}, {"series", json::array()}},
+          {{"type", "chart"}, {"labels", json::array()}, {"series", json::array()}}}}};
+    const json components =
+        modules::validate_tab(result, manifest()).value_or(json{})["components"];
+    REQUIRE(components.size() == 1);
+    const json& chart = components[0];
+    CHECK(chart["kind"] == "line");
+    CHECK(chart["unit"] == "°C");
+    REQUIRE(chart["series"].size() == 2);
+    CHECK(chart["series"][0]["values"] == json{9.0, nullptr, 11.5});
+    CHECK(chart["series"][1]["values"] == json{2.0, nullptr, nullptr});
+}
+
+TEST_CASE("onglets : un formulaire ne remplit qu'une commande du module", "[tabs]") {
+    const json result{{"components",
+                       {{{"type", "form"},
+                         {"command", "meteo"},
+                         {"label", "Ville"},
+                         {"placeholder", "Lyon"},
+                         {"options", {"Lyon", "Brest"}}},
+                        {{"type", "form"}, {"command", "arreter"}, {"label", "Piège"}},
+                        {{"type", "form"}, {"command", "meteo"}}}}};
+    const json components =
+        modules::validate_tab(result, manifest()).value_or(json{})["components"];
+    REQUIRE(components.size() == 1);
+    CHECK(components[0]["command"] == "meteo");
+    CHECK(components[0]["submit"] == "Envoyer");
+    CHECK(components[0]["options"] == json{"Lyon", "Brest"});
+}
