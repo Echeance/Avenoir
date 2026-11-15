@@ -299,12 +299,12 @@ L'ordre suit un principe : **chaque jalon produit un assistant utilisable**, plu
 
 ### 6.1 Fondations — P1
 - ✅ Choisir le framework web et la bibliothèque C++ de vue web — décision 68 : **Svelte 5** ; hôte **écrit à la main** (WebKitGTK 6 + gtk4-layer-shell du système sous Linux, SDK WebView2 sous Windows), lié dynamiquement (LGPL acceptée pour ce seul exécutable)
-- 🔄 Hôte C++ des fenêtres (`apps/ui`) : WebView2 sous Windows, WebKitGTK sous Linux ; un processus, deux fenêtres — fait sous Linux : exécutable `avenoir-ui` (GTK 4, WebKitGTK 6, gtk4-layer-shell), client du démon comme la CLI, page servie sous `avenoir://app/` depuis son seul dossier, navigation ailleurs refusée ; reste WebView2 sous Windows et la fenêtre de l'application principale
+- 🔄 Hôte C++ des fenêtres (`apps/ui`) : WebView2 sous Windows, WebKitGTK sous Linux ; un processus, deux fenêtres — fait sous Linux : exécutable `avenoir-ui` (GTK 4, WebKitGTK 6, gtk4-layer-shell), client du démon comme la CLI, page servie sous `avenoir://app/` depuis son seul dossier, navigation ailleurs refusée ; sous Windows : fenêtre Win32 au premier plan en haut au centre, WebView2 (chargeur statique, page sous `https://app.avenoir/`), essayée dans la VM ; reste la fenêtre de l'application principale
 - ✅ Pont typé interface ↔ hôte C++ ↔ démon (IPC du jalon 3) — page (`ui/src/lib/protocol.ts`, `bridge.ts`) et hôte (`apps/ui/src/relay.cpp`) : messages validés des deux côtés, appels en liste fermée, réponses aux questions vérifiées par type (refus par défaut), question retirée quand le démon l'annule, hauteur de la fenêtre suivie
 - ✅ Build de `ui/` intégré à CMake et à la CI ; contrôle de types TypeScript strict — Vite, `npm run check` (svelte-check, TypeScript strict), `npm test` (vitest), `npm run build`, job « Interface web » de la CI ; CMake construit la page à côté de `avenoir-ui` (option `AVENOIR_WITH_UI`, si Node.js et les bibliothèques sont là)
 
 ### 6.2 Widget principal — P1
-- 🔄 Fenêtre sans bordure, transparente, au premier plan, en haut au centre ; layer-shell sous Wayland (niri, KDE, Hyprland, Sway) — fait sous Linux (essayé sous niri) ; reste Windows
+- 🔄 Fenêtre sans bordure, transparente, au premier plan, en haut au centre ; layer-shell sous Wayland (niri, KDE, Hyprland, Sway) — fait sous Linux (essayé sous niri) et sous Windows (fenêtre au premier plan sans bordure, essayée dans la VM ; fond opaque : la transparence demanderait DirectComposition)
 - 🔄 Barre pliée ; widget déplié au survol, avec animations — première version de la page : barre (loup, état, modèle), dépliée au survol ou pendant une requête ; conversation au fil de l'eau, saisie, « Arrêter »
 - ⬜ Loup animé (Rive ou Lottie) qui reflète l'état de l'assistant (repos, écoute, réflexion, action)
 - ⬜ Onglets : activités en cours, historique défilable, informations système, version et mises à jour, chatbox, consommation et limites Claude Code

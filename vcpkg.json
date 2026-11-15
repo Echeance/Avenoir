@@ -13,6 +13,10 @@
     "reproc",
     "spdlog",
     "sqlite3",
-    "tomlplusplus"
+    "tomlplusplus",
+    {
+      "name": "webview2",
+      "platform": "windows"
+    }
   ]
 }

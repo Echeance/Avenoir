@@ -3,8 +3,9 @@
 #
 # Le relais et les fichiers servis (portables, testés partout) forment
 # `avenoir_ui_lib`. La fenêtre demande WebKitGTK 6 et gtk4-layer-shell du
-# système sous Linux (liés dynamiquement, jamais livrés) ; sans eux, ou sous
-# Windows (WebView2 à venir), seul `avenoir_ui_lib` est compilé.
+# système sous Linux (liés dynamiquement, jamais livrés), WebView2 sous
+# Windows (chargeur lié en statique, Edge déjà présent dans Windows) ; sans
+# eux, seul `avenoir_ui_lib` est compilé.
 
 add_library(avenoir_ui_lib STATIC src/assets.cpp src/relay.cpp)
 target_include_directories(avenoir_ui_lib PUBLIC src)
@@ -23,27 +24,40 @@ endif()
 if(NOT AVENOIR_WITH_UI)
     return()
 endif()
-if(NOT CMAKE_SYSTEM_NAME STREQUAL "Linux")
-    message(STATUS "Interface graphique : pas encore sous ce système (WebView2 à venir)")
+if(WIN32)
+    find_package(unofficial-webview2 CONFIG)
+    if(NOT unofficial-webview2_FOUND)
+        message(STATUS "Interface graphique non compilée : WebView2 introuvable (vcpkg)")
+        return()
+    endif()
+    # Application fenêtrée (pas de console), point d'entrée main().
+    add_executable(avenoir_ui WIN32 src/main.cpp src/platform/windows.cpp)
+    target_link_options(avenoir_ui PRIVATE /ENTRY:mainCRTStartup)
+    target_link_libraries(avenoir_ui PRIVATE unofficial::webview2::webview2 dwmapi ole32 user32
+                                             gdi32)
+elseif(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    find_package(PkgConfig)
+    if(PKG_CONFIG_FOUND)
+        pkg_check_modules(AVENOIR_WEBVIEW IMPORTED_TARGET webkitgtk-6.0 gtk4 gtk4-layer-shell-0)
+    endif()
+    if(NOT AVENOIR_WEBVIEW_FOUND)
+        message(STATUS "Interface graphique non compilée : webkitgtk-6.0, gtk4 ou "
+                       "gtk4-layer-shell-0 introuvable (pkg-config)")
+        return()
+    endif()
+    add_executable(avenoir_ui src/main.cpp src/platform/linux.cpp)
+    target_link_libraries(avenoir_ui PRIVATE PkgConfig::AVENOIR_WEBVIEW)
+else()
+    message(STATUS "Interface graphique : pas sous ce système")
     return()
 endif()
 
-find_package(PkgConfig)
-if(PKG_CONFIG_FOUND)
-    pkg_check_modules(AVENOIR_WEBVIEW IMPORTED_TARGET webkitgtk-6.0 gtk4 gtk4-layer-shell-0)
-endif()
-if(NOT AVENOIR_WEBVIEW_FOUND)
-    message(STATUS "Interface graphique non compilée : webkitgtk-6.0, gtk4 ou "
-                   "gtk4-layer-shell-0 introuvable (pkg-config)")
-    return()
-endif()
-
-add_executable(avenoir_ui src/main.cpp src/platform/linux.cpp)
 set_target_properties(avenoir_ui PROPERTIES
     OUTPUT_NAME avenoir-ui
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/apps/cli")
 target_link_libraries(avenoir_ui PRIVATE
-    avenoir_ui_lib avenoir_cli_lib avenoir::ipc avenoir::options PkgConfig::AVENOIR_WEBVIEW)
+    avenoir_ui_lib avenoir_cli_lib avenoir::ipc avenoir::options)
+avenoir_utf8_manifest(avenoir_ui)
 add_dependencies(avenoir_ui avenoird)
 
 # La page (ui/) construite par Vite à côté de l'exécutable, si Node.js est là.
