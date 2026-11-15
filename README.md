@@ -296,7 +296,7 @@ Les conversations sont enregistrées dans `avenoir.db`, dans le dossier de donn�
 
 ### Modules
 
-Les modules fournis sont dans `modules/`, à côté de l'exécutable ; ceux que vous installez vont dans `modules/` du dossier de données (un sous-dossier par module, avec son `module.toml`). Un module que vous installez reste **désactivé** tant que vous ne l'activez pas avec `/accorder <id>` : ses permissions (réseau, fichiers, onglet web) vous sont montrées et vous les lui accordez ; s'il en demande de nouvelles après une mise à jour, il n'est plus lancé avant un nouvel accord. `/revoquer <id>` les lui retire, ce qui le désactive. Leurs messages d'erreur vont dans `logs/modules/<id>.log`, leurs données dans `module-data/<id>/`.
+Les modules fournis sont dans `modules/`, à côté de l'exécutable ; ceux que vous installez vont dans `modules/` du dossier de données (un sous-dossier par module, avec son `module.toml`). Un module que vous installez reste **désactivé** tant que vous ne l'activez pas avec `/accorder <id>` : ses permissions (réseau, fichiers, onglet web) vous sont montrées et vous les lui accordez ; s'il en demande de nouvelles après une mise à jour, il n'est plus lancé avant un nouvel accord. `/revoquer <id>` les lui retire, ce qui le désactive. Leurs messages d'erreur vont dans `logs/modules/<id>.log`, leurs données dans `module-data/<id>/`. Un module peut ajouter des onglets au widget : déclaratifs (dessinés par Avenoir) ou web (sa propre page, dans son dossier `ui/`, permission « onglet web ») ; une page de module est isolée — ni réseau, ni accès à Avenoir ou aux autres modules — et ne communique qu'avec son module, par Avenoir.
 
 Le module **météo** utilise [Open-Meteo](https://open-meteo.com) (données CC BY 4.0, sans clé d'API) : seuls le nom de la ville et ses coordonnées sont envoyés. Réglez votre ville une fois (*« ma ville est Lyon »* ou `/ville Lyon`, annulable) ; précisez le pays en cas d'homonymes (*« météo à Brest, France »*).
 
@@ -395,7 +395,7 @@ Le workflow `release` vérifie que le numéro du tag correspond à la version du
 | **3 · Résident** | démon, journal, permissions durables, réglages scellés, clés au trousseau, magasin de modèles, carte graphique partagée, saisie rapide | ✅ |
 | **4 · Tâches et modules** | orchestrateur multi-agents, plusieurs projets en parallèle, fichiers, mémoire, appels entre modules | 🔄 équipes d'agents et projets faits |
 | **5 · Voix** | mot de réveil, reconnaissance et synthèse vocales | ⬜ |
-| **6 · Interface graphique** | widget avec le loup animé, application principale | 🔄 widget, application principale et onglets déclaratifs des modules sous Linux et Windows ; onglets web à venir |
+| **6 · Interface graphique** | widget avec le loup animé, application principale | 🔄 widget, application principale et onglets des modules (déclaratifs et web isolés) sous Linux et Windows |
 | **7 · Identité et présence** | propriétaire et liste blanche, voix et visage, verrouillage automatique | ⬜ |
 
 Le détail, étape par étape : **[docs/ROADMAP.md](docs/ROADMAP.md)**.

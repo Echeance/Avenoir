@@ -108,6 +108,9 @@ struct ModuleTab {
     std::string id;
     std::string title;
     TabKind kind = TabKind::Declarative;
+    /// Onglet web : dossier de ses fichiers (`<module>/ui`), servi par l'hôte
+    /// des fenêtres sous l'origine propre au module.
+    std::filesystem::path directory;
 };
 
 class Module;
@@ -155,12 +158,18 @@ class ModuleHost {
 
     /// Onglets des modules lancés, dans l'ordre de découverte.
     [[nodiscard]] std::vector<ModuleTab> tabs() const;
-    /// Contenu validé de l'onglet déclaratif `tab` du module `module`
-    /// (`validate_tab`). Erreur si le module n'est pas lancé, si l'onglet
-    /// n'est pas déclaré déclaratif dans son manifeste, ou si sa réponse est
-    /// mal formée.
+    /// Contenu validé de l'onglet `tab` du module `module` : composants pour
+    /// un onglet déclaratif (`validate_tab`), données pour un onglet web
+    /// (`validate_web_data`). Erreur si le module n'est pas lancé, si l'onglet
+    /// n'est pas déclaré dans son manifeste, ou si sa réponse est mal formée.
     [[nodiscard]] core::Result<nlohmann::json> tab_content(std::string_view module,
                                                            std::string_view tab) const;
+    /// Événement `name` (`is_tab_event_name`) de l'onglet web `tab`, avec
+    /// `payload` (16 Kio au plus) ; rend les données validées de la réponse.
+    [[nodiscard]] core::Result<nlohmann::json> tab_event(std::string_view module,
+                                                         std::string_view tab,
+                                                         std::string_view name,
+                                                         const nlohmann::json& payload) const;
 
     /// État de chaque module découvert (y compris désactivés ou en échec).
     [[nodiscard]] std::vector<ModuleStatus> statuses() const;

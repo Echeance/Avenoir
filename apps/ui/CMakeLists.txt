@@ -33,7 +33,7 @@ if(WIN32)
     # Application fenêtrée (pas de console), point d'entrée main().
     add_executable(avenoir_ui WIN32 src/main.cpp src/platform/windows.cpp)
     target_link_options(avenoir_ui PRIVATE /ENTRY:mainCRTStartup)
-    target_link_libraries(avenoir_ui PRIVATE unofficial::webview2::webview2 dwmapi ole32 user32
+    target_link_libraries(avenoir_ui PRIVATE unofficial::webview2::webview2 dwmapi ole32 shlwapi user32
                                              gdi32)
 elseif(CMAKE_SYSTEM_NAME STREQUAL "Linux")
     find_package(PkgConfig)

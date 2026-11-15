@@ -66,4 +66,56 @@ std::optional<Asset> resolve_asset(const std::filesystem::path& root, std::strin
     return Asset{.path = file, .mime = std::string(mime)};
 }
 
+namespace {
+
+bool is_module_id(std::string_view id) {
+    const auto allowed = [](char c) { return (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9'); };
+    return !id.empty() && id.size() <= 32 && allowed(id.front()) &&
+           std::ranges::all_of(id, [&](char c) { return allowed(c) || c == '-'; });
+}
+
+} // namespace
+
+std::string module_tab_policy(std::string_view origin) {
+    const std::string own(origin);
+    return "default-src 'none'; script-src " + own + "; style-src " + own +
+           " 'unsafe-inline'; img-src " + own + " data:; font-src " + own +
+           "; connect-src 'none'; frame-src 'none'; form-action 'none'; base-uri 'none'";
+}
+
+std::optional<ModuleAddress> parse_module_address(std::string_view uri) {
+    constexpr std::string_view kLinux = "avenoir-module://";
+    constexpr std::string_view kWindows = "https://";
+    constexpr std::string_view kWindowsHost = ".module.avenoir";
+    std::string_view module;
+    std::string_view rest;
+    std::string_view origin;
+    if (uri.starts_with(kLinux)) {
+        rest = uri.substr(kLinux.size());
+        const auto slash = rest.find('/');
+        module = rest.substr(0, slash);
+        origin = uri.substr(0, kLinux.size() + module.size());
+        rest = slash == std::string_view::npos ? std::string_view{} : rest.substr(slash);
+    } else if (uri.starts_with(kWindows)) {
+        rest = uri.substr(kWindows.size());
+        const auto slash = rest.find('/');
+        const std::string_view host = rest.substr(0, slash);
+        if (!host.ends_with(kWindowsHost)) {
+            return std::nullopt;
+        }
+        module = host.substr(0, host.size() - kWindowsHost.size());
+        origin = uri.substr(0, kWindows.size() + host.size());
+        rest = slash == std::string_view::npos ? std::string_view{} : rest.substr(slash);
+    } else {
+        return std::nullopt;
+    }
+    if (!is_module_id(module)) {
+        return std::nullopt;
+    }
+    rest = rest.substr(0, rest.find_first_of("?#"));
+    return ModuleAddress{.module = std::string(module),
+                         .origin = std::string(origin),
+                         .path = rest.empty() ? std::string("/") : std::string(rest)};
+}
+
 } // namespace avenoir::ui

@@ -107,6 +107,12 @@ class GtkWidgetWindow final : public Window {
                                                nullptr);
         webkit_security_manager_register_uri_scheme_as_secure(
             webkit_web_context_get_security_manager(context), "avenoir");
+        // Onglets web des modules : une origine par module
+        // (avenoir-module://<id>/), politique de sécurité posée par en-tête.
+        webkit_web_context_register_uri_scheme(context, "avenoir-module",
+                                               &GtkWidgetWindow::on_module_asset, this, nullptr);
+        webkit_security_manager_register_uri_scheme_as_secure(
+            webkit_web_context_get_security_manager(context), "avenoir-module");
 
         WebKitUserContentManager* content = webkit_user_content_manager_new();
         webkit_user_content_manager_register_script_message_handler(content, "avenoir", nullptr);
@@ -116,6 +122,9 @@ class GtkWidgetWindow final : public Window {
         WebKitSettings* settings = webkit_settings_new();
         webkit_settings_set_enable_developer_extras(settings,
                                                     options_.developer_tools ? TRUE : FALSE);
+        // Mode débogage : messages de la console (page et onglets) sur la sortie.
+        webkit_settings_set_enable_write_console_messages_to_stdout(
+            settings, options_.developer_tools ? TRUE : FALSE);
         webkit_settings_set_javascript_can_open_windows_automatically(settings, FALSE);
         webkit_settings_set_javascript_can_access_clipboard(settings, FALSE);
         webkit_settings_set_enable_html5_local_storage(settings, FALSE);
@@ -233,6 +242,50 @@ class GtkWidgetWindow final : public Window {
         g_bytes_unref(bytes);
     }
 
+    /// Un fichier de l'onglet web d'un module, servi sous sa propre origine
+    /// avec la politique de sécurité d'Avenoir ; rien hors de son dossier.
+    static void on_module_asset(WebKitURISchemeRequest* request, gpointer data) {
+        const auto* self = static_cast<const GtkWidgetWindow*>(data);
+        // avenoir-module://<module>/<chemin>
+        const auto address = parse_module_address(webkit_uri_scheme_request_get_uri(request));
+        std::optional<Asset> asset;
+        std::string policy;
+        if (address && self->options_.module_root) {
+            if (const auto root = self->options_.module_root(address->module)) {
+                asset = resolve_asset(*root, address->path);
+                policy = module_tab_policy(address->origin);
+            }
+        }
+        spdlog::debug("interface : onglet web, {} {}", webkit_uri_scheme_request_get_uri(request),
+                      asset ? "servi" : "refusé");
+        std::string content;
+        if (asset) {
+            std::ifstream file(asset->path, std::ios::binary);
+            content.assign(std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>());
+        }
+        if (!asset) {
+            GError* error = g_error_new_literal(G_IO_ERROR, G_IO_ERROR_NOT_FOUND, "introuvable");
+            webkit_uri_scheme_request_finish_error(request, error);
+            g_error_free(error);
+            return;
+        }
+        GBytes* bytes = g_bytes_new(content.data(), content.size());
+        GInputStream* stream = g_memory_input_stream_new_from_bytes(bytes);
+        WebKitURISchemeResponse* response =
+            webkit_uri_scheme_response_new(stream, static_cast<gint64>(content.size()));
+        webkit_uri_scheme_response_set_content_type(response, asset->mime.c_str());
+        SoupMessageHeaders* headers = soup_message_headers_new(SOUP_MESSAGE_HEADERS_RESPONSE);
+        soup_message_headers_append(headers, "Content-Security-Policy", policy.c_str());
+        // Le type est répété ici : ces en-têtes remplacent celui de la réponse.
+        soup_message_headers_append(headers, "Content-Type", asset->mime.c_str());
+        soup_message_headers_append(headers, "X-Content-Type-Options", "nosniff");
+        webkit_uri_scheme_response_set_http_headers(response, headers); // prend les en-têtes
+        webkit_uri_scheme_request_finish_with_response(request, response);
+        g_object_unref(response);
+        g_object_unref(stream);
+        g_bytes_unref(bytes);
+    }
+
     /// Message de la page (une chaîne JSON), donné au relais.
     static void on_message(WebKitUserContentManager* /*manager*/, JSCValue* value, gpointer data) {
         const auto* self = static_cast<const GtkWidgetWindow*>(data);
@@ -259,7 +312,9 @@ class GtkWidgetWindow final : public Window {
                     WEBKIT_NAVIGATION_POLICY_DECISION(decision));
             const char* uri =
                 webkit_uri_request_get_uri(webkit_navigation_action_get_request(action));
-            if (uri != nullptr && std::string_view(uri).starts_with(kOrigin)) {
+            // La page d'Avenoir, et les onglets web des modules (iframes).
+            if (uri != nullptr && (std::string_view(uri).starts_with(kOrigin) ||
+                                   std::string_view(uri).starts_with("avenoir-module://"))) {
                 webkit_policy_decision_use(decision);
                 return TRUE;
             }

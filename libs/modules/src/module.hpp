@@ -42,6 +42,9 @@ class Module {
 
     /// `avenoir/tab` : contenu brut de l'onglet `tab` (à valider par `validate_tab`).
     [[nodiscard]] core::Result<nlohmann::json> tab(std::string_view tab) const;
+    /// `avenoir/tab_event` : événement de l'onglet web `tab` (réponse brute).
+    [[nodiscard]] core::Result<nlohmann::json>
+    tab_event(std::string_view tab, std::string_view name, const nlohmann::json& payload) const;
 
   private:
     Manifest manifest_;

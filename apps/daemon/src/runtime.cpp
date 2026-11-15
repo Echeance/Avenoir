@@ -995,16 +995,27 @@ core::Result<nlohmann::json> Runtime::report(std::string_view what,
     if (what == "tabs") {
         json list = json::array();
         for (const auto& tab : s.host->tabs()) {
-            list.push_back({{"module", tab.module},
-                            {"id", tab.id},
-                            {"title", tab.title},
-                            {"kind", tab.kind == modules::TabKind::Web ? "web" : "declarative"}});
+            json item{{"module", tab.module},
+                      {"id", tab.id},
+                      {"title", tab.title},
+                      {"kind", tab.kind == modules::TabKind::Web ? "web" : "declarative"}};
+            if (tab.kind == modules::TabKind::Web) {
+                // Pour l'hôte des fenêtres seulement, qui sert ces fichiers
+                // (il retire le chemin avant de transmettre à la page).
+                item["directory"] = utf8_path(tab.directory);
+            }
+            list.push_back(std::move(item));
         }
         return json{{"tabs", std::move(list)}};
     }
     if (what == "tab") {
-        // Contenu validé par l'hôte de modules (validate_tab).
+        // Contenu validé par l'hôte de modules (validate_tab, validate_web_data).
         return s.host->tab_content(params.value("module", ""), params.value("tab", ""));
+    }
+    if (what == "tab_event") {
+        return s.host->tab_event(params.value("module", ""), params.value("tab", ""),
+                                 params.value("name", ""),
+                                 params.contains("payload") ? params["payload"] : json());
     }
     if (what == "conversations") {
         const storage::Store* store = s.conversations ? s.conversations->store() : nullptr;

@@ -4,6 +4,7 @@
 #include <chrono>
 #include <cstddef>
 #include <cstdint>
+#include <filesystem>
 #include <functional>
 #include <future>
 #include <map>
@@ -82,6 +83,10 @@ class Relay {
     /// Connexion au démon perdue.
     void disconnected();
 
+    /// Dossier des fichiers de l'onglet web du module `module`, appris dans
+    /// la réponse du démon à `tabs/list` ; rien sinon. Depuis n'importe quel fil.
+    [[nodiscard]] std::optional<std::filesystem::path> module_root(std::string_view module) const;
+
   private:
     struct Running {
         std::stop_source stop;
@@ -90,6 +95,8 @@ class Relay {
     };
 
     void start_call(std::uint64_t id, const std::string& method, nlohmann::json params);
+    /// Retient les dossiers des onglets web et les retire de la réponse.
+    void remember_tabs(nlohmann::json& result);
     void reap();
 
     DaemonLink daemon_;
@@ -97,10 +104,12 @@ class Relay {
     Resize resize_;
     OpenApp open_app_;
     std::chrono::steady_clock::time_point last_open_;
-    std::mutex mutex_; ///< Protège ce qui suit.
+    mutable std::mutex mutex_; ///< Protège ce qui suit.
     bool closing_ = false;
     std::map<std::uint64_t, Running> running_;
     std::uint64_t next_question_ = 1;
+    /// Dossier de l'onglet web de chaque module (réponses à `tabs/list`).
+    std::map<std::string, std::filesystem::path, std::less<>> module_roots_;
     std::map<std::uint64_t, std::pair<std::string, std::promise<nlohmann::json>>> questions_;
 };
 

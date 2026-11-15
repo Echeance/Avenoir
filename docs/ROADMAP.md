@@ -314,8 +314,8 @@ L'ordre suit un principe : **chaque jalon produit un assistant utilisable**, plu
 
 ### 6.3 Onglets des modules — P1
 - 🔄 Onglets déclaratifs : format des composants (textes, listes, images, graphiques, boutons, formulaires) et rendu — décision 73 : `avenoir/tab`, composants titre, texte, valeur, liste, tableau, bouton (commande du module), validés par l'hôte (`validate_tab`), dessinés dans le widget ; onglet du module météo ; restent images, graphiques et formulaires
-- ⬜ Onglets web (permission `ui.web`) : iframe `sandbox="allow-scripts"`, origine `avenoir-module://<id>/`, CSP sans réseau, `postMessage` validé (directive de sécurité n° 12)
-- ⬜ Tests de sécurité : un onglet web ne peut ni accéder au réseau, ni à l'interface, ni aux autres modules
+- ✅ Onglets web (permission `ui.web`) : iframe `sandbox="allow-scripts"`, origine `avenoir-module://<id>/` (Linux) ou `https://<id>.module.avenoir/` (Windows), CSP sans réseau posée par en-tête, `postMessage` validé (directive de sécurité n° 12) — décision 74 : `avenoir/tab` (données) et `avenoir/tab_event` (événements), bornés
+- ✅ Tests de sécurité : un onglet web ne peut ni accéder au réseau, ni à l'interface, ni aux autres modules — tests unitaires (adresses, politique, données, événements) et essai réel sous Linux (réseau, page parente, autre module, page d'Avenoir, stockage, image distante : bloqués ; messages forgés ignorés), et sous Windows (WebView2, mêmes résultats)
 
 ### 6.4 Application principale — P1
 - ✅ Réglages (fournisseur LLM, permissions par défaut, démarrage automatique…) — décision 72 : vue Réglages (tous les réglages de `/reglages`, changés par `/reglage`, avec l'accord « Je sais ce que je fais » dans l'application ; « Redémarrer Avenoir ») ; les modèles se choisissent dans la vue Modèles

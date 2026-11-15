@@ -85,3 +85,23 @@ TEST_CASE("onglets : résultat mal formé refusé", "[tabs]") {
     CHECK_FALSE(modules::validate_tab(json::array(), manifest()).has_value());
     CHECK_FALSE(modules::validate_tab({{"components", "x"}}, manifest()).has_value());
 }
+
+TEST_CASE("onglets web : données bornées, noms d'événements stricts", "[tabs]") {
+    const auto kept = modules::validate_web_data(json{{"data", {{"count", 3}}}}, manifest());
+    REQUIRE(kept.has_value());
+    CHECK(kept.value_or(json{}) == json{{"data", {{"count", 3}}}});
+    CHECK(modules::validate_web_data(json::object(), manifest()).value_or(json{}) ==
+          json{{"data", nullptr}});
+    CHECK_FALSE(modules::validate_web_data(json::array(), manifest()).has_value());
+    CHECK_FALSE(modules::validate_web_data(
+                    json{{"data", std::string(modules::kMaxWebTabData, 'x')}}, manifest())
+                    .has_value());
+
+    CHECK(modules::is_tab_event_name("refresh"));
+    CHECK(modules::is_tab_event_name("set_city-2"));
+    CHECK_FALSE(modules::is_tab_event_name(""));
+    CHECK_FALSE(modules::is_tab_event_name("Refresh"));
+    CHECK_FALSE(modules::is_tab_event_name("a b"));
+    CHECK_FALSE(modules::is_tab_event_name("../x"));
+    CHECK_FALSE(modules::is_tab_event_name(std::string(65, 'a')));
+}

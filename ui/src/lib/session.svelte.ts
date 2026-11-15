@@ -119,6 +119,11 @@ class Session {
     return this.bridge.call(method, params).result;
   }
 
+  /// Adresse de l'onglet web du module `id`, ou `null`.
+  moduleUrl(id: string): string | null {
+    return this.bridge.moduleUrl(id);
+  }
+
   /// Ouvre la fenêtre de l'application principale.
   openApp(): void {
     this.bridge.openApp();

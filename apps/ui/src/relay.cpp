@@ -37,10 +37,10 @@ std::optional<std::uint64_t> id_of(const json& message) {
 
 bool is_allowed_call(std::string_view method) {
     // Session et requêtes, puis données de l'application, en lecture seule.
-    constexpr std::array<std::string_view, 11> kCalls{
+    constexpr std::array<std::string_view, 12> kCalls{
         "session/open",       "input",       "session/describe", "settings/list",
         "journal/list",       "models/list", "permissions/list", "modules/list",
-        "conversations/list", "tabs/list",   "tabs/content"};
+        "conversations/list", "tabs/list",   "tabs/content",     "tabs/event"};
     return std::ranges::find(kCalls, method) != kCalls.end();
 }
 
@@ -123,6 +123,9 @@ void Relay::start_call(std::uint64_t id, const std::string& method, json params)
     call.thread = std::jthread([this, id, method, params = std::move(params), stop,
                                 done = call.done] mutable {
         auto result = daemon_.call(method, std::move(params), stop);
+        if (result && result->is_object() && method == "tabs/list") {
+            remember_tabs(*result);
+        }
         if (result && result->is_object()) {
             post_(json{{"type", "reply"}, {"id", id}, {"result", std::move(*result)}});
         } else if (result) {
@@ -134,6 +137,34 @@ void Relay::start_call(std::uint64_t id, const std::string& method, json params)
         done->store(true);
     });
     running_.emplace(id, std::move(call));
+}
+
+void Relay::remember_tabs(json& result) {
+    // Le chemin des fichiers d'un onglet web sert à l'hôte, pas à la page.
+    if (!result.contains("tabs") || !result["tabs"].is_array()) {
+        return;
+    }
+    const std::scoped_lock lock(mutex_);
+    for (auto& tab : result["tabs"]) {
+        if (!tab.is_object() || !tab.contains("directory")) {
+            continue;
+        }
+        if (tab["directory"].is_string() && !tab.value("module", std::string{}).empty()) {
+            module_roots_.insert_or_assign(
+                tab["module"].get<std::string>(),
+                std::filesystem::path(tab["directory"].get<std::string>()));
+        }
+        tab.erase("directory");
+    }
+}
+
+std::optional<std::filesystem::path> Relay::module_root(std::string_view module) const {
+    const std::scoped_lock lock(mutex_);
+    const auto found = module_roots_.find(module);
+    if (found == module_roots_.end()) {
+        return std::nullopt;
+    }
+    return found->second;
 }
 
 void Relay::from_page(std::string_view text) {

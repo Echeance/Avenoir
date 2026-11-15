@@ -96,6 +96,9 @@ int run(int argc, char** argv) {
         .developer_tools = core::read_env("AVENOIR_UI_DEBUG").has_value(),
         .pinned = core::read_env("AVENOIR_UI_PIN").has_value(),
         .application = application,
+        .module_root = [&relay](std::string_view module) -> std::optional<std::filesystem::path> {
+            return relay ? relay->module_root(module) : std::nullopt;
+        },
         .view = core::read_env("AVENOIR_UI_VIEW").value_or(""),
     });
     if (!created) {

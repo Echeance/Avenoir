@@ -7,7 +7,8 @@ import { defineConfig } from "vitest/config";
 // en développement (le serveur de Vite injecte ses propres scripts).
 const CSP =
   "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; " +
-  "font-src 'self'; connect-src 'none'; frame-src 'none'; base-uri 'none'; form-action 'none'";
+  "font-src 'self'; connect-src 'none'; frame-src avenoir-module: https://*.module.avenoir; " +
+  "base-uri 'none'; form-action 'none'";
 
 function contentSecurityPolicy(): Plugin {
   return {

@@ -1,5 +1,8 @@
 #pragma once
 
+#include <cstddef>
+#include <string_view>
+
 #include <nlohmann/json.hpp>
 
 #include "avenoir/core/error.hpp"
@@ -31,5 +34,17 @@ inline constexpr std::size_t kMaxTabText = 500;
 /// résultat n'est pas un objet avec une liste `components`.
 [[nodiscard]] core::Result<nlohmann::json> validate_tab(const nlohmann::json& result,
                                                         const Manifest& manifest);
+
+/// Données d'un onglet web, en JSON, au plus.
+inline constexpr std::size_t kMaxWebTabData = std::size_t{64} * 1024;
+
+/// Réponse du module pour un onglet web (`avenoir/tab`, `avenoir/tab_event`) :
+/// `{"data": <JSON>}` gardé seulement si `data` tient en `kMaxWebTabData`
+/// octets une fois sérialisé (sinon erreur) ; absent : `{"data": null}`.
+[[nodiscard]] core::Result<nlohmann::json> validate_web_data(const nlohmann::json& result,
+                                                             const Manifest& manifest);
+
+/// Nom d'événement d'un onglet web : `[a-z0-9_-]`, 1 à 64.
+[[nodiscard]] bool is_tab_event_name(std::string_view name);
 
 } // namespace avenoir::modules

@@ -13,6 +13,7 @@ export function mockTransport(): Transport {
     later(delay, { type: "ui", params });
   let question = 1000;
   return {
+    moduleUrl: () => null,
     listen(callback) {
       receive = callback;
     },

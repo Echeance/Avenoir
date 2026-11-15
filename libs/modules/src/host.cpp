@@ -521,7 +521,10 @@ std::vector<ModuleTab> ModuleHost::tabs() const {
             out.push_back(ModuleTab{.module = entry.discovered.manifest.id,
                                     .id = tab.id,
                                     .title = tab.title,
-                                    .kind = tab.kind});
+                                    .kind = tab.kind,
+                                    .directory = tab.kind == TabKind::Web
+                                                     ? entry.discovered.manifest.directory / "ui"
+                                                     : std::filesystem::path{}});
         }
     }
     return out;
@@ -539,15 +542,42 @@ core::Result<nlohmann::json> ModuleHost::tab_content(std::string_view module,
                                     "module « " + manifest.id + " » non lancé");
         }
         const auto declared = std::ranges::find(manifest.tabs, tab, &TabDeclaration::id);
-        if (declared == manifest.tabs.end() || declared->kind != TabKind::Declarative) {
+        if (declared == manifest.tabs.end()) {
             return core::make_error(core::ErrorCode::Module,
-                                    "onglet déclaratif inconnu : « " + std::string(tab) + " »");
+                                    "onglet inconnu : « " + std::string(tab) + " »");
         }
         auto raw = entry.module->tab(tab);
         if (!raw) {
             return std::unexpected(std::move(raw.error()));
         }
-        return validate_tab(*raw, manifest);
+        return declared->kind == TabKind::Web ? validate_web_data(*raw, manifest)
+                                              : validate_tab(*raw, manifest);
+    }
+    return core::make_error(core::ErrorCode::Module,
+                            "module inconnu : « " + std::string(module) + " »");
+}
+
+core::Result<nlohmann::json> ModuleHost::tab_event(std::string_view module, std::string_view tab,
+                                                   std::string_view name,
+                                                   const nlohmann::json& payload) const {
+    if (!is_tab_event_name(name) || payload.dump().size() > std::size_t{16} * 1024) {
+        return core::make_error(core::ErrorCode::Module, "événement d'onglet refusé");
+    }
+    for (const auto& entry : entries_) {
+        const Manifest& manifest = entry.discovered.manifest;
+        if (manifest.id != module) {
+            continue;
+        }
+        const auto declared = std::ranges::find(manifest.tabs, tab, &TabDeclaration::id);
+        if (entry.state != ModuleState::Running || !entry.module || !entry.module->alive() ||
+            declared == manifest.tabs.end() || declared->kind != TabKind::Web) {
+            return core::make_error(core::ErrorCode::Module, "onglet web indisponible");
+        }
+        auto raw = entry.module->tab_event(tab, name, payload);
+        if (!raw) {
+            return std::unexpected(std::move(raw.error()));
+        }
+        return validate_web_data(*raw, manifest);
     }
     return core::make_error(core::ErrorCode::Module,
                             "module inconnu : « " + std::string(module) + " »");

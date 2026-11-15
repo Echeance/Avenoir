@@ -16,6 +16,7 @@ export const CALLS = [
   "conversations/list",
   "tabs/list",
   "tabs/content",
+  "tabs/event",
 ] as const;
 export type CallMethod = (typeof CALLS)[number];
 

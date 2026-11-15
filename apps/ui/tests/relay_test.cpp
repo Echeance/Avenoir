@@ -146,3 +146,26 @@ TEST_CASE("relais : l'application s'ouvre une fois, même sur un double clic", "
     CHECK(ui::is_allowed_call("models/list"));
     CHECK_FALSE(ui::is_allowed_call("models/delete"));
 }
+
+TEST_CASE("relais : dossiers des onglets web gardés par l'hôte", "[ui]") {
+    Page page;
+    ui::Relay relay(ui::DaemonLink{.call = [](std::string_view, const json&,
+                                              const std::stop_token&) -> core::Result<json> {
+                        return json{
+                            {"tabs",
+                             {{{"module", "meteo"},
+                               {"id", "carte"},
+                               {"kind", "web"},
+                               {"directory", "/modules/meteo/ui"}},
+                              {{"module", "notes"}, {"id", "notes"}, {"kind", "declarative"}}}}};
+                    }},
+                    [&page](const json& message) { page.post(message); });
+    CHECK_FALSE(relay.module_root("meteo").has_value());
+    relay.from_page(R"({"type":"call","id":1,"method":"tabs/list","params":{}})");
+    const json reply = page.wait_for("reply");
+    // La page ne voit pas le chemin ; l'hôte s'en souvient.
+    REQUIRE(reply["result"]["tabs"].size() == 2);
+    CHECK_FALSE(reply["result"]["tabs"][0].contains("directory"));
+    CHECK(relay.module_root("meteo") == std::filesystem::path("/modules/meteo/ui"));
+    CHECK_FALSE(relay.module_root("notes").has_value());
+}

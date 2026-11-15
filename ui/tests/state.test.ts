@@ -86,3 +86,22 @@ describe("état de l'interface", () => {
     expect(state.entries).toHaveLength(MAX_ENTRIES);
   });
 });
+
+import { parseTabEvent } from "../src/lib/tabs";
+
+describe("événements des onglets web", () => {
+  it("accepte un événement bien formé", () => {
+    expect(parseTabEvent({ type: "avenoir/event", name: "refresh", payload: { city: "Lyon" } })).toEqual({
+      name: "refresh",
+      payload: { city: "Lyon" },
+    });
+    expect(parseTabEvent({ type: "avenoir/event", name: "ping" })).toEqual({ name: "ping", payload: null });
+  });
+  it("écarte le reste", () => {
+    expect(parseTabEvent(null)).toBeNull();
+    expect(parseTabEvent({ type: "call", name: "input" })).toBeNull();
+    expect(parseTabEvent({ type: "avenoir/event", name: "Input Line" })).toBeNull();
+    expect(parseTabEvent({ type: "avenoir/event", name: "x".repeat(65) })).toBeNull();
+    expect(parseTabEvent({ type: "avenoir/event", name: "big", payload: "x".repeat(20000) })).toBeNull();
+  });
+});

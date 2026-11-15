@@ -159,6 +159,26 @@ json component(const json& item, const Manifest& manifest) {
 
 } // namespace
 
+core::Result<json> validate_web_data(const json& result, const Manifest& manifest) {
+    if (!result.is_object()) {
+        return core::make_error(core::ErrorCode::Module,
+                                "onglet du module « " + manifest.id + " » mal formé");
+    }
+    json data = result.contains("data") ? result["data"] : json();
+    const std::string serialized = data.dump(-1, ' ', false, json::error_handler_t::replace);
+    if (serialized.size() > kMaxWebTabData) {
+        return core::make_error(core::ErrorCode::Module, "données de l'onglet du module « " +
+                                                             manifest.id + " » trop grandes");
+    }
+    return json{{"data", std::move(data)}};
+}
+
+bool is_tab_event_name(std::string_view name) {
+    return !name.empty() && name.size() <= 64 && std::ranges::all_of(name, [](char c) {
+        return (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '_' || c == '-';
+    });
+}
+
 core::Result<json> validate_tab(const json& result, const Manifest& manifest) {
     if (!result.is_object() || !result.contains("components") || !result["components"].is_array()) {
         return core::make_error(core::ErrorCode::Module,

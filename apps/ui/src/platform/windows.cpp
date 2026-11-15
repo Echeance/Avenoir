@@ -7,6 +7,8 @@
 // toute nouvelle fenêtre sont refusées.
 
 #include <filesystem>
+#include <fstream>
+#include <iterator>
 #include <memory>
 #include <optional>
 #include <string>
@@ -16,6 +18,7 @@
 // clang-format off
 #include <windows.h>
 #include <dwmapi.h>
+#include <shlwapi.h>
 #include <wrl.h>
 // clang-format on
 #include <WebView2.h>
@@ -23,6 +26,7 @@
 
 #include "avenoir/core/error.hpp"
 
+#include "../assets.hpp"
 #include "../relay.hpp"
 #include "../window.hpp"
 
@@ -273,6 +277,8 @@ class WebViewWindow final : public Window {
                 .Get(),
             &token);
 
+        serve_module_tabs();
+
         fit();
         std::wstring page = L"index.html";
         if (options_.application) {
@@ -289,6 +295,94 @@ class WebViewWindow final : public Window {
         const std::wstring start = std::wstring(kOrigin) + page;
         view_->Navigate(start.c_str());
         return S_OK;
+    }
+
+    /// Onglets web des modules (directive 12) : chacun sous sa propre origine
+    /// `https://<module>.module.avenoir/`, servi depuis son dossier `ui` avec
+    /// une politique de sécurité sans réseau ; les iframes ne vont nulle part
+    /// ailleurs.
+    void serve_module_tabs() {
+        constexpr std::wstring_view kFilter = L"https://*.module.avenoir/*";
+        ComPtr<ICoreWebView2_22> sources;
+        if (SUCCEEDED(view_.As(&sources))) {
+            // Iframes d'une autre origine : seulement avec ce filtre.
+            sources->AddWebResourceRequestedFilterWithRequestSourceKinds(
+                std::wstring(kFilter).c_str(), COREWEBVIEW2_WEB_RESOURCE_CONTEXT_ALL,
+                COREWEBVIEW2_WEB_RESOURCE_REQUEST_SOURCE_KINDS_DOCUMENT);
+        } else {
+            view_->AddWebResourceRequestedFilter(std::wstring(kFilter).c_str(),
+                                                 COREWEBVIEW2_WEB_RESOURCE_CONTEXT_ALL);
+        }
+        EventRegistrationToken token{};
+        view_->add_WebResourceRequested(
+            Callback<ICoreWebView2WebResourceRequestedEventHandler>(
+                [this](ICoreWebView2* sender, ICoreWebView2WebResourceRequestedEventArgs* args) {
+                    ComPtr<ICoreWebView2WebResourceRequest> request;
+                    LPWSTR uri = nullptr;
+                    if (FAILED(args->get_Request(&request)) || FAILED(request->get_Uri(&uri)) ||
+                        uri == nullptr) {
+                        return S_OK;
+                    }
+                    const std::string text = narrow(uri);
+                    CoTaskMemFree(uri);
+                    respond_module_asset(sender, args, text);
+                    return S_OK;
+                })
+                .Get(),
+            &token);
+        view_->add_FrameNavigationStarting(
+            Callback<ICoreWebView2NavigationStartingEventHandler>(
+                [](ICoreWebView2* /*sender*/, ICoreWebView2NavigationStartingEventArgs* args) {
+                    LPWSTR uri = nullptr;
+                    args->get_Uri(&uri);
+                    const bool module =
+                        uri != nullptr && parse_module_address(narrow(uri)).has_value();
+                    CoTaskMemFree(uri);
+                    if (!module) {
+                        spdlog::warn("interface : navigation d'iframe refusée");
+                        args->put_Cancel(TRUE);
+                    }
+                    return S_OK;
+                })
+                .Get(),
+            &token);
+    }
+
+    void respond_module_asset(ICoreWebView2* sender,
+                              ICoreWebView2WebResourceRequestedEventArgs* args,
+                              const std::string& uri) const {
+        std::optional<Asset> asset;
+        std::string policy;
+        if (const auto address = parse_module_address(uri); address && options_.module_root) {
+            if (const auto root = options_.module_root(address->module)) {
+                asset = resolve_asset(*root, address->path);
+                policy = module_tab_policy(address->origin);
+            }
+        }
+        ComPtr<ICoreWebView2_2> view;
+        ComPtr<ICoreWebView2Environment> environment;
+        if (FAILED(sender->QueryInterface(IID_PPV_ARGS(&view))) ||
+            FAILED(view->get_Environment(&environment))) {
+            return;
+        }
+        ComPtr<ICoreWebView2WebResourceResponse> response;
+        if (!asset) {
+            environment->CreateWebResourceResponse(nullptr, 404, L"Not Found", L"", &response);
+            args->put_Response(response.Get());
+            return;
+        }
+        std::ifstream file(asset->path, std::ios::binary);
+        const std::string content{std::istreambuf_iterator<char>(file),
+                                  std::istreambuf_iterator<char>()};
+        ComPtr<IStream> stream;
+        stream.Attach(SHCreateMemStream(reinterpret_cast<const BYTE*>(content.data()),
+                                        static_cast<UINT>(content.size())));
+        const std::wstring headers = L"Content-Type: " + wide(asset->mime) +
+                                     L"\r\nContent-Security-Policy: " + wide(policy) +
+                                     L"\r\nX-Content-Type-Options: nosniff";
+        environment->CreateWebResourceResponse(stream.Get(), 200, L"OK", headers.c_str(),
+                                               &response);
+        args->put_Response(response.Get());
     }
 
     /// Pixels CSS → pixels de l'écran.

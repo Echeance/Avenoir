@@ -13,6 +13,9 @@ import {
 
 export interface Transport {
   send(message: PageMessage): void;
+  /// Adresse de l'onglet web du module `id` (origine propre au module), ou
+  /// `null` si cette vue web n'en sert pas.
+  moduleUrl(id: string): string | null;
   /// Appelée une fois : `receive` reçoit ensuite chaque message de l'hôte.
   listen(receive: (raw: unknown) => void): void;
 }
@@ -35,6 +38,7 @@ export function nativeTransport(target: WebKitWindow): Transport | null {
   if (webkit !== undefined) {
     return {
       send: (message) => webkit.postMessage(JSON.stringify(message)),
+      moduleUrl: (id) => `avenoir-module://${id}/index.html`,
       listen: (receive) => {
         target.avenoirReceive = receive;
       },
@@ -44,6 +48,7 @@ export function nativeTransport(target: WebKitWindow): Transport | null {
   if (webview !== undefined) {
     return {
       send: (message) => webview.postMessage(JSON.stringify(message)),
+      moduleUrl: (id) => `https://${id}.module.avenoir/index.html`,
       listen: (receive) => webview.addEventListener("message", (event) => receive(event.data)),
     };
   }
@@ -86,6 +91,11 @@ export class Bridge {
     });
     this.transport.send({ type: "call", id, method, params });
     return { id, result };
+  }
+
+  /// Adresse de l'onglet web d'un module (identifiant déjà validé).
+  moduleUrl(id: string): string | null {
+    return /^[a-z0-9][a-z0-9-]{0,31}$/.test(id) ? this.transport.moduleUrl(id) : null;
   }
 
   /// Demande à l'hôte d'ouvrir l'application principale.

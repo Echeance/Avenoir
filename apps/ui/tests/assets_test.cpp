@@ -47,3 +47,36 @@ TEST_CASE("fichiers servis à la page : seulement ceux de l'interface", "[ui]") 
     }
     fs::remove_all(base, error);
 }
+
+TEST_CASE("adresses des onglets web : module et chemin", "[ui]") {
+    const auto linux_form = ui::parse_module_address("avenoir-module://meteo/app.js?v=1#x");
+    REQUIRE(linux_form.has_value());
+    CHECK(linux_form.value_or(ui::ModuleAddress{}).module == "meteo");
+    CHECK(linux_form.value_or(ui::ModuleAddress{}).path == "/app.js");
+    const auto windows_form =
+        ui::parse_module_address("https://ma-meteo.module.avenoir/index.html");
+    REQUIRE(windows_form.has_value());
+    CHECK(windows_form.value_or(ui::ModuleAddress{}).module == "ma-meteo");
+    CHECK(windows_form.value_or(ui::ModuleAddress{}).path == "/index.html");
+    CHECK(windows_form.value_or(ui::ModuleAddress{}).origin == "https://ma-meteo.module.avenoir");
+    CHECK(linux_form.value_or(ui::ModuleAddress{}).origin == "avenoir-module://meteo");
+
+    // Politique : l'origine du module seulement, aucun réseau.
+    const std::string policy = ui::module_tab_policy("avenoir-module://meteo");
+    CHECK(policy.contains("script-src avenoir-module://meteo;"));
+    CHECK(policy.contains("connect-src 'none'"));
+    CHECK(policy.starts_with("default-src 'none'"));
+    CHECK(ui::parse_module_address("avenoir-module://meteo").value_or(ui::ModuleAddress{}).path ==
+          "/");
+
+    // Autres origines, identifiants invalides : refusés.
+    CHECK_FALSE(ui::parse_module_address("https://app.avenoir/index.html").has_value());
+    CHECK_FALSE(ui::parse_module_address("https://module.avenoir/index.html").has_value());
+    CHECK_FALSE(ui::parse_module_address("https://a.b.module.avenoir/").has_value());
+    CHECK_FALSE(ui::parse_module_address("https://x.module.avenoir.evil.com/").has_value());
+    CHECK_FALSE(ui::parse_module_address("avenoir-module://Meteo/").has_value());
+    CHECK_FALSE(ui::parse_module_address("avenoir-module://../etc/passwd").has_value());
+    CHECK_FALSE(ui::parse_module_address("avenoir-module://-x/").has_value());
+    CHECK_FALSE(ui::parse_module_address("http://meteo.module.avenoir/").has_value());
+    CHECK_FALSE(ui::parse_module_address("file:///etc/passwd").has_value());
+}

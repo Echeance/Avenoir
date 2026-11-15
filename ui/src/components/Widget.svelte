@@ -5,14 +5,18 @@
   import Conversation from "./Conversation.svelte";
   import QuestionCard from "./QuestionCard.svelte";
   import TabView from "./TabView.svelte";
+  import WebTab from "./WebTab.svelte";
   import Wolf from "./Wolf.svelte";
   import { session } from "../lib/session.svelte";
 
   let hovered = $state(false);
   /// Onglet affiché : la conversation, ou « module/onglet ».
   let current = $state("conversation");
-  // Onglets web (permission ui.web) : pas encore affichés.
-  const declarative = $derived(session.tabs.filter((tab) => tab.kind === "declarative"));
+  // Onglets des modules : déclaratifs, et web (iframe isolée) là où la vue
+  // web les sert.
+  const declarative = $derived(
+    session.tabs.filter((tab) => tab.kind === "declarative" || session.moduleUrl(tab.module) !== null),
+  );
   const shown = $derived(declarative.find((tab) => `${tab.module}/${tab.id}` === current));
   // Débogage : « #ouvert/meteo » ouvre le premier onglet de ce module.
   const wantedModule = location.hash.startsWith("#ouvert/") ? location.hash.slice("#ouvert/".length) : "";
@@ -98,7 +102,9 @@
           {/each}
         </div>
       {/if}
-      {#if shown !== undefined}
+      {#if shown !== undefined && shown.kind === "web"}
+        <WebTab module={shown.module} tab={shown.id} title={shown.title} />
+      {:else if shown !== undefined}
         <TabView module={shown.module} tab={shown.id} onaction={() => (current = "conversation")} />
       {:else}
         <Conversation entries={session.view.entries} />

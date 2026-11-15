@@ -24,6 +24,9 @@ struct WindowOptions {
     /// Fenêtre de l'application principale (`--app`) : ordinaire, avec
     /// bordure, redimensionnable, dans la barre des tâches.
     bool application = false;
+    /// Dossier de l'onglet web d'un module (fichiers servis sous l'origine
+    /// propre au module) ; rien : refusé.
+    std::function<std::optional<std::filesystem::path>(std::string_view module)> module_root;
     /// Vue de départ (AVENOIR_UI_VIEW) : de l'application (settings,
     /// journal…), ou, avec `pinned`, le module dont le widget montre l'onglet.
     std::string view;
