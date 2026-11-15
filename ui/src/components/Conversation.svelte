@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { Entry } from "../lib/state";
+  import Markdown from "./Markdown.svelte";
 
   let { entries }: { entries: Entry[] } = $props();
 
@@ -18,7 +19,7 @@
     {#if entry.kind === "user"}
       <p class="user"><span class="mark">›</span>{entry.text}</p>
     {:else if entry.kind === "assistant"}
-      <p class="assistant" class:streaming={entry.streaming}>{entry.text}</p>
+      <div class="assistant" class:streaming={entry.streaming}><Markdown text={entry.text} /></div>
     {:else if entry.kind === "tool"}
       <p class="tool" class:failed={entry.failed}>
         <span class="mark">»</span>{entry.name}
@@ -60,6 +61,8 @@
   .assistant {
     border-left: 2px solid var(--navy);
     padding-left: 10px;
+    line-height: 1.45;
+    overflow-wrap: anywhere;
   }
   .assistant.streaming {
     border-left-color: var(--azure);

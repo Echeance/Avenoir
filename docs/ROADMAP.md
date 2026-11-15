@@ -306,8 +306,8 @@ L'ordre suit un principe : **chaque jalon produit un assistant utilisable**, plu
 
 ### 6.2 Widget principal — P1
 - 🔄 Fenêtre sans bordure, transparente, au premier plan, en haut au centre ; layer-shell sous Wayland (niri, KDE, Hyprland, Sway) — fait sous Linux (essayé sous niri) et sous Windows (fenêtre au premier plan sans bordure, essayée dans la VM ; fond opaque : la transparence demanderait DirectComposition)
-- 🔄 Barre pliée ; widget déplié au survol, avec animations — première version de la page : barre (loup, état, modèle), dépliée au survol ou pendant une requête ; conversation au fil de l'eau, saisie, « Arrêter »
-- ⬜ Loup animé (Rive ou Lottie) qui reflète l'état de l'assistant (repos, écoute, réflexion, action)
+- 🔄 Barre pliée ; widget déplié au survol, avec animations — barre (loup animé, état, modèle), dépliée au survol ou pendant une requête ; conversation au fil de l'eau, réponses en Markdown (titres, listes, gras, italique, code, citations, tableaux, liens en texte), saisie, « Arrêter »
+- ✅ Loup animé qui reflète l'état de l'assistant (repos, écoute, réflexion, action) — décision 71 : le loup en braille, animé point par point en CSS (respiration au repos, vague de lumière pendant la réflexion, pulsation dorée quand une réponse est attendue, gris hors connexion) ; l'écoute viendra avec la voix (jalon 5)
 - ⬜ Onglets : activités en cours, historique défilable, informations système, version et mises à jour, chatbox, consommation et limites Claude Code
 - 🔄 Confirmations dessinées par Avenoir (`ConfirmationHandler` graphique), hors de tout contenu de module — carte de confirmation de la page (autoriser, refuser, toujours, jamais ; questions, saisie masquée) ; branchée par l'hôte (questions du démon relayées) ; essayée par les tests du relais, pas encore en vrai à la souris
 - ⬜ Bouton « Arrêter » (équivalent de Ctrl+C) et proposition d'annulation ; bouton « Annuler » sur la dernière requête (équivalent de `/annuler`)

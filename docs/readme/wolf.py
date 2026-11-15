@@ -11,9 +11,10 @@ Les couleurs sont celles de la capture (docs/readme/terminal_render.py) :
 mêmes codes de terminal ; le fond est transparent.
 
 Usage : python3 docs/readme/wolf.py   (écrit docs/readme/avenoir-wolf.svg,
-avenoir-wolf-icon.svg et ui/src/assets/wolf.svg)
+avenoir-wolf-icon.svg et ui/src/assets/wolf-dots.json)
 """
 
+import json
 import re
 from html import escape
 from pathlib import Path
@@ -62,6 +63,19 @@ def text_row(row: int, column: int, text: str, color: str) -> str:
         f'textLength="{len(text) * CELL_W:.1f}" lengthAdjust="spacingAndGlyphs">'
         f"{escape(text)}</text>"
     )
+
+
+def dots(art: list[str]) -> dict:
+    """Points levés du braille : colonnes et lignes de points (2 × 4 par
+    caractère), et la liste [x, y] de chaque point."""
+    points = []
+    for row, line in enumerate(art):
+        for column, character in enumerate(line):
+            bits = ord(character) - 0x2800
+            if 0 <= bits <= 0xFF:
+                points += [[column * 2 + dx, row * 4 + dy]
+                           for bit, (dx, dy) in enumerate(BRAILLE) if bits >> bit & 1]
+    return {"width": max(map(len, art)) * 2, "height": len(art) * 4, "dots": points}
 
 
 def braille_dots(art: list[str]) -> list[str]:
@@ -131,10 +145,11 @@ if __name__ == "__main__":
         "avenoir-wolf.svg": logo(read_array(wolf, "kArt"), title),
         "avenoir-wolf-icon.svg": icon(read_array(wolf, "kIcon")),
     }
-    # Le petit loup sert aussi à l'interface graphique (barre du widget).
-    ui_icon = Path(__file__).resolve().parents[2] / "ui" / "src" / "assets" / "wolf.svg"
-    ui_icon.write_text(outputs["avenoir-wolf-icon.svg"], encoding="utf-8")
-    print(f"écrit : {ui_icon}")
+    # Le petit loup sert aussi à l'interface graphique : ses points, que la
+    # page anime (ui/src/components/Wolf.svelte).
+    ui_dots = Path(__file__).resolve().parents[2] / "ui" / "src" / "assets" / "wolf-dots.json"
+    ui_dots.write_text(json.dumps(dots(read_array(wolf, "kIcon"))) + "\n", encoding="utf-8")
+    print(f"écrit : {ui_dots}")
     for name, content in outputs.items():
         output = Path(__file__).with_name(name)
         output.write_text(content, encoding="utf-8")

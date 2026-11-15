@@ -1,10 +1,10 @@
 <script lang="ts">
   // Widget d'Avenoir : une barre en haut de l'écran, qui se déplie au survol
   // (ou tant qu'une requête ou une question est en cours).
-  import wolf from "./assets/wolf.svg";
   import Composer from "./components/Composer.svelte";
   import Conversation from "./components/Conversation.svelte";
   import QuestionCard from "./components/QuestionCard.svelte";
+  import Wolf from "./components/Wolf.svelte";
   import { session } from "./lib/session.svelte";
 
   let hovered = $state(false);
@@ -32,7 +32,13 @@
   });
 
   const mood = $derived(
-    session.question !== null ? "asking" : session.view.thinking ? "thinking" : "idle",
+    !session.connected
+      ? "offline"
+      : session.question !== null
+        ? "asking"
+        : session.view.thinking
+          ? "thinking"
+          : "idle",
   );
 </script>
 
@@ -46,7 +52,7 @@
   onfocusout={() => (focused = false)}
 >
   <header class="bar">
-    <img class="wolf {mood}" src={wolf} alt="" />
+    <Wolf {mood} />
     <span class="title">Avenoir</span>
     <span class="status">
       {#if !session.connected}
@@ -93,21 +99,6 @@
     padding: 0 14px;
     flex: none;
   }
-  .wolf {
-    height: 26px;
-    width: auto;
-  }
-  .wolf.thinking {
-    animation: breathe 1.2s ease-in-out infinite;
-  }
-  .wolf.asking {
-    animation: breathe 0.6s ease-in-out infinite;
-  }
-  @keyframes breathe {
-    50% {
-      opacity: 0.45;
-    }
-  }
   .title {
     color: var(--ice);
     font-weight: 700;
@@ -127,10 +118,5 @@
     height: 420px;
     min-height: 0;
     border-top: 1px solid var(--line);
-  }
-  @media (prefers-reduced-motion: reduce) {
-    .wolf {
-      animation: none;
-    }
   }
 </style>
