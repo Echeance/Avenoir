@@ -7,6 +7,7 @@ import type { Json, JsonObject, QuestionMethod } from "./protocol";
 import { initialState, reduce, type ViewState } from "./state";
 
 export interface Question {
+  id: number;
   method: QuestionMethod;
   params: JsonObject;
   answer(result: Json): void;
@@ -36,9 +37,15 @@ class Session {
           void this.open();
         }
       },
-      question: (method, params) =>
+      dismiss: (id) => {
+        if (this.question?.id === id) {
+          this.question = null;
+        }
+      },
+      question: (id, method, params) =>
         new Promise<Json>((resolve) => {
           this.question = {
+            id,
             method,
             params,
             answer: (result) => {
@@ -82,6 +89,11 @@ class Session {
     } finally {
       this.running = null;
     }
+  }
+
+  /// Hauteur de la page (barre pliée ou dépliée), donnée à l'hôte.
+  resize(height: number): void {
+    this.bridge.resize(height);
   }
 
   /// Arrête l'action en cours (équivalent de Ctrl+C).

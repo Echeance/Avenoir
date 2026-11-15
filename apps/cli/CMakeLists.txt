@@ -11,6 +11,7 @@ endif()
 add_library(avenoir_cli_lib STATIC
     src/console.cpp
     src/display.cpp
+    src/launcher.cpp
     src/mouse.cpp
     src/packages.cpp
     src/prompt.cpp

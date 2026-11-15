@@ -22,6 +22,7 @@ describe("messages de l'hôte", () => {
     expect(
       parseHostMessage({ type: "question", id: 3, method: "confirm", params: {} }),
     ).toMatchObject({ id: 3, method: "confirm" });
+    expect(parseHostMessage({ type: "dismiss", id: 4 })).toEqual({ type: "dismiss", id: 4 });
   });
   it("écarte les messages mal formés ou inconnus", () => {
     expect(parseHostMessage(null)).toBeNull();
@@ -29,6 +30,7 @@ describe("messages de l'hôte", () => {
     expect(parseHostMessage({ type: "question", id: 1, method: "run", params: {} })).toBeNull();
     expect(parseHostMessage({ type: "reply", id: -1, result: {} })).toBeNull();
     expect(parseHostMessage({ type: "eval", code: "alert(1)" })).toBeNull();
+    expect(parseHostMessage({ type: "dismiss", id: "1" })).toBeNull();
   });
 });
 

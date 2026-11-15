@@ -53,7 +53,13 @@ export function nativeTransport(target: WebKitWindow): Transport | null {
 export interface BridgeHandlers {
   ui(params: JsonObject): void;
   /// Question du démon : la promesse donne la réponse à lui rendre.
-  question(method: Extract<HostMessage, { type: "question" }>["method"], params: JsonObject): Promise<Json>;
+  question(
+    id: number,
+    method: Extract<HostMessage, { type: "question" }>["method"],
+    params: JsonObject,
+  ): Promise<Json>;
+  /// Question retirée par le démon (requête annulée) : la carte se ferme.
+  dismiss(id: number): void;
   status(connected: boolean, message: string): void;
 }
 
@@ -80,6 +86,11 @@ export class Bridge {
     });
     this.transport.send({ type: "call", id, method, params });
     return { id, result };
+  }
+
+  /// Hauteur de la page, pour que l'hôte ajuste la fenêtre.
+  resize(height: number): void {
+    this.transport.send({ type: "resize", height: Math.ceil(height) });
   }
 
   /// Interrompt l'appel `id` (équivalent de Ctrl+C).
@@ -110,9 +121,12 @@ export class Bridge {
         break;
       case "question":
         void this.handlers
-          .question(message.method, message.params)
+          .question(message.id, message.method, message.params)
           .catch((): Json => null)
           .then((result) => this.transport.send({ type: "answer", id: message.id, result }));
+        break;
+      case "dismiss":
+        this.handlers.dismiss(message.id);
         break;
       case "reply":
         this.pending.get(message.id)?.resolve(message.result);

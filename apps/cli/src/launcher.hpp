@@ -1,11 +1,14 @@
 #pragma once
 
+#include <filesystem>
+#include <memory>
 #include <optional>
 #include <string>
 #include <string_view>
 #include <vector>
 
 #include "avenoir/core/error.hpp"
+#include "avenoir/ipc/transport.hpp"
 
 // Lancement du démon par la CLI quand il ne répond pas (décision 53), et
 // d'une commande dans le terminal de la CLI (installation de swaylock).
@@ -15,6 +18,16 @@ namespace avenoir::cli {
 /// ce terminal (nouvelle session, entrées et sorties fermées), avec
 /// `arguments`. Ne l'attend pas.
 [[nodiscard]] core::Result<void> start_daemon(const std::vector<std::string>& arguments);
+
+/// Adresse du démon : celle de l'utilisateur, ou un démon privé pour une
+/// configuration donnée en argument (adresse propre à son chemin).
+[[nodiscard]] core::Result<ipc::Endpoint>
+daemon_endpoint(const std::optional<std::filesystem::path>& config);
+
+/// Se connecte au démon ; le lance s'il ne répond pas, puis attend qu'il
+/// soit prêt. Sert à toutes les interfaces (CLI, hôte des fenêtres).
+[[nodiscard]] core::Result<std::unique_ptr<ipc::Connection>>
+connect_daemon(const ipc::Endpoint& endpoint, const std::optional<std::filesystem::path>& config);
 
 /// Lance `arguments` (tableau, jamais de shell) dans ce terminal : entrées et
 /// sorties héritées, terminal remis en mode ligne avec écho le temps de la

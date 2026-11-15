@@ -10,6 +10,7 @@ option(AVENOIR_BUILD_TESTS "Compiler les tests (Catch2)" ON)
 option(AVENOIR_WARNINGS_AS_ERRORS "Traiter les avertissements comme des erreurs" ON)
 option(AVENOIR_MODULE_METEO "Compiler le module météo fourni avec Avenoir" ON)
 option(AVENOIR_EVALS "Compiler le banc d'essai avec de vrais modèles (evals/)" ON)
+option(AVENOIR_WITH_UI "Compiler l'hôte des fenêtres (interface graphique) si ses dépendances sont là" ON)
 option(AVENOIR_SANITIZE "Activer AddressSanitizer + UndefinedBehaviorSanitizer (GCC/Clang)" OFF)
 set(AVENOIR_VERSION_SUFFIX "" CACHE STRING
     "Suffixe de pré-version ajouté à PROJECT_VERSION (ex. « -beta.1 »), fourni par le workflow de release")
@@ -56,6 +57,7 @@ add_subdirectory(libs/ipc)
 add_subdirectory(libs/agents)
 add_subdirectory(apps/daemon)
 add_subdirectory(apps/cli)
+add_subdirectory(apps/ui)
 
 # ─── Modules fournis ────────────────────────────────────────────────────────
 # Placés dans `modules/` à côté de l'exécutable : l'hôte les y trouve.

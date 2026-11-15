@@ -19,6 +19,7 @@ export type PageMessage =
   | { type: "call"; id: number; method: CallMethod; params: JsonObject }
   | { type: "cancel"; id: number }
   | { type: "answer"; id: number; result: Json }
+  | { type: "resize"; height: number }
   | { type: "ready" };
 
 /// Hôte → page.
@@ -27,6 +28,7 @@ export type HostMessage =
   | { type: "question"; id: number; method: QuestionMethod; params: JsonObject }
   | { type: "reply"; id: number; result: JsonObject }
   | { type: "failure"; id: number; message: string }
+  | { type: "dismiss"; id: number }
   | { type: "status"; connected: boolean; message: string };
 
 export function isObject(value: unknown): value is JsonObject {
@@ -65,6 +67,8 @@ export function parseHostMessage(raw: unknown): HostMessage | null {
       return isId(raw["id"]) && typeof raw["message"] === "string"
         ? { type: "failure", id: raw["id"], message: raw["message"] }
         : null;
+    case "dismiss":
+      return isId(raw["id"]) ? { type: "dismiss", id: raw["id"] } : null;
     case "status":
       return typeof raw["connected"] === "boolean"
         ? {

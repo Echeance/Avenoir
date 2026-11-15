@@ -11,15 +11,33 @@
   let focused = $state(false);
 
   const busy = $derived(session.running !== null);
-  // En développement, « #ouvert » garde le widget déplié (captures d'écran).
-  const pinned = import.meta.env.DEV && location.hash === "#ouvert";
+  // « #ouvert » garde le widget déplié : captures d'écran, débogage
+  // (AVENOIR_UI_PIN pour l'hôte, ou l'adresse en développement).
+  const pinned = location.hash === "#ouvert";
   const open = $derived(pinned || hovered || focused || busy || session.question !== null);
+  let widget: HTMLElement | undefined = $state();
+
+  // La fenêtre de l'hôte suit la hauteur du widget (barre pliée ou dépliée).
+  $effect(() => {
+    if (widget === undefined) {
+      return;
+    }
+    const observer = new ResizeObserver(() => {
+      if (widget !== undefined) {
+        session.resize(widget.getBoundingClientRect().height);
+      }
+    });
+    observer.observe(widget);
+    return () => observer.disconnect();
+  });
+
   const mood = $derived(
     session.question !== null ? "asking" : session.view.thinking ? "thinking" : "idle",
   );
 </script>
 
 <main
+  bind:this={widget}
   class="widget"
   class:open
   onmouseenter={() => (hovered = true)}
@@ -59,7 +77,6 @@
 <style>
   .widget {
     width: 100%;
-    max-height: 100%;
     display: flex;
     flex-direction: column;
     background: color-mix(in srgb, var(--panel) 94%, transparent);
