@@ -92,7 +92,7 @@ Toutes les règles : [PROJECT.md — Directives de sécurité](docs/PROJECT.md#3
 Téléchargez la dernière version pour **Linux** (`avenoir-linux-x64.tar.gz`) ou **Windows** (`avenoir-windows-x64.zip`) depuis la page [Releases](https://github.com/echeance/Avenoir/releases).
 
 > [!NOTE]
-> Les versions `0.x` sont des pré-versions : la CLI et les modules fonctionnent, le démon résident et l'interface graphique sont encore à venir. L'archive contient l'exécutable et le dossier `modules/` (module météo) : gardez-les ensemble.
+> Les versions `0.x` sont des pré-versions : la CLI, le démon résident et les modules fonctionnent, l'interface graphique est en cours. L'archive contient `avenoir` (CLI), `avenoird` (démon), `avenoir-ui` (widget) et les dossiers `modules/` et `ui/` : gardez-les ensemble. Sous Linux, le widget demande WebKitGTK 6 et gtk4-layer-shell (Arch : `sudo pacman -S webkitgtk-6.0 gtk4-layer-shell` ; Debian, Ubuntu : `sudo apt install libwebkitgtk-6.0-4 libgtk4-layer-shell0`) ; la CLI et le démon n'en ont pas besoin.
 
 ### Depuis les sources
 

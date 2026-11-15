@@ -44,10 +44,15 @@ jobs:
             echo "::error::Le numéro du tag ($number) ne correspond pas à la version du projet ($project / $manifest)"; exit 1; }
           echo "AVENOIR_VERSION_SUFFIX=$suffix" >> "$GITHUB_ENV"
 
-      - name: Outils Linux (GCC 14, Ninja, autotools pour libsodium)
+      # Node.js (préinstallé sur les runners) construit la page de l'interface.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Outils Linux (GCC 14, Ninja, autotools pour libsodium, WebKitGTK 6 pour l'interface)
         if: runner.os == 'Linux'
         run: |
-          sudo apt-get update -q && sudo apt-get install -y -q ninja-build autoconf autoconf-archive automake libtool
+          sudo apt-get update -q && sudo apt-get install -y -q ninja-build autoconf autoconf-archive automake libtool \
+            libwebkitgtk-6.0-dev libgtk4-layer-shell-dev
           echo "CC=gcc-14" >> "$GITHUB_ENV"
           echo "CXX=g++-14" >> "$GITHUB_ENV"
       - name: Environnement MSVC (cl, Ninja)
@@ -83,12 +88,17 @@ jobs:
           cp README.md LICENSE.md config.example.toml dist/avenoir/
           # Modules fournis (programme + module.toml), à côté de l'exécutable.
           cp -r build/release/apps/cli/modules dist/avenoir/
-          # La CLI (avenoir) et le démon qu'elle lance (avenoird), côte à côte.
+          # Interface graphique : l'hôte des fenêtres et sa page (ui/).
+          cp -r build/release/apps/cli/ui dist/avenoir/
+          # La CLI (avenoir), le démon qu'elle lance (avenoird) et l'interface
+          # graphique (avenoir-ui), côte à côte.
           if [ "$RUNNER_OS" = "Windows" ]; then
-            cp build/release/apps/cli/avenoir.exe build/release/apps/cli/avenoird.exe dist/avenoir/
+            cp build/release/apps/cli/avenoir.exe build/release/apps/cli/avenoird.exe \
+              build/release/apps/cli/avenoir-ui.exe dist/avenoir/
             (cd dist && 7z a -bso0 "${{ matrix.archive }}" avenoir)
           else
-            cp build/release/apps/cli/avenoir build/release/apps/cli/avenoird dist/avenoir/
+            cp build/release/apps/cli/avenoir build/release/apps/cli/avenoird \
+              build/release/apps/cli/avenoir-ui dist/avenoir/
             tar -C dist -czf "dist/${{ matrix.archive }}" avenoir
           fi
 

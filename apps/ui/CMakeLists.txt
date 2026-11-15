@@ -61,7 +61,8 @@ avenoir_utf8_manifest(avenoir_ui)
 add_dependencies(avenoir_ui avenoird)
 
 # La page (ui/) construite par Vite à côté de l'exécutable, si Node.js est là.
-find_program(AVENOIR_NPM npm)
+# Sous Windows, npm.cmd : « npm » seul y est un script pour bash.
+find_program(AVENOIR_NPM NAMES npm.cmd npm)
 if(AVENOIR_NPM)
     set(_ui_root "${CMAKE_SOURCE_DIR}/ui")
     set(_ui_out "${CMAKE_BINARY_DIR}/apps/cli/ui")

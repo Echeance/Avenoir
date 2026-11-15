@@ -84,6 +84,16 @@ jobs:
             pipx install ninja
           fi
           ninja --version
+      # Node.js : CMake construit la page de l'interface à côté d'avenoir-ui.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      # Hôte des fenêtres (avenoir-ui) : WebKitGTK 6 et gtk4-layer-shell du
+      # système ; sans eux (miroirs injoignables), il n'est pas compilé.
+      - name: Installer WebKitGTK 6 et gtk4-layer-shell (interface graphique)
+        run: |
+          sudo apt-get install -y -q libwebkitgtk-6.0-dev libgtk4-layer-shell-dev \
+            || echo "::warning::bibliothèques de l'interface graphique indisponibles"
       - name: Installer Clang 20 (dépôt apt.llvm.org)
         if: startsWith(matrix.cc, 'clang')
         # llvm.sh installe aussi lldb et clangd, dont les dépendances viennent
